@@ -15,12 +15,12 @@ El sistema debe funcionar desde línea de comandos sin interfaz gráfica, usando
 
 Tareas:
 
-- [ ] Crear estructura de directorios del repositorio (`scripts/`, `assets/`, `systemd/`, `docs/`)
-- [ ] Documentar instalación de dependencias (`libcamera-apps`, `ffmpeg`)
-- [ ] Activar cámara en DietPi (`dietpi-config → Advanced Options → Camera`)
-- [ ] Script `scripts/capture.sh` — captura local a archivo `.h264`
-- [ ] Verificar encoding H264 por hardware (no software)
-- [ ] Documentar limitaciones Pi 3B (1080p30, ~4–5 Mbps)
+- [x] Crear estructura de directorios del repositorio (`scripts/`, `assets/`, `systemd/`, `docs/`)
+- [x] Documentar instalación de dependencias (`libcamera-apps`, `ffmpeg`)
+- [x] Activar cámara en DietPi (`dietpi-config → Advanced Options → Camera`)
+- [x] Script `scripts/capture.sh` — captura local a archivo `.h264`
+- [x] Verificar encoding H264 por hardware (no software)
+- [x] Documentar limitaciones Pi 3B (1080p30, ~4–5 Mbps)
 
 Entregable: `scripts/capture.sh` funcional, video `.h264` grabado en Pi.
 
