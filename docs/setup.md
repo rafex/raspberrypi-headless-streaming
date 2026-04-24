@@ -143,6 +143,67 @@ chmod +x scripts/*.sh
 
 ---
 
+## 7. Automatización con systemd
+
+Para que el stream arranque automáticamente al encender la Pi:
+
+### Instalar el servicio
+
+```bash
+sudo scripts/control.sh install
+```
+
+Esto copia el archivo de servicio a `/etc/systemd/system/` y crea `/etc/streaming.env`.
+
+### Configurar el stream key
+
+```bash
+sudo nano /etc/streaming.env
+```
+
+Editar la variable `RTMP_URL` con la URL y key de la plataforma:
+
+```
+RTMP_URL=rtmp://a.rtmp.youtube.com/live2/TU_STREAM_KEY
+```
+
+### Comandos de control
+
+```bash
+# Iniciar el stream
+scripts/control.sh start
+
+# Ver estado y logs recientes
+scripts/control.sh status
+
+# Ver logs en tiempo real
+scripts/control.sh logs
+
+# Habilitar inicio automático en boot
+scripts/control.sh enable
+
+# Detener
+scripts/control.sh stop
+
+# Reiniciar
+scripts/control.sh restart
+```
+
+### Ver logs con journald directamente
+
+```bash
+# Últimas 50 líneas
+journalctl -u streaming.service -n 50
+
+# Tiempo real
+journalctl -u streaming.service -f
+
+# Desde el último boot
+journalctl -u streaming.service -b
+```
+
+---
+
 ## Próximo paso
 
 Con la cámara configurada y las dependencias instaladas, continuar con la captura de video:

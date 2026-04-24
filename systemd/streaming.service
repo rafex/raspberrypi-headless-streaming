@@ -1,0 +1,55 @@
+[Unit]
+Description=Raspberry Pi Headless Streaming
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+# Esperar a que la red esté disponible antes de iniciar
+After=network-online.target
+Wants=network-online.target
+# Reintentar si la cámara no está lista al arrancar
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pi
+
+# --- Configuración del stream ---
+# Editar estas variables o usar un archivo .env externo
+Environment="RTMP_URL=rtmp://a.rtmp.youtube.com/live2/STREAM_KEY_AQUI"
+Environment="STREAM_WIDTH=1920"
+Environment="STREAM_HEIGHT=1080"
+Environment="STREAM_FPS=30"
+Environment="STREAM_BITRATE=4500000"
+
+# Cargar variables desde archivo externo si existe (más seguro para el stream key)
+# Crear /etc/streaming.env con: RTMP_URL=rtmp://...
+EnvironmentFile=-/etc/streaming.env
+
+# Directorio de trabajo: raíz del repositorio clonado
+WorkingDirectory=/home/pi/raspberrypi-headless-streaming
+
+# Comando principal
+ExecStart=/bin/bash scripts/stream.sh \
+    -u ${RTMP_URL} \
+    -w ${STREAM_WIDTH} \
+    -h ${STREAM_HEIGHT} \
+    -f ${STREAM_FPS} \
+    -b ${STREAM_BITRATE} \
+    --no-audio
+
+# Esperar antes de reiniciar (da tiempo a que la cámara o red se recuperen)
+RestartSec=10
+
+# Reiniciar automáticamente en cualquier fallo excepto señal de stop explícita
+Restart=on-failure
+
+# Logging: toda la salida va a journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streaming
+
+# Límites de recursos
+# Prioridad alta para el proceso de streaming
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

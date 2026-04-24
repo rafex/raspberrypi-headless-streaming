@@ -1,0 +1,47 @@
+[Unit]
+Description=Raspberry Pi Headless Streaming con Overlays
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pi
+
+Environment="RTMP_URL=rtmp://a.rtmp.youtube.com/live2/STREAM_KEY_AQUI"
+Environment="STREAM_WIDTH=1920"
+Environment="STREAM_HEIGHT=1080"
+Environment="STREAM_FPS=30"
+Environment="STREAM_BITRATE=4500000"
+Environment="STREAM_PRESET=veryfast"
+
+EnvironmentFile=-/etc/streaming.env
+
+WorkingDirectory=/home/pi/raspberrypi-headless-streaming
+
+# Stream con logo y timestamp — ajustar opciones según necesidad
+ExecStart=/bin/bash scripts/stream-overlay.sh \
+    -u ${RTMP_URL} \
+    -w ${STREAM_WIDTH} \
+    -h ${STREAM_HEIGHT} \
+    -f ${STREAM_FPS} \
+    -b ${STREAM_BITRATE} \
+    --preset ${STREAM_PRESET} \
+    --logo assets/logo.png \
+    --logo-pos br \
+    --timestamp \
+    --no-audio
+
+RestartSec=10
+Restart=on-failure
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=streaming-overlay
+
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

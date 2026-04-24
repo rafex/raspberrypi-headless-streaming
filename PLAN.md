@@ -81,11 +81,11 @@ Entregable: `scripts/stream-record.sh` funcional.
 
 Tareas:
 
-- [ ] Crear `systemd/streaming.service` con `Restart=on-failure`
-- [ ] Documentar instalación del servicio (`systemctl enable`)
-- [ ] Probar reinicio automático al desconectar/reconectar cámara
-- [ ] Agregar logging a journald
-- [ ] Script de control `scripts/control.sh` (start / stop / status / restart)
+- [x] Crear `systemd/streaming.service` con `Restart=on-failure`
+- [x] Documentar instalación del servicio (`systemctl enable`)
+- [x] Probar reinicio automático al desconectar/reconectar cámara
+- [x] Agregar logging a journald
+- [x] Script de control `scripts/control.sh` (start / stop / status / restart)
 
 Entregable: servicio systemd funcional, stream arranca en boot.
 
