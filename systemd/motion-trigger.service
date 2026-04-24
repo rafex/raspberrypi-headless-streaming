@@ -1,0 +1,48 @@
+[Unit]
+Description=Raspberry Pi Motion-Triggered Streaming
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+After=network-online.target mediamtx.service
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pi
+
+# Cargar stream key y parámetros desde archivo externo
+EnvironmentFile=-/etc/streaming.env
+
+WorkingDirectory=/home/pi/raspberrypi-headless-streaming
+
+# Modo RTSP local hacia mediamtx (recomendado para demo local)
+ExecStart=/bin/bash scripts/motion-trigger.sh \
+    --rtsp \
+    --rtsp-host localhost \
+    --rtsp-port 8554 \
+    --rtsp-name cam \
+    --threshold 0.15 \
+    --interval 2 \
+    --cooldown 10 \
+    --stop-after 30 \
+    --no-audio \
+    --log /var/log/motion-trigger.log
+
+# Alternativa RTMP externo (descomentar y comentar el ExecStart anterior):
+# ExecStart=/bin/bash scripts/motion-trigger.sh \
+#     -u ${RTMP_URL} \
+#     --threshold 0.15 \
+#     --interval 2 \
+#     --cooldown 10 \
+#     --stop-after 30 \
+#     --log /var/log/motion-trigger.log
+
+RestartSec=10
+Restart=on-failure
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=motion-trigger
+
+[Install]
+WantedBy=multi-user.target

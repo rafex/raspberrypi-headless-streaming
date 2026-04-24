@@ -97,10 +97,10 @@ Entregable: servicio systemd funcional, stream arranca en boot.
 
 Tareas:
 
-- [ ] Documentar instalación de mediamtx
-- [ ] Script `scripts/stream-rtsp.sh` — pipeline hacia servidor RTSP local
-- [ ] Verificar acceso desde otro dispositivo en la misma red (`rtsp://raspi:8554/cam`)
-- [ ] Documentar caso de uso: Pi 3B → RTSP → Pi 4B (o cualquier cliente)
+- [x] Documentar instalación de mediamtx
+- [x] Script `scripts/stream-rtsp.sh` — pipeline hacia servidor RTSP local
+- [x] Verificar acceso desde otro dispositivo en la misma red (`rtsp://raspi:8554/cam`)
+- [x] Documentar caso de uso: Pi 3B → RTSP → Pi 4B (o cualquier cliente)
 
 Entregable: stream RTSP consumible desde red local.
 
@@ -112,11 +112,11 @@ Entregable: stream RTSP consumible desde red local.
 
 Tareas:
 
-- [ ] Evaluar opciones: `motion`, frame diff con ffmpeg, OpenCV
-- [ ] Script `scripts/motion-trigger.sh` — activa stream al detectar movimiento
-- [ ] Implementar ventana de cooldown (evitar activaciones repetidas)
-- [ ] Enviar notificación de evento (webhook o log estructurado)
-- [ ] Documentar umbrales recomendados para Pi 3B
+- [x] Evaluar opciones: `motion`, frame diff con ffmpeg, OpenCV
+- [x] Script `scripts/motion-trigger.sh` — activa stream al detectar movimiento
+- [x] Implementar ventana de cooldown (evitar activaciones repetidas)
+- [x] Enviar notificación de evento (webhook o log estructurado)
+- [x] Documentar umbrales recomendados para Pi 3B
 
 Entregable: script de stream activado por movimiento.
 
@@ -128,11 +128,11 @@ Entregable: script de stream activado por movimiento.
 
 Tareas:
 
-- [ ] Script `scripts/frame-extract.sh` — extraer frame JPEG del stream cada N segundos
-- [ ] Script `scripts/send-event.sh` — enviar evento o frame a endpoint HTTP (Pi 4B)
-- [ ] Documentar API mínima esperada en Pi 4B para recibir frames
-- [ ] Integrar con detección de movimiento (evento → frame → LLM)
-- [ ] Documentar arquitectura completa: red + video + IA
+- [x] Script `scripts/frame-extract.sh` — extraer frame JPEG del stream cada N segundos
+- [x] Script `scripts/send-event.sh` — enviar evento o frame a endpoint HTTP (Pi 4B)
+- [x] Documentar API mínima esperada en Pi 4B para recibir frames
+- [x] Integrar con detección de movimiento (evento → frame → LLM)
+- [x] Documentar arquitectura completa: red + video + IA
 
 Entregable: pipeline completo detección de movimiento → frame → análisis LLM.
 
