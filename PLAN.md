@@ -32,11 +32,11 @@ Entregable: `scripts/capture.sh` funcional, video `.h264` grabado en Pi.
 
 Tareas:
 
-- [ ] Script `scripts/stream.sh` — pipeline `libcamera-vid | ffmpeg → RTMP`
-- [ ] Parametrizar RTMP endpoint y stream key via variables de entorno o argumentos
-- [ ] Probar con YouTube Live (`rtmp://a.rtmp.youtube.com/live2/<KEY>`)
-- [ ] Probar con servidor RTMP local (nginx-rtmp o mediamtx)
-- [ ] Documentar parámetros de bitrate y framerate recomendados para Pi 3B
+- [x] Script `scripts/stream.sh` — pipeline `libcamera-vid | ffmpeg → RTMP`
+- [x] Parametrizar RTMP endpoint y stream key via variables de entorno o argumentos
+- [x] Probar con YouTube Live (`rtmp://a.rtmp.youtube.com/live2/<KEY>`)
+- [x] Probar con servidor RTMP local (nginx-rtmp o mediamtx)
+- [x] Documentar parámetros de bitrate y framerate recomendados para Pi 3B
 
 Entregable: `scripts/stream.sh` funcional, stream en vivo verificado.
 
