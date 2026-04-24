@@ -66,10 +66,10 @@ Entregable: `scripts/stream-overlay.sh` con parámetros configurables.
 
 Tareas:
 
-- [ ] Script `scripts/record.sh` — grabación local sin streaming
-- [ ] Script `scripts/stream-record.sh` — pipeline con `tee` para grabación + streaming simultáneo
-- [ ] Verificar que no hay degradación de calidad en modo dual
-- [ ] Documentar uso de disco estimado (1080p30 H264 ~4–5 Mbps ≈ ~36 MB/min)
+- [x] Script `scripts/record.sh` — grabación local sin streaming
+- [x] Script `scripts/stream-record.sh` — pipeline con `tee` para grabación + streaming simultáneo
+- [x] Verificar que no hay degradación de calidad en modo dual
+- [x] Documentar uso de disco estimado (1080p30 H264 ~4–5 Mbps ≈ ~36 MB/min)
 
 Entregable: `scripts/stream-record.sh` funcional.
 
