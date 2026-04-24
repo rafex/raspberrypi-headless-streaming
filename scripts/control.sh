@@ -19,6 +19,8 @@
 # Servicios disponibles:
 #   streaming          Stream básico sin overlays (default)
 #   streaming-overlay  Stream con overlays
+#   mediamtx           Servidor RTSP/RTMP/WebRTC local
+#   motion-trigger     Stream activado por detección de movimiento
 #
 # Ejemplos:
 #   ./control.sh start
@@ -59,7 +61,7 @@ SERVICE="${2:-$DEFAULT_SERVICE}"
 SERVICE_FILE="${SERVICE}.service"
 
 # Verificar que el servicio es válido
-valid_services=("streaming" "streaming-overlay")
+valid_services=("streaming" "streaming-overlay" "mediamtx" "motion-trigger")
 is_valid=false
 for s in "${valid_services[@]}"; do
     [[ "$SERVICE" == "$s" ]] && is_valid=true && break
