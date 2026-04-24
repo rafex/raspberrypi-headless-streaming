@@ -48,13 +48,13 @@ Entregable: `scripts/stream.sh` funcional, stream en vivo verificado.
 
 Tareas:
 
-- [ ] Agregar assets de ejemplo (`assets/logo.png`, `assets/frame.png`)
-- [ ] Script `scripts/stream-overlay.sh` — stream con overlay de logo PNG
-- [ ] Implementar overlay de marco PNG (fullscreen frame sobre video)
-- [ ] Implementar overlay de texto estático (`drawtext`)
-- [ ] Implementar overlay de timestamp dinámico
-- [ ] Medir impacto en CPU al aplicar overlays (Pi 3B requiere re-encoding)
-- [ ] Documentar combinaciones de overlays recomendadas vs limitaciones
+- [x] Agregar assets de ejemplo (`assets/logo.png`, `assets/frame.png`)
+- [x] Script `scripts/stream-overlay.sh` — stream con overlay de logo PNG
+- [x] Implementar overlay de marco PNG (fullscreen frame sobre video)
+- [x] Implementar overlay de texto estático (`drawtext`)
+- [x] Implementar overlay de timestamp dinámico
+- [x] Medir impacto en CPU al aplicar overlays (Pi 3B requiere re-encoding)
+- [x] Documentar combinaciones de overlays recomendadas vs limitaciones
 
 Entregable: `scripts/stream-overlay.sh` con parámetros configurables.
 
