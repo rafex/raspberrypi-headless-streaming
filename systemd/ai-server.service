@@ -1,0 +1,27 @@
+[Unit]
+Description=Servidor de análisis IA — DeepSeek / OpenRouter
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+
+# Cargar API keys y configuración desde archivo externo
+EnvironmentFile=/etc/ai-server.env
+
+# Rutas definidas por ai-server-install.sh al instalar
+# __VENV_DIR__ → /opt/ai-server/venv
+# __INSTALL_DIR__ → /opt/ai-server
+ExecStart=__VENV_DIR__/bin/python __INSTALL_DIR__/analyze-server.py
+
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-server
+
+[Install]
+WantedBy=multi-user.target

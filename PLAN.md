@@ -138,6 +138,25 @@ Entregable: pipeline completo detección de movimiento → frame → análisis L
 
 ---
 
+### Fase 9 — Servidor de análisis IA con DeepSeek y OpenRouter
+
+**Meta:** servidor HTTP listo para producción en Pi 4B que acepta frames y eventos, y los analiza con DeepSeek o OpenRouter según configuración.
+
+Tareas:
+
+- [x] Crear `server/analyze-server.py` — servidor Flask con soporte de múltiples proveedores
+- [x] Implementar proveedor DeepSeek (API OpenAI-compatible, modelos con visión)
+- [x] Implementar proveedor OpenRouter (acceso a modelos de visión de terceros)
+- [x] Permitir selección de proveedor y modelo via variable de entorno o argumento
+- [x] Crear `server/requirements.txt` con dependencias mínimas
+- [x] Crear `scripts/ai-server-install.sh` — instalación automatizada en Pi 4B
+- [x] Crear `systemd/ai-server.service` — servicio systemd para el servidor
+- [x] Documentar modelos recomendados para cada proveedor
+
+Entregable: servidor funcional en Pi 4B seleccionando proveedor con `AI_PROVIDER=deepseek|openrouter`.
+
+---
+
 ## Estructura final del repositorio
 
 ```
@@ -203,7 +222,10 @@ Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5
                                       Fase 7
                                          ↓
                                       Fase 8
+                                         ↓
+                                      Fase 9
 ```
 
 Las fases 1–5 son el núcleo funcional.  
-Las fases 6–8 son extensiones para casos de uso avanzados.
+Las fases 6–8 son extensiones para casos de uso avanzados.  
+La fase 9 es el servidor de análisis de IA con proveedores configurables.

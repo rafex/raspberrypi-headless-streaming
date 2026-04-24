@@ -21,6 +21,7 @@
 #   streaming-overlay  Stream con overlays
 #   mediamtx           Servidor RTSP/RTMP/WebRTC local
 #   motion-trigger     Stream activado por detección de movimiento
+#   ai-server          Servidor HTTP de análisis IA (DeepSeek / OpenRouter)
 #
 # Ejemplos:
 #   ./control.sh start
@@ -61,7 +62,7 @@ SERVICE="${2:-$DEFAULT_SERVICE}"
 SERVICE_FILE="${SERVICE}.service"
 
 # Verificar que el servicio es válido
-valid_services=("streaming" "streaming-overlay" "mediamtx" "motion-trigger")
+valid_services=("streaming" "streaming-overlay" "mediamtx" "motion-trigger" "ai-server")
 is_valid=false
 for s in "${valid_services[@]}"; do
     [[ "$SERVICE" == "$s" ]] && is_valid=true && break
