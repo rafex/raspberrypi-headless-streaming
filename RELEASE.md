@@ -1,19 +1,25 @@
-# Release v0.1.0
+# Release v0.2.0
 
 **Date**: 2026-04-25  
-**Version**: 0.1.0 (Initial Release)  
+**Version**: 0.2.0 (Feature Release)  
 **Status**: Stable  
 
 ---
 
 ## Summary
 
-**raspi-headless-streaming v0.1.0** is the initial production-ready release of a lightweight, headless video capture and live streaming system designed for Raspberry Pi devices.
+**raspi-headless-streaming v0.2.0** adds interactive overlay support (logos + banners) and dual-stream capability, enabling simultaneous broadcasts to multiple platforms. Optimized performance with pre-processed logos reduces CPU load on Pi 3B/4.
 
-This version includes everything needed to:
+New capabilities in v0.2.0:
+- Stream simultaneously to YouTube and Facebook with single stream
+- Add professional logos and text banners to streams
+- Improved overlay performance: pre-resize logos before streaming
+- Robust banner text handling (special characters, quotes)
+- Streamlined TUI workflow with dedicated overlay configuration step
+
+All v0.1.0 features remain fully supported:
 - Capture video from CSI or USB cameras
 - Live stream to YouTube, Facebook, or custom RTMP servers
-- Apply real-time overlays (logos, text, timestamps)
 - Record locally while streaming
 - Detect motion and trigger events
 - Integrate AI-powered video analysis
@@ -21,7 +27,22 @@ This version includes everything needed to:
 
 ---
 
-## Key Features
+## Key Features (v0.2.0)
+
+### 📡 Multi-Platform Streaming
+- **Dual-Stream Broadcasting**: YouTube + Facebook simultaneously (experimental)
+- **Smart Failover**: if one platform fails, other continues (tee muxer)
+- **Single Encode**: video encoded once, bandwidth-efficient
+- **Interactive Selection**: TUI option to choose single or dual stream
+
+### 🎨 Advanced Overlays (NEW)
+- **Logo PNG Support**: Upload logos via URL or local path
+- **Auto-Download**: Fetch logos from HTTP/HTTPS URLs automatically
+- **Smart Sizing**: Pre-resize logos offline (pre-streaming)
+- **Flexible Positioning**: corner positions (TL, TR, BL, BR)
+- **Text Banners**: header/footer text with dark background
+- **Font Auto-Detection**: Liberation/FreeFont/Noto Sans
+- **Special Characters**: Robust handling of quotes, colons, etc.
 
 ### 📹 Video Capture
 - **CSI Camera Module**: Direct support for Raspberry Pi Camera v1/v2/v3
@@ -96,6 +117,52 @@ See [docs/install.md](docs/install.md) for complete setup instructions including
 
 ## Usage Examples
 
+### Interactive Stream Setup (Recommended - v0.2.0)
+```bash
+scripts/stream-tui.sh
+```
+*(5-step interactive wizard: camera → audio → platform → bitrate → overlays)*
+- Select camera and resolution
+- Configure microphone + channels
+- Choose: YouTube, Facebook, or Dual (both simultaneous)
+- Set bitrate
+- **NEW**: Add logo PNG and/or text banner
+
+### Dual-Stream to YouTube + Facebook
+```bash
+# Using TUI (recommended)
+scripts/stream-tui.sh
+# → Select platform: "★ Dual stream — YouTube + Facebook"
+
+# Or direct script (if needed)
+ffmpeg -i /dev/video0 ... -f tee "[f=flv:onfail=ignore]YT_URL|[f=flv:onfail=ignore]FB_URL"
+```
+
+### Stream with Overlays (v0.2.0)
+```bash
+scripts/stream-tui.sh
+# → Follow prompts, add logo at PASO 5
+# → Logo auto-resized, banner text optional
+
+# Custom logo + banner programmatically
+scripts/stream-tui.sh \
+    << EOF
+/dev/video0
+3
+YouTube Live
+YOUR_KEY
+2
+
+2500
+y
+https://example.com/logo.png
+br
+20
+120
+n
+EOF
+```
+
 ### Capture Video Only
 ```bash
 scripts/capture.sh -t 30 -o recording.h264
@@ -106,19 +173,13 @@ scripts/capture.sh -t 30 -o recording.h264
 scripts/rec.sh --mic-vol 2.0 -t 60 demo.mp4
 ```
 
-### Stream with Overlay
+### Stream with Overlay (v0.1.0 style - still supported)
 ```bash
 scripts/stream-overlay.sh \
     -u rtmp://a.rtmp.youtube.com/live2/KEY \
     --logo assets/logo.png \
     --timestamp
 ```
-
-### Interactive Stream Setup
-```bash
-scripts/stream-tui.sh
-```
-*(Select camera, microphone, resolution, platform interactively)*
 
 ### Motion-Triggered Streaming
 ```bash
@@ -220,18 +281,33 @@ None. This is the initial release.
 
 ## Known Issues
 
-### v0.1.0
+### v0.2.0
+
+1. **Dual-Stream Platform Consistency**: YouTube + Facebook may have 1–3 second sync drift
+   - *Cause*: Different RTMP server processing times
+   - *Workaround*: Monitor both streams separately; drift is usually imperceptible to viewers
+
+2. **Overlay Text Long Strings**: Text >60 chars may wrap unexpectedly on 1080p
+   - *Cause*: FFmpeg `drawtext` filter font sizing
+   - *Workaround*: Test custom strings in TUI before live stream; use shorter text or smaller fonts
+
+3. **Logo Transparency**: PNG logos with alpha channel require `libpng` support
+   - *Cause*: FFmpeg compiled without libpng
+   - *Workaround*: Use fully opaque PNG or convert to JPEG; verify with `ffmpeg -codecs | grep png`
+
+4. **Dual-Stream Failure Handling**: If one platform RTMP URL fails, tee muxer logs error but continues
+   - *Cause*: `onfail=ignore` in tee syntax
+   - *Workaround*: Monitor logs regularly; failed streams silently drop; both URLs must be valid before start
+
+### v0.1.0 (Still Applicable)
 
 1. **Audio Sync Drift**: Long recordings (>2 hours) may experience slight A/V drift
    - *Workaround*: Use shorter segments or reduce bitrate
 
-2. **Overlay CPU Load**: Multiple overlays on Pi 3B cause framerate drops
-   - *Workaround*: Limit to 1–2 lightweight overlays or upgrade to Pi 4
-
-3. **Motion Detection Tuning**: Sensitivity varies per environment
+2. **Motion Detection Tuning**: Sensitivity varies per environment
    - *Workaround*: Adjust threshold in `motion-detect.sh` for your lighting
 
-4. **Focusrite Scarlett**: Requires driver fix on Pi 3B
+3. **Focusrite Scarlett**: Requires driver fix on Pi 3B
    - *Workaround*: Run `scripts/scarlett-pi3b-fix.sh` (included)
 
 ---

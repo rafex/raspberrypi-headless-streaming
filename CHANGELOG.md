@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-04-25
+
+### Added
+
+- **Dual-Stream Broadcasting**
+  - Simultaneous streaming to YouTube and Facebook (experimental)
+  - FFmpeg tee muxer: video encoded once, sent to multiple platforms
+  - Independent failure handling: if one platform fails, other continues
+  - Interactive TUI option: "★ Dual stream — YouTube + Facebook"
+
+- **Interactive Overlays (Complete System)**
+  - PNG logo support with URL download (HTTP/HTTPS)
+  - Auto-detection of transparent vs opaque images
+  - Logo positioning: top-left, top-right, bottom-left, bottom-right
+  - Configurable logo size and padding from edges
+  - Banner text with dark background (header or footer)
+  - Font auto-detection: Liberation/FreeFont/Noto Sans Bold
+  - Advanced FFmpeg filter_complex for logo + banner combinations
+
+### Fixed
+
+- **Banner Text Robustness**
+  - Replace manual character escaping with textfile approach
+  - Handles special characters (colons, quotes, etc.) without quoting issues
+  - More reliable for user-supplied text
+
+### Improved
+
+- **Logo Processing Performance**
+  - Pre-resize logos offline (before stream starts) instead of real-time
+  - Reduces CPU load during transmission on resource-constrained hardware
+  - Uses ffmpeg -vf scale (primary) or ImageMagick convert (fallback)
+  - Significant efficiency gain for 1080p+ overlays on Pi 3B
+
+- **Stream TUI Usability**
+  - Simplified filter expressions and mapping logic
+  - Better organization of filter components
+  - Extended workflow from 4 steps to 5 (overlays now dedicated step)
+  - Smarter integration between overlays, dual-stream, and audio
+
+---
+
 ## [0.1.0] - 2026-04-25
 
 ### Added
@@ -143,4 +185,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.2.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.1.0
