@@ -40,26 +40,34 @@ sudo apt update && sudo apt upgrade -y
 
 ## Paso 2 — Instalar dependencias
 
-### Cámara USB (recomendado para empezar)
+El proyecto incluye un script que instala automáticamente todo lo necesario:
 
 ```bash
-sudo apt install -y \
-    ffmpeg \
-    v4l-utils \
-    alsa-utils \
-    git \
-    curl
+# Cámara USB (webcam) — caso más común
+sudo scripts/install-deps.sh --usb-camera
+
+# Módulo CSI oficial (Camera Module de Raspberry Pi)
+sudo scripts/install-deps.sh --csi-camera
+
+# Ambas cámaras + servidor IA
+sudo scripts/install-deps.sh --full
+
+# Ver qué se instalaría sin instalar nada
+scripts/install-deps.sh --dry-run
+```
+
+O instalar manualmente según tu cámara:
+
+### Cámara USB
+
+```bash
+sudo apt install -y ffmpeg v4l-utils alsa-utils git curl bc
 ```
 
 ### Módulo CSI (Camera Module oficial)
 
 ```bash
-sudo apt install -y \
-    libcamera-apps \
-    ffmpeg \
-    alsa-utils \
-    git \
-    curl
+sudo apt install -y libcamera-apps ffmpeg alsa-utils git curl bc
 ```
 
 | Paquete | Para qué se usa |
@@ -69,7 +77,8 @@ sudo apt install -y \
 | `alsa-utils` | detección y prueba de micrófono USB (`arecord`, `alsamixer`) |
 | `libcamera-apps` | solo si usas el módulo CSI oficial (`libcamera-vid`) |
 | `git` | clonar el repositorio |
-| `curl` | descargar mediamtx (opcional) |
+| `curl` | descargas, webhooks |
+| `bc` | cálculos de tiempo en motion-detect.sh |
 
 ---
 
