@@ -241,10 +241,12 @@ fi
 
 if [[ "$NO_AUDIO" == false ]]; then
     AUDIO_ARGS=(
-        -thread_queue_size 4096
-        -f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV"
+        -thread_queue_size 8192
+        -f alsa
+        -buffer_size 16384
+        -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV"
         -acodec aac -b:a 128k
-        -af aresample=async=1:min_hard_comp=0.100000:first_pts=0
+        -af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0"
     )
 else
     AUDIO_ARGS=(-an)
@@ -284,7 +286,7 @@ if [[ "$MODE" == "capture" ]]; then
     ffmpeg \
         -hide_banner \
         -loglevel warning \
-        -thread_queue_size 4096 \
+        -thread_queue_size 8192 \
         -f v4l2 \
         -input_format mjpeg \
         -video_size "${WIDTH}x${HEIGHT}" \
@@ -332,7 +334,7 @@ if [[ "$MODE" == "stream" ]]; then
     ffmpeg \
         -hide_banner \
         -loglevel warning \
-        -thread_queue_size 4096 \
+        -thread_queue_size 8192 \
         -f v4l2 \
         -input_format mjpeg \
         -video_size "${WIDTH}x${HEIGHT}" \

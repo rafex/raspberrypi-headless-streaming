@@ -18,6 +18,8 @@
 #   --mono         Capturar audio en mono — 1 canal (default)
 #   --stereo       Capturar audio en estéreo — 2 canales
 #   --audio-ch N   Número de canales explícito: 1 o 2 (default: 1)
+#   --mic-vol N    Multiplicador de volumen del micrófono (default: 2.0)
+#                  1.0 = sin cambio, 2.0 = doble, 3.0 = triple
 #   --no-audio     Grabar solo video sin audio
 #   --tmp          Guardar siempre en /tmp (aunque se pase nombre de archivo)
 #   --help         Mostrar esta ayuda
@@ -29,6 +31,7 @@
 #   ./rec.sh /home/pi/videos/demo.mp4 # guarda en ruta específica
 #   ./rec.sh --cam /dev/video0 --mic plughw:1,0 --mono -t 30
 #   ./rec.sh --stereo -t 60 demo.mp4
+#   ./rec.sh --mic-vol 3.0 -t 30     # subir volumen al triple
 
 set -euo pipefail
 
@@ -44,6 +47,7 @@ CAM_DEV=""
 MIC_DEV=""
 MIC_RATE=0          # 0 = autodetectar según el micrófono encontrado
 MIC_CH=1            # 1 = mono (default), 2 = stereo
+MIC_VOL=2.0         # multiplicador de volumen (1.0 = sin cambio)
 NO_AUDIO=false
 FORCE_TMP=false
 OUTPUT=""
@@ -71,9 +75,10 @@ while [[ $# -gt 0 ]]; do
         --cam)       CAM_DEV="$2";   shift 2 ;;
         --mic)       MIC_DEV="$2";   shift 2 ;;
         --mic-rate)  MIC_RATE="$2";  shift 2 ;;
-        --mono)      MIC_CH=1;       shift ;;
-        --stereo)    MIC_CH=2;       shift ;;
+        --mono)      MIC_CH=1;        shift ;;
+        --stereo)    MIC_CH=2;        shift ;;
         --audio-ch)  MIC_CH="$2";    shift 2 ;;
+        --mic-vol)   MIC_VOL="$2";   shift 2 ;;
         --no-audio)  NO_AUDIO=true;  shift ;;
         --tmp)       FORCE_TMP=true; shift ;;
         --help)      usage ;;
@@ -234,7 +239,7 @@ if [[ "$NO_AUDIO" == true ]]; then
 else
     CH_LABEL="mono"
     [[ "$MIC_CH" -eq 2 ]] && CH_LABEL="stereo"
-    echo "  Audio      : $MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL}"
+    echo "  Audio      : $MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL} (volumen x${MIC_VOL})"
 fi
 if [[ "$DURATION" -eq 0 ]]; then
     echo "  Duración   : indefinida — Ctrl+C para detener"
@@ -253,14 +258,15 @@ DURATION_ARGS=()
 AUDIO_ARGS=()
 if [[ "$NO_AUDIO" == false ]]; then
     AUDIO_ARGS=(
-        -thread_queue_size 4096
+        -thread_queue_size 8192
         -f alsa
+        -buffer_size 16384
         -ar "$MIC_RATE"
         -ac "$MIC_CH"
         -i "$MIC_DEV"
         -acodec aac
         -b:a 128k
-        -af aresample=async=1:min_hard_comp=0.100000:first_pts=0
+        -af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=${MIC_VOL}"
     )
 else
     AUDIO_ARGS=(-an)
@@ -273,7 +279,7 @@ ffmpeg \
     -hide_banner \
     -loglevel warning \
     -stats \
-    -thread_queue_size 4096 \
+    -thread_queue_size 8192 \
     -f v4l2 \
     -input_format "$INPUT_FORMAT" \
     -video_size "${WIDTH}x${HEIGHT}" \
