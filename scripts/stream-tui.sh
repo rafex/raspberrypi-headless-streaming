@@ -132,11 +132,11 @@ logo_download_if_url() {
         echo "" >&2
         echo -e "  ${C_DIM}Descargando logo desde URL...${C_RESET}" >&2
         if command -v wget >/dev/null 2>&1; then
-            wget -q -O "$dest" "$src" 2>&1 \
+            wget -q -O "$dest" "$src" \
                 && echo -e "  ${C_GREEN}[✓]${C_RESET} Descargado con wget → $dest" >&2 \
                 || { echo -e "  ${C_RED}[✗]${C_RESET} Error al descargar con wget." >&2; echo ""; return; }
         elif command -v curl >/dev/null 2>&1; then
-            curl -sL -o "$dest" "$src" 2>&1 \
+            curl -sL -o "$dest" "$src" \
                 && echo -e "  ${C_GREEN}[✓]${C_RESET} Descargado con curl → $dest" >&2 \
                 || { echo -e "  ${C_RED}[✗]${C_RESET} Error al descargar con curl." >&2; echo ""; return; }
         else
@@ -151,6 +151,41 @@ logo_download_if_url() {
     else
         echo "$src"
     fi
+}
+
+# Redimensiona una imagen al ancho indicado conservando la proporción.
+# Genera /tmp/stream_logo_resized_PID.png y devuelve su ruta.
+# Usa ffmpeg (siempre disponible) o convert (ImageMagick) como alternativa.
+# Si ambos fallan, devuelve la ruta original sin modificar.
+logo_resize() {
+    local src="$1"
+    local width="$2"
+    local dest="/tmp/stream_logo_resized_$$.png"
+
+    echo "" >&2
+    echo -e "  ${C_DIM}Redimensionando logo a ${width}px de ancho...${C_RESET}" >&2
+
+    # ffmpeg: -vf scale=W:-1  (-1 = altura proporcional, redondea a par)
+    if ffmpeg -hide_banner -loglevel error \
+              -i "$src" -vf "scale=${width}:-2" -frames:v 1 \
+              -y "$dest" 2>/dev/null; then
+        echo -e "  ${C_GREEN}[✓]${C_RESET} Redimensionado con ffmpeg → $dest" >&2
+        echo "$dest"
+        return
+    fi
+
+    # Fallback: convert (ImageMagick)
+    if command -v convert >/dev/null 2>&1; then
+        if convert "$src" -resize "${width}x" "$dest" 2>/dev/null; then
+            echo -e "  ${C_GREEN}[✓]${C_RESET} Redimensionado con convert → $dest" >&2
+            echo "$dest"
+            return
+        fi
+    fi
+
+    # Sin resize: usar original
+    echo -e "  ${C_YELLOW}[!]${C_RESET} No se pudo redimensionar — se usará la imagen original." >&2
+    echo "$src"
 }
 
 supports_mjpeg() {
@@ -476,7 +511,9 @@ if confirm "¿Agregar logo PNG en una esquina?"; then
             esac
             ask "Margen en píxeles desde el borde" OVERLAY_LOGO_PAD "20"
 
+            # Resize previo al stream (una sola vez, menos CPU durante la transmisión)
             if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
+                OVERLAY_LOGO=$(logo_resize "$OVERLAY_LOGO" "$OVERLAY_LOGO_W")
                 ok "Logo: $(basename "$OVERLAY_LOGO") — ${OVERLAY_LOGO_W}px — posición $OVERLAY_LOGO_POS (pad ${OVERLAY_LOGO_PAD}px)"
             else
                 ok "Logo: $(basename "$OVERLAY_LOGO") — tamaño original — posición $OVERLAY_LOGO_POS (pad ${OVERLAY_LOGO_PAD}px)"
@@ -599,16 +636,6 @@ case "$OVERLAY_LOGO_POS" in
     br) _LOGO_X="W-w-$_PAD";     _LOGO_Y="H-h-$_PAD" ;;
 esac
 
-# Prefijo de scale para el logo: "[1:v]scale=W:-1[logo_s];" (vacío si sin scale)
-# -1 en altura = mantener proporción automáticamente
-if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
-    _LOGO_SCALE="[1:v]scale=${OVERLAY_LOGO_W}:-1[logo_s];"
-    _LOGO_REF="[logo_s]"
-else
-    _LOGO_SCALE=""
-    _LOGO_REF="[1:v]"
-fi
-
 # Calcular posición Y del banner
 _BAR_H=46   # altura de la barra en píxeles
 _FONT_SIZE=26
@@ -631,11 +658,11 @@ _BANNER_ESC="${_BANNER_ESC//\'/\\'}"
 _VF_FILTER=""
 _VIDEO_MAP=()
 if [[ -n "$OVERLAY_BANNER" && -n "$OVERLAY_LOGO" ]]; then
-    # Banner + logo: drawbox+drawtext sobre [0:v], scale del logo, luego overlay
-    _VF_FILTER="${_LOGO_SCALE}[0:v]drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill,\
+    # Banner + logo: imagen ya redimensionada en /tmp — no hace falta scale en filtro
+    _VF_FILTER="[0:v]drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill,\
 drawtext=${_FONT}text='${_BANNER_ESC}':fontcolor=white:fontsize=${_FONT_SIZE}:\
 x=(w-text_w)/2:y=${_TEXT_Y}[_txt];\
-[_txt]${_LOGO_REF}overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
+[_txt][1:v]overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
     _VIDEO_MAP=(-map "[outv]")
 elif [[ -n "$OVERLAY_BANNER" ]]; then
     # Solo banner: -vf directo (sin logo input)
@@ -644,8 +671,8 @@ drawtext=${_FONT}text='${_BANNER_ESC}':fontcolor=white:fontsize=${_FONT_SIZE}:\
 x=(w-text_w)/2:y=${_TEXT_Y}"
     _VIDEO_MAP=()
 elif [[ -n "$OVERLAY_LOGO" ]]; then
-    # Solo logo: scale opcional + overlay
-    _VF_FILTER="${_LOGO_SCALE}[0:v]${_LOGO_REF}overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
+    # Solo logo: imagen ya redimensionada en /tmp
+    _VF_FILTER="[0:v][1:v]overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
     _VIDEO_MAP=(-map "[outv]")
 fi
 
