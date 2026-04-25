@@ -182,13 +182,10 @@ if [[ "$NO_AUDIO" == false ]]; then
             NO_AUDIO=true
         else
             [[ "$MIC_RATE" -eq 0 ]] && MIC_RATE="$AUTO_RATE"
+            CARD_NUM=$(echo "$MIC_DEV" | grep -oE '[0-9]+' | head -1)
             MIC_NAME=$(arecord -l 2>/dev/null \
-                | grep "^card" \
-                | awk -v dev="$MIC_DEV" '{
-                    match($0, /card ([0-9]+)/, c);
-                    match($0, /\[([^\]]+)\]/, n);
-                    if ("plughw:" c[1] ",0" == dev) print n[1]
-                  }' | head -1 || echo "$MIC_DEV")
+                | grep "^card ${CARD_NUM}:" \
+                | grep -oP '\[.*?\]' | head -1 | tr -d '[]' || echo "$MIC_DEV")
             echo "  [✓] Micrófono: $MIC_NAME ($MIC_DEV — ${MIC_RATE}Hz) [autodetectado]"
         fi
     else
