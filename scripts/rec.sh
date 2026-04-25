@@ -253,12 +253,14 @@ DURATION_ARGS=()
 AUDIO_ARGS=()
 if [[ "$NO_AUDIO" == false ]]; then
     AUDIO_ARGS=(
+        -thread_queue_size 4096
         -f alsa
         -ar "$MIC_RATE"
         -ac "$MIC_CH"
         -i "$MIC_DEV"
         -acodec aac
         -b:a 128k
+        -af aresample=async=1:min_hard_comp=0.100000:first_pts=0
     )
 else
     AUDIO_ARGS=(-an)
@@ -271,6 +273,7 @@ ffmpeg \
     -hide_banner \
     -loglevel warning \
     -stats \
+    -thread_queue_size 4096 \
     -f v4l2 \
     -input_format "$INPUT_FORMAT" \
     -video_size "${WIDTH}x${HEIGHT}" \
@@ -281,6 +284,7 @@ ffmpeg \
     -vcodec libx264 \
     -preset ultrafast \
     -b:v "$BITRATE" \
+    -vsync cfr \
     -movflags +faststart \
     "$OUTPUT"
 

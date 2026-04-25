@@ -240,7 +240,12 @@ if [[ "$NO_AUDIO" == false ]]; then
 fi
 
 if [[ "$NO_AUDIO" == false ]]; then
-    AUDIO_ARGS=(-f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV" -acodec aac -b:a 128k)
+    AUDIO_ARGS=(
+        -thread_queue_size 4096
+        -f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV"
+        -acodec aac -b:a 128k
+        -af aresample=async=1:min_hard_comp=0.100000:first_pts=0
+    )
 else
     AUDIO_ARGS=(-an)
 fi
@@ -279,6 +284,7 @@ if [[ "$MODE" == "capture" ]]; then
     ffmpeg \
         -hide_banner \
         -loglevel warning \
+        -thread_queue_size 4096 \
         -f v4l2 \
         -input_format mjpeg \
         -video_size "${WIDTH}x${HEIGHT}" \
@@ -289,6 +295,7 @@ if [[ "$MODE" == "capture" ]]; then
         -vcodec libx264 \
         -preset ultrafast \
         -b:v "$BITRATE" \
+        -vsync cfr \
         -movflags +faststart \
         "$OUTPUT"
 
@@ -325,6 +332,7 @@ if [[ "$MODE" == "stream" ]]; then
     ffmpeg \
         -hide_banner \
         -loglevel warning \
+        -thread_queue_size 4096 \
         -f v4l2 \
         -input_format mjpeg \
         -video_size "${WIDTH}x${HEIGHT}" \
@@ -335,6 +343,7 @@ if [[ "$MODE" == "stream" ]]; then
         -vcodec libx264 \
         -preset ultrafast \
         -b:v "$BITRATE" \
+        -vsync cfr \
         -f flv \
         "$URL"
 fi
