@@ -157,6 +157,25 @@ Entregable: servidor funcional en Pi 4B seleccionando proveedor con `AI_PROVIDER
 
 ---
 
+### Fase 10 — Captura de audio por micrófono USB
+
+**Meta:** integrar audio USB al pipeline de captura y streaming para transmitir video + audio sincronizados.
+
+Tareas:
+
+- [x] Documentar detección del micrófono USB en DietPi/Debian (`arecord -l`, `aplay -l`)
+- [x] Script `scripts/audio-check.sh` — verifica dispositivos de audio disponibles y niveles de señal
+- [x] Actualizar `scripts/capture.sh` — opción `--audio` para grabar video + audio en MP4
+- [x] Actualizar `scripts/stream.sh` — soporte de audio USB real (no dummy `hw:0`)
+- [x] Actualizar `scripts/stream-overlay.sh` — audio USB en streams con overlays
+- [x] Documentar configuración ALSA para micrófono USB como dispositivo default
+- [x] Documentar ajuste de niveles con `alsamixer`
+- [x] Documentar limitaciones de latencia A/V en Pi 3B
+
+Entregable: stream con audio USB sincronizado desde `stream.sh` y `capture.sh`.
+
+---
+
 ## Estructura final del repositorio
 
 ```
@@ -224,8 +243,11 @@ Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5
                                       Fase 8
                                          ↓
                                       Fase 9
+                                         ↓
+                                      Fase 10
 ```
 
 Las fases 1–5 son el núcleo funcional.  
 Las fases 6–8 son extensiones para casos de uso avanzados.  
-La fase 9 es el servidor de análisis de IA con proveedores configurables.
+La fase 9 es el servidor de análisis de IA con proveedores configurables.  
+La fase 10 agrega captura de audio USB al pipeline completo.

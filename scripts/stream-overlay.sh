@@ -29,6 +29,9 @@
 #
 # Opciones de audio:
 #   -a ABITRATE    Bitrate de audio en bits/s (default: 128000)
+#   --audio-dev D  Dispositivo ALSA del micrófono (default: detección automática)
+#   --audio-rate N Sample rate en Hz (default: 44100)
+#   --audio-ch N   Canales 1=mono 2=stereo (default: 1)
 #   --no-audio     Deshabilitar audio
 #
 # Otras:
@@ -56,10 +59,13 @@ HEIGHT=1080
 FPS=30
 BITRATE=4500000
 AUDIO_BITRATE=128000
+AUDIO_RATE=44100
+AUDIO_CH=1
 DURATION=0
 PRESET="veryfast"
 URL="${RTMP_URL:-}"
 KEY="${STREAM_KEY:-}"
+AUDIO_DEV="${AUDIO_DEVICE:-}"
 NO_AUDIO=false
 
 LOGO_FILE=""
@@ -118,17 +124,20 @@ while [[ $# -gt 0 ]]; do
         -h)          HEIGHT="$2"; shift 2 ;;
         -f)          FPS="$2"; shift 2 ;;
         -b)          BITRATE="$2"; shift 2 ;;
-        -a)          AUDIO_BITRATE="$2"; shift 2 ;;
-        -t)          DURATION="$2"; shift 2 ;;
-        --preset)    PRESET="$2"; shift 2 ;;
-        --logo)      LOGO_FILE="$2"; shift 2 ;;
-        --logo-pos)  LOGO_POS="$2"; shift 2 ;;
-        --logo-pad)  LOGO_PAD="$2"; shift 2 ;;
-        --frame)     FRAME_FILE="$2"; shift 2 ;;
-        --text)      TEXT_CONTENT="$2"; shift 2 ;;
-        --text-pos)  TEXT_POS="$2"; shift 2 ;;
-        --timestamp) USE_TIMESTAMP=true; shift ;;
-        --no-audio)  NO_AUDIO=true; shift ;;
+        -a)           AUDIO_BITRATE="$2"; shift 2 ;;
+        --audio-dev)  AUDIO_DEV="$2"; shift 2 ;;
+        --audio-rate) AUDIO_RATE="$2"; shift 2 ;;
+        --audio-ch)   AUDIO_CH="$2"; shift 2 ;;
+        -t)           DURATION="$2"; shift 2 ;;
+        --preset)     PRESET="$2"; shift 2 ;;
+        --logo)       LOGO_FILE="$2"; shift 2 ;;
+        --logo-pos)   LOGO_POS="$2"; shift 2 ;;
+        --logo-pad)   LOGO_PAD="$2"; shift 2 ;;
+        --frame)      FRAME_FILE="$2"; shift 2 ;;
+        --text)       TEXT_CONTENT="$2"; shift 2 ;;
+        --text-pos)   TEXT_POS="$2"; shift 2 ;;
+        --timestamp)  USE_TIMESTAMP=true; shift ;;
+        --no-audio)   NO_AUDIO=true; shift ;;
         --help)      usage ;;
         *) die "Opción desconocida: $1. Usa --help para ver las opciones." ;;
     esac
@@ -228,11 +237,35 @@ build_filter_complex() {
     echo "${input_args[@]:-} -filter_complex \"${filter_str}\" -map \"${current_label}\""
 }
 
+# --- Detectar automáticamente micrófono USB ---
+detect_usb_mic() {
+    arecord -l 2>/dev/null \
+        | grep -i "usb\|microphone\|mic\|webcam" \
+        | grep "^card" \
+        | head -1 \
+        | awk '{
+            match($0, /card ([0-9]+).*device ([0-9]+)/, arr);
+            if (arr[1] != "" && arr[2] != "")
+                print "plughw:" arr[1] "," arr[2]
+        }' || true
+}
+
 # --- Construir argumentos de audio ---
 if [[ "$NO_AUDIO" == true ]]; then
     AUDIO_ARGS=(-an)
+    AUDIO_INFO="deshabilitado"
 else
-    AUDIO_ARGS=(-f alsa -i hw:0 -acodec aac -b:a "${AUDIO_BITRATE}")
+    if [[ -z "$AUDIO_DEV" ]]; then
+        AUDIO_DEV=$(detect_usb_mic)
+        if [[ -n "$AUDIO_DEV" ]]; then
+            echo "Micrófono USB detectado: ${AUDIO_DEV}"
+        else
+            echo "AVISO: No se detectó micrófono USB. Usando audio interno (hw:0)."
+            AUDIO_DEV="hw:0"
+        fi
+    fi
+    AUDIO_ARGS=(-f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV" -acodec aac -b:a "${AUDIO_BITRATE}")
+    AUDIO_INFO="${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch"
 fi
 
 # --- Determinar si hay overlays activos ---
@@ -245,11 +278,7 @@ echo "  Resolución  : ${WIDTH}x${HEIGHT}"
 echo "  FPS         : ${FPS}"
 echo "  Bitrate     : ${BITRATE} bps ($(( BITRATE / 1000 )) kbps)"
 echo "  Preset      : ${PRESET}"
-if [[ "$NO_AUDIO" == true ]]; then
-    echo "  Audio       : deshabilitado"
-else
-    echo "  Audio       : AAC ${AUDIO_BITRATE} bps"
-fi
+echo "  Audio       : ${AUDIO_INFO}"
 echo "  Overlays activos:"
 [[ -n "$LOGO_FILE"    ]] && echo "    - Logo      : ${LOGO_FILE} (posición: ${LOGO_POS})"
 [[ -n "$FRAME_FILE"   ]] && echo "    - Marco     : ${FRAME_FILE}"
