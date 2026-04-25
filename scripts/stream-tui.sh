@@ -123,6 +123,36 @@ detect_mics() {
     done
 }
 
+# Descarga un logo desde una URL (http/https) a /tmp si es necesario.
+# Devuelve la ruta local del archivo descargado (o la original si ya es local).
+logo_download_if_url() {
+    local src="$1"
+    if [[ "$src" =~ ^https?:// ]]; then
+        local dest="/tmp/stream_logo_$$.png"
+        echo "" >&2
+        echo -e "  ${C_DIM}Descargando logo desde URL...${C_RESET}" >&2
+        if command -v wget >/dev/null 2>&1; then
+            wget -q -O "$dest" "$src" 2>&1 \
+                && echo -e "  ${C_GREEN}[✓]${C_RESET} Descargado con wget → $dest" >&2 \
+                || { echo -e "  ${C_RED}[✗]${C_RESET} Error al descargar con wget." >&2; echo ""; return; }
+        elif command -v curl >/dev/null 2>&1; then
+            curl -sL -o "$dest" "$src" 2>&1 \
+                && echo -e "  ${C_GREEN}[✓]${C_RESET} Descargado con curl → $dest" >&2 \
+                || { echo -e "  ${C_RED}[✗]${C_RESET} Error al descargar con curl." >&2; echo ""; return; }
+        else
+            echo -e "  ${C_RED}[✗]${C_RESET} wget ni curl encontrados. Instalar con: sudo apt install wget" >&2
+            echo ""; return
+        fi
+        # Verificar que sea realmente una imagen
+        if ! file "$dest" 2>/dev/null | grep -qiE "PNG|JPEG|image"; then
+            echo -e "  ${C_YELLOW}[!]${C_RESET} El archivo descargado no parece ser una imagen PNG." >&2
+        fi
+        echo "$dest"
+    else
+        echo "$src"
+    fi
+}
+
 supports_mjpeg() {
     v4l2-ctl --device="$1" --list-formats 2>/dev/null | grep -qE "MJPG|MJPEG"
 }
@@ -147,7 +177,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # PASO 1 — Cámara
 # ---------------------------------------------------------------------------
-header "1 / 4  Cámara USB"
+header "1 / 5  Cámara USB"
 
 mapfile -t CAM_RAW < <(detect_cameras)
 
@@ -189,7 +219,7 @@ ok "Resolución: ${WIDTH}x${HEIGHT}"
 # ---------------------------------------------------------------------------
 # PASO 2 — Micrófono
 # ---------------------------------------------------------------------------
-header "2 / 4  Micrófono"
+header "2 / 5  Micrófono"
 
 mapfile -t MIC_RAW < <(detect_mics)
 
@@ -249,7 +279,7 @@ fi
 # ---------------------------------------------------------------------------
 # PASO 3 — Plataforma y Stream Key
 # ---------------------------------------------------------------------------
-header "3 / 4  Plataforma de streaming"
+header "3 / 5  Plataforma de streaming"
 
 _PLAT_OPTS=(
     "YouTube Live"
@@ -352,9 +382,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# PASO 4 — Opciones adicionales
+# PASO 4 — Bitrate de video
 # ---------------------------------------------------------------------------
-header "4 / 4  Opciones de video"
+header "4 / 5  Opciones de video"
 
 _BR_OPTS=("4500 kbps  (alta calidad — requiere buena subida)" "2500 kbps  (balance — recomendado)" "1500 kbps  (bajo ancho de banda)" "800  kbps  (mínimo)")
 pick _IDX "Bitrate de video:" "${_BR_OPTS[@]}"
@@ -373,6 +403,106 @@ if supports_mjpeg "$CAM_DEV"; then
 else
     INPUT_FORMAT="yuyv422"
     INPUT_FORMAT_LABEL="YUYV"
+fi
+
+# ---------------------------------------------------------------------------
+# PASO 5 — Overlays (logo + banner)
+# ---------------------------------------------------------------------------
+header "5 / 5  Overlays"
+
+OVERLAY_LOGO=""
+OVERLAY_LOGO_POS="br"   # tl tr bl br
+OVERLAY_LOGO_PAD=20
+OVERLAY_LOGO_W=120      # ancho en px — ffmpeg escala la imagen al iniciarse
+OVERLAY_BANNER=""
+OVERLAY_BANNER_POS="footer"  # header | footer
+
+echo ""
+if confirm "¿Agregar logo PNG en una esquina?"; then
+    echo ""
+    info "Puedes indicar una ruta local o una URL (http/https)."
+    info "Tamaños recomendados según resolución:"
+    info "  360p / 480p  →  60 – 80 px de ancho"
+    info "  720p  (HD)   →  100 – 150 px de ancho  ← tu resolución actual si elegiste 720p"
+    info "  1080p (FHD)  →  120 – 200 px de ancho"
+    info "Formato ideal: PNG con fondo transparente (canal alfa)."
+    info "Si no tienes PNG transparente, cualquier JPEG/PNG funciona también."
+    echo ""
+    ask "Ruta local o URL del logo" OVERLAY_LOGO
+
+    if [[ -n "$OVERLAY_LOGO" ]]; then
+        # Descargar si es URL
+        OVERLAY_LOGO=$(logo_download_if_url "$OVERLAY_LOGO")
+
+        if [[ -z "$OVERLAY_LOGO" || ! -f "$OVERLAY_LOGO" ]]; then
+            warn "No se pudo obtener el logo — se omitirá."
+            OVERLAY_LOGO=""
+        else
+            # Tamaño de visualización (el script escala la imagen en ffmpeg)
+            # Calcular sugerencia según resolución
+            if   [[ "$HEIGHT" -ge 1080 ]]; then _W_SUGG=150
+            elif [[ "$HEIGHT" -ge  720 ]]; then _W_SUGG=120
+            elif [[ "$HEIGHT" -ge  480 ]]; then _W_SUGG=90
+            else                                _W_SUGG=70
+            fi
+
+            _W_OPTS=(
+                "Automático — usar imagen tal como está (sin escalar)"
+                "${_W_SUGG} px  — recomendado para ${HEIGHT}p"
+                "80 px  — pequeño"
+                "100 px — mediano"
+                "150 px — grande"
+                "200 px — muy grande"
+                "Personalizado — ingresar valor"
+            )
+            pick _IDX "Ancho del logo en el video:" "${_W_OPTS[@]}"
+            case "$_IDX" in
+                0) OVERLAY_LOGO_W=0 ;;          # 0 = sin scale
+                1) OVERLAY_LOGO_W="$_W_SUGG" ;;
+                2) OVERLAY_LOGO_W=80  ;;
+                3) OVERLAY_LOGO_W=100 ;;
+                4) OVERLAY_LOGO_W=150 ;;
+                5) OVERLAY_LOGO_W=200 ;;
+                6) ask "Ancho en píxeles" OVERLAY_LOGO_W "$_W_SUGG" ;;
+            esac
+
+            _POS_OPTS=("br — inferior derecha (default)" "bl — inferior izquierda" "tr — superior derecha" "tl — superior izquierda")
+            pick _IDX "Posición del logo:" "${_POS_OPTS[@]}"
+            case "$_IDX" in
+                0) OVERLAY_LOGO_POS="br" ;;
+                1) OVERLAY_LOGO_POS="bl" ;;
+                2) OVERLAY_LOGO_POS="tr" ;;
+                3) OVERLAY_LOGO_POS="tl" ;;
+            esac
+            ask "Margen en píxeles desde el borde" OVERLAY_LOGO_PAD "20"
+
+            if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
+                ok "Logo: $(basename "$OVERLAY_LOGO") — ${OVERLAY_LOGO_W}px — posición $OVERLAY_LOGO_POS (pad ${OVERLAY_LOGO_PAD}px)"
+            else
+                ok "Logo: $(basename "$OVERLAY_LOGO") — tamaño original — posición $OVERLAY_LOGO_POS (pad ${OVERLAY_LOGO_PAD}px)"
+            fi
+        fi
+    else
+        ok "Sin logo"
+    fi
+else
+    ok "Sin logo"
+fi
+
+echo ""
+if confirm "¿Agregar banner de texto (título / evento)?"; then
+    ask "Texto del banner" OVERLAY_BANNER
+    if [[ -n "$OVERLAY_BANNER" ]]; then
+        _BP_OPTS=("footer — barra inferior (default)" "header — barra superior")
+        pick _IDX "Posición del banner:" "${_BP_OPTS[@]}"
+        case "$_IDX" in
+            0) OVERLAY_BANNER_POS="footer" ;;
+            1) OVERLAY_BANNER_POS="header" ;;
+        esac
+        ok "Banner: \"$OVERLAY_BANNER\" — $OVERLAY_BANNER_POS"
+    fi
+else
+    ok "Sin banner"
 fi
 
 # ---------------------------------------------------------------------------
@@ -400,6 +530,16 @@ if [[ "$DUAL_STREAM" == true ]]; then
 else
     echo -e "  Destino    : ${C_DIM}${RTMP_URL:0:54}${C_RESET}"
 fi
+if [[ -n "$OVERLAY_LOGO" ]]; then
+    if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
+        echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — ${OVERLAY_LOGO_W}px — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
+    else
+        echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — tamaño original — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
+    fi
+fi
+if [[ -n "$OVERLAY_BANNER" ]]; then
+    echo -e "  Banner     : ${C_BOLD}\"$OVERLAY_BANNER\"${C_RESET} — $OVERLAY_BANNER_POS"
+fi
 echo ""
 
 if ! confirm "¿Iniciar stream?"; then
@@ -417,59 +557,126 @@ echo -e "  ${C_GREEN}${C_BOLD}Iniciando stream... Ctrl+C para detener.${C_RESET}
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+_INPUT_FMT="$INPUT_FORMAT"
 
-# Formato de entrada de cámara
-if supports_mjpeg "$CAM_DEV"; then
-    _INPUT_FMT="mjpeg"
-else
-    _INPUT_FMT="yuyv422"
+# -----------------------------------------------------------------------
+# Buscar fuente de texto disponible para drawtext
+# -----------------------------------------------------------------------
+_FONT=""
+for _f in \
+    /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf \
+    /usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf \
+    /usr/share/fonts/truetype/freefont/FreeSansBold.ttf \
+    /usr/share/fonts/truetype/noto/NotoSans-Bold.ttf; do
+    if [[ -f "$_f" ]]; then _FONT="fontfile=${_f}:"; break; fi
+done
+
+# -----------------------------------------------------------------------
+# Construir filter_complex o -vf según overlays activos
+# -----------------------------------------------------------------------
+# Entradas ffmpeg:
+#   [0]   cámara  (siempre)
+#   [1]   logo PNG (solo si OVERLAY_LOGO no está vacío)
+#   [N]   audio ALSA (índice = 1 sin logo, 2 con logo)
+#
+_LOGO_INPUTS=()
+_AUDIO_IDX=1
+_HAS_OVERLAY=false
+
+[[ -n "$OVERLAY_LOGO" || -n "$OVERLAY_BANNER" ]] && _HAS_OVERLAY=true
+
+if [[ -n "$OVERLAY_LOGO" ]]; then
+    _LOGO_INPUTS=(-i "$OVERLAY_LOGO")
+    _AUDIO_IDX=2
 fi
 
-if [[ "$DUAL_STREAM" == true ]]; then
-    # -----------------------------------------------------------------------
-    # Modo dual stream: ffmpeg tee muxer → YouTube + Facebook simultáneamente
-    # El video se codifica UNA sola vez y se envía a las dos plataformas.
-    # onfail=ignore: si una plataforma cae, la otra sigue.
-    # -----------------------------------------------------------------------
-    echo -e "  ${C_YELLOW}[experimental]${C_RESET} Dual stream activo"
-    echo ""
+# Calcular coordenadas del logo
+_PAD="$OVERLAY_LOGO_PAD"
+case "$OVERLAY_LOGO_POS" in
+    tl) _LOGO_X="$_PAD";         _LOGO_Y="$_PAD" ;;
+    tr) _LOGO_X="W-w-$_PAD";     _LOGO_Y="$_PAD" ;;
+    bl) _LOGO_X="$_PAD";         _LOGO_Y="H-h-$_PAD" ;;
+    br) _LOGO_X="W-w-$_PAD";     _LOGO_Y="H-h-$_PAD" ;;
+esac
 
-    _AUDIO_FFMPEG_ARGS=()
-    if [[ "$NO_AUDIO" == false ]]; then
-        _AUDIO_FFMPEG_ARGS=(
-            -thread_queue_size 8192
-            -f alsa -ar "$MIC_RATE" -ac "$MIC_CH" -i "$MIC_DEV"
-            -acodec aac -b:a 128k
-            -af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0"
-        )
-    else
-        _AUDIO_FFMPEG_ARGS=(-an)
-    fi
-
-    # tee destino: [f=flv:onfail=ignore]URL|[f=flv:onfail=ignore]URL
-    _TEE_DST="[f=flv:onfail=ignore]${YT_URL}|[f=flv:onfail=ignore]${META_URL}"
-
-    ffmpeg \
-        -hide_banner \
-        -loglevel warning \
-        -stats \
-        -thread_queue_size 8192 \
-        -f v4l2 \
-        -input_format "$_INPUT_FMT" \
-        -video_size "${WIDTH}x${HEIGHT}" \
-        -framerate "$FPS" \
-        -i "$CAM_DEV" \
-        "${_AUDIO_FFMPEG_ARGS[@]}" \
-        -vcodec libx264 \
-        -preset ultrafast \
-        -b:v "$BITRATE" \
-        -fps_mode cfr \
-        -f tee \
-        "$_TEE_DST"
+# Prefijo de scale para el logo: "[1:v]scale=W:-1[logo_s];" (vacío si sin scale)
+# -1 en altura = mantener proporción automáticamente
+if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
+    _LOGO_SCALE="[1:v]scale=${OVERLAY_LOGO_W}:-1[logo_s];"
+    _LOGO_REF="[logo_s]"
 else
-    # -----------------------------------------------------------------------
-    # Modo stream normal: delegar en usb-camera.sh
-    # -----------------------------------------------------------------------
+    _LOGO_SCALE=""
+    _LOGO_REF="[1:v]"
+fi
+
+# Calcular posición Y del banner
+_BAR_H=46   # altura de la barra en píxeles
+_FONT_SIZE=26
+case "$OVERLAY_BANNER_POS" in
+    header)
+        _BAR_Y="0"
+        _TEXT_Y="$(( (_BAR_H - _FONT_SIZE) / 2 ))"
+        ;;
+    footer)
+        _BAR_Y="h-${_BAR_H}"
+        _TEXT_Y="h-${_BAR_H}+$(( (_BAR_H - _FONT_SIZE) / 2 ))"
+        ;;
+esac
+
+# Escapar caracteres especiales del texto para drawtext
+_BANNER_ESC="${OVERLAY_BANNER//:/\\:}"
+_BANNER_ESC="${_BANNER_ESC//\'/\\'}"
+
+# Construir el filtro de video
+_VF_FILTER=""
+_VIDEO_MAP=()
+if [[ -n "$OVERLAY_BANNER" && -n "$OVERLAY_LOGO" ]]; then
+    # Banner + logo: drawbox+drawtext sobre [0:v], scale del logo, luego overlay
+    _VF_FILTER="${_LOGO_SCALE}[0:v]drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill,\
+drawtext=${_FONT}text='${_BANNER_ESC}':fontcolor=white:fontsize=${_FONT_SIZE}:\
+x=(w-text_w)/2:y=${_TEXT_Y}[_txt];\
+[_txt]${_LOGO_REF}overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
+    _VIDEO_MAP=(-map "[outv]")
+elif [[ -n "$OVERLAY_BANNER" ]]; then
+    # Solo banner: -vf directo (sin logo input)
+    _VF_FILTER="drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill,\
+drawtext=${_FONT}text='${_BANNER_ESC}':fontcolor=white:fontsize=${_FONT_SIZE}:\
+x=(w-text_w)/2:y=${_TEXT_Y}"
+    _VIDEO_MAP=()
+elif [[ -n "$OVERLAY_LOGO" ]]; then
+    # Solo logo: scale opcional + overlay
+    _VF_FILTER="${_LOGO_SCALE}[0:v]${_LOGO_REF}overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
+    _VIDEO_MAP=(-map "[outv]")
+fi
+
+# Argumentos de filtro para ffmpeg
+_FILTER_ARGS=()
+if [[ -n "$OVERLAY_LOGO" ]]; then
+    _FILTER_ARGS=(-filter_complex "$_VF_FILTER" "${_VIDEO_MAP[@]}")
+elif [[ -n "$OVERLAY_BANNER" ]]; then
+    _FILTER_ARGS=(-vf "$_VF_FILTER")
+fi
+
+# Argumentos de audio
+_AUDIO_FFMPEG_ARGS=()
+_AUDIO_MAP_ARGS=()
+if [[ "$NO_AUDIO" == false ]]; then
+    _AUDIO_FFMPEG_ARGS=(
+        -thread_queue_size 8192
+        -f alsa -ar "$MIC_RATE" -ac "$MIC_CH" -i "$MIC_DEV"
+        -acodec aac -b:a 128k
+        -af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0"
+    )
+    # Con filter_complex hay que mapear el audio explícitamente
+    [[ "${#_VIDEO_MAP[@]}" -gt 0 ]] && _AUDIO_MAP_ARGS=(-map "${_AUDIO_IDX}:a")
+else
+    _AUDIO_FFMPEG_ARGS=(-an)
+fi
+
+# -----------------------------------------------------------------------
+# Modo normal (sin overlays, sin dual): delegar en usb-camera.sh
+# -----------------------------------------------------------------------
+if [[ "$DUAL_STREAM" == false && "$_HAS_OVERLAY" == false ]]; then
     _AUDIO_ARGS=()
     if [[ "$NO_AUDIO" == false ]]; then
         _AUDIO_ARGS=(--audio-dev "$MIC_DEV" --audio-rate "$MIC_RATE" --audio-ch "$MIC_CH")
@@ -484,4 +691,38 @@ else
         -h "$HEIGHT" \
         -b "$BITRATE" \
         -u "$RTMP_URL"
+    exit 0
 fi
+
+# -----------------------------------------------------------------------
+# Todos los demás modos usan ffmpeg directo (overlays y/o dual stream)
+# -----------------------------------------------------------------------
+[[ "$DUAL_STREAM" == true ]] && \
+    echo -e "  ${C_YELLOW}[experimental]${C_RESET} Dual stream activo" && echo ""
+
+# Destino de salida
+if [[ "$DUAL_STREAM" == true ]]; then
+    _OUTPUT_ARGS=(-f tee "[f=flv:onfail=ignore]${YT_URL}|[f=flv:onfail=ignore]${META_URL}")
+else
+    _OUTPUT_ARGS=(-f flv "$RTMP_URL")
+fi
+
+ffmpeg \
+    -hide_banner \
+    -loglevel warning \
+    -stats \
+    -thread_queue_size 8192 \
+    -f v4l2 \
+    -input_format "$_INPUT_FMT" \
+    -video_size "${WIDTH}x${HEIGHT}" \
+    -framerate "$FPS" \
+    -i "$CAM_DEV" \
+    "${_LOGO_INPUTS[@]}" \
+    "${_AUDIO_FFMPEG_ARGS[@]}" \
+    "${_FILTER_ARGS[@]}" \
+    "${_AUDIO_MAP_ARGS[@]}" \
+    -vcodec libx264 \
+    -preset ultrafast \
+    -b:v "$BITRATE" \
+    -fps_mode cfr \
+    "${_OUTPUT_ARGS[@]}"
