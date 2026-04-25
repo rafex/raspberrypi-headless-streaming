@@ -260,7 +260,6 @@ if [[ "$NO_AUDIO" == false ]]; then
     AUDIO_ARGS=(
         -thread_queue_size 8192
         -f alsa
-        -buffer_size 16384
         -ar "$MIC_RATE"
         -ac "$MIC_CH"
         -i "$MIC_DEV"
@@ -290,7 +289,7 @@ ffmpeg \
     -vcodec libx264 \
     -preset ultrafast \
     -b:v "$BITRATE" \
-    -vsync cfr \
+    -fps_mode cfr \
     -movflags +faststart \
     "$OUTPUT"
 

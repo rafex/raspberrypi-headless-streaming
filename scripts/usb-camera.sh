@@ -243,7 +243,6 @@ if [[ "$NO_AUDIO" == false ]]; then
     AUDIO_ARGS=(
         -thread_queue_size 8192
         -f alsa
-        -buffer_size 16384
         -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV"
         -acodec aac -b:a 128k
         -af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0"
@@ -297,7 +296,7 @@ if [[ "$MODE" == "capture" ]]; then
         -vcodec libx264 \
         -preset ultrafast \
         -b:v "$BITRATE" \
-        -vsync cfr \
+        -fps_mode cfr \
         -movflags +faststart \
         "$OUTPUT"
 
@@ -345,7 +344,7 @@ if [[ "$MODE" == "stream" ]]; then
         -vcodec libx264 \
         -preset ultrafast \
         -b:v "$BITRATE" \
-        -vsync cfr \
+        -fps_mode cfr \
         -f flv \
         "$URL"
 fi
