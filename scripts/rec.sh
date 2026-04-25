@@ -209,14 +209,12 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 if [[ -z "$OUTPUT" || "$FORCE_TMP" == true ]]; then
     OUTPUT="/tmp/rec_${TIMESTAMP}.mp4"
-else
-    # Si es solo un nombre sin ruta, guardar en directorio actual
-    if [[ "$OUTPUT" != /* && "$OUTPUT" != ./* ]]; then
-        OUTPUT="./$OUTPUT"
-    fi
-    # Asegurar extensión .mp4
-    [[ "$OUTPUT" == *.mp4 ]] || OUTPUT="${OUTPUT%.mkv}.mp4"
+elif [[ "$OUTPUT" != */* ]]; then
+    # Solo nombre de archivo sin ruta → guardar en /tmp/
+    OUTPUT="/tmp/$OUTPUT"
 fi
+# Asegurar extensión .mp4
+[[ "$OUTPUT" == *.mp4 ]] || OUTPUT="${OUTPUT%.mkv}.mp4"
 
 # Asegurar que el directorio de destino existe
 OUTPUT_DIR="$(dirname "$OUTPUT")"
