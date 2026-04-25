@@ -650,29 +650,34 @@ case "$OVERLAY_BANNER_POS" in
         ;;
 esac
 
-# Escapar caracteres especiales del texto para drawtext
-_BANNER_ESC="${OVERLAY_BANNER//:/\\:}"
-_BANNER_ESC="${_BANNER_ESC//\'/\\'}"
+# Texto del banner: escribir a archivo temporal para evitar cualquier problema
+# de quoting con 'text=...' en el filtro drawtext.
+# textfile= acepta el texto tal como está, sin necesidad de escapar nada.
+_BANNER_FILE=""
+if [[ -n "$OVERLAY_BANNER" ]]; then
+    _BANNER_FILE="/tmp/stream_banner_$$.txt"
+    printf '%s' "$OVERLAY_BANNER" > "$_BANNER_FILE"
+fi
+
+# Bloques reutilizables del filtro (sin comillas simples ni líneas de continuación)
+_DRAWBOX="drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill"
+_DRAWTEXT="${_FONT}textfile=${_BANNER_FILE}:fontcolor=white:fontsize=${_FONT_SIZE}:x=(w-text_w)/2:y=${_TEXT_Y}"
+_OVERLAY_POS="x=${_LOGO_X}:y=${_LOGO_Y}"
 
 # Construir el filtro de video
 _VF_FILTER=""
 _VIDEO_MAP=()
 if [[ -n "$OVERLAY_BANNER" && -n "$OVERLAY_LOGO" ]]; then
-    # Banner + logo: imagen ya redimensionada en /tmp — no hace falta scale en filtro
-    _VF_FILTER="[0:v]drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill,\
-drawtext=${_FONT}text='${_BANNER_ESC}':fontcolor=white:fontsize=${_FONT_SIZE}:\
-x=(w-text_w)/2:y=${_TEXT_Y}[_txt];\
-[_txt][1:v]overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
+    # Banner + logo
+    _VF_FILTER="[0:v]${_DRAWBOX},drawtext=${_DRAWTEXT}[_txt];[_txt][1:v]overlay=${_OVERLAY_POS}[outv]"
     _VIDEO_MAP=(-map "[outv]")
 elif [[ -n "$OVERLAY_BANNER" ]]; then
-    # Solo banner: -vf directo (sin logo input)
-    _VF_FILTER="drawbox=x=0:y=${_BAR_Y}:w=iw:h=${_BAR_H}:color=black@0.72:t=fill,\
-drawtext=${_FONT}text='${_BANNER_ESC}':fontcolor=white:fontsize=${_FONT_SIZE}:\
-x=(w-text_w)/2:y=${_TEXT_Y}"
+    # Solo banner (-vf simple, sin logo input)
+    _VF_FILTER="${_DRAWBOX},drawtext=${_DRAWTEXT}"
     _VIDEO_MAP=()
 elif [[ -n "$OVERLAY_LOGO" ]]; then
-    # Solo logo: imagen ya redimensionada en /tmp
-    _VF_FILTER="[0:v][1:v]overlay=x=${_LOGO_X}:y=${_LOGO_Y}[outv]"
+    # Solo logo
+    _VF_FILTER="[0:v][1:v]overlay=${_OVERLAY_POS}[outv]"
     _VIDEO_MAP=(-map "[outv]")
 fi
 
