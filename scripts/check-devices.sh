@@ -102,7 +102,7 @@ else
               END { print best }' || echo "?")
 
         ok "$dev — $NAME"
-        info "Driver   : $driver"
+        info "Driver   : $DRIVER"
         info "Formatos : $VIDEO_FORMATS"
         info "Mejor res: $BEST_RES"
 
