@@ -153,7 +153,7 @@ CAM_NAMES=()
 for entry in "${CAM_RAW[@]}"; do
     CAM_DEVS+=("${entry%%|*}")
     CAM_NAMES+=("${entry##*|}")
-    CAM_LABELS+=("${entry##*|}  ${C_DIM}(${entry%%|*})${C_RESET}")
+    CAM_LABELS+=("${entry##*|}  (${entry%%|*})")
 done
 
 if [[ "${#CAM_RAW[@]}" -eq 1 ]]; then
@@ -204,7 +204,7 @@ else
     for entry in "${MIC_RAW[@]}"; do
         MIC_DEVS+=("${entry%%|*}")
         MIC_NAMES+=("${entry##*|}")
-        MIC_LABELS+=("${entry##*|}  ${C_DIM}(${entry%%|*})${C_RESET}")
+        MIC_LABELS+=("${entry##*|}  (${entry%%|*})")
     done
     MIC_LABELS+=("Sin audio")
 
