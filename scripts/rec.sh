@@ -15,6 +15,9 @@
 #   --cam DEV      Forzar dispositivo de cámara (ej: /dev/video0)
 #   --mic DEV      Forzar dispositivo de micrófono (ej: plughw:1,0)
 #   --mic-rate N   Sample rate del micrófono en Hz (default: autodetectado)
+#   --mono         Capturar audio en mono — 1 canal (default)
+#   --stereo       Capturar audio en estéreo — 2 canales
+#   --audio-ch N   Número de canales explícito: 1 o 2 (default: 1)
 #   --no-audio     Grabar solo video sin audio
 #   --tmp          Guardar siempre en /tmp (aunque se pase nombre de archivo)
 #   --help         Mostrar esta ayuda
@@ -24,7 +27,8 @@
 #   ./rec.sh -t 30                    # 30 segundos, guarda en /tmp
 #   ./rec.sh -t 60 grabacion.mp4      # 60 segundos, guarda en el directorio actual
 #   ./rec.sh /home/pi/videos/demo.mp4 # guarda en ruta específica
-#   ./rec.sh --cam /dev/video0 --mic plughw:1,0 -t 30
+#   ./rec.sh --cam /dev/video0 --mic plughw:1,0 --mono -t 30
+#   ./rec.sh --stereo -t 60 demo.mp4
 
 set -euo pipefail
 
@@ -39,6 +43,7 @@ BITRATE=2500000
 CAM_DEV=""
 MIC_DEV=""
 MIC_RATE=0          # 0 = autodetectar según el micrófono encontrado
+MIC_CH=1            # 1 = mono (default), 2 = stereo
 NO_AUDIO=false
 FORCE_TMP=false
 OUTPUT=""
@@ -66,6 +71,9 @@ while [[ $# -gt 0 ]]; do
         --cam)       CAM_DEV="$2";   shift 2 ;;
         --mic)       MIC_DEV="$2";   shift 2 ;;
         --mic-rate)  MIC_RATE="$2";  shift 2 ;;
+        --mono)      MIC_CH=1;       shift ;;
+        --stereo)    MIC_CH=2;       shift ;;
+        --audio-ch)  MIC_CH="$2";    shift 2 ;;
         --no-audio)  NO_AUDIO=true;  shift ;;
         --tmp)       FORCE_TMP=true; shift ;;
         --help)      usage ;;
@@ -226,7 +234,9 @@ echo "  Bitrate    : $((BITRATE / 1000)) kbps"
 if [[ "$NO_AUDIO" == true ]]; then
     echo "  Audio      : deshabilitado"
 else
-    echo "  Audio      : $MIC_DEV — ${MIC_RATE}Hz"
+    CH_LABEL="mono"
+    [[ "$MIC_CH" -eq 2 ]] && CH_LABEL="stereo"
+    echo "  Audio      : $MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL}"
 fi
 if [[ "$DURATION" -eq 0 ]]; then
     echo "  Duración   : indefinida — Ctrl+C para detener"
@@ -247,7 +257,7 @@ if [[ "$NO_AUDIO" == false ]]; then
     AUDIO_ARGS=(
         -f alsa
         -ar "$MIC_RATE"
-        -ac 1
+        -ac "$MIC_CH"
         -i "$MIC_DEV"
         -acodec aac
         -b:a 128k

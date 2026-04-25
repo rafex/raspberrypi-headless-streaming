@@ -195,6 +195,7 @@ mapfile -t MIC_RAW < <(detect_mics)
 
 MIC_DEV=""
 MIC_RATE=44100
+MIC_CH=1
 
 if [[ "${#MIC_RAW[@]}" -eq 0 ]]; then
     warn "No se detectó ningún micrófono."
@@ -236,6 +237,18 @@ else
             done
             ok "Micrófono: $MIC_NAME ($MIC_DEV — ${MIC_RATE}Hz)"
         fi
+    fi
+
+    # Canales de audio (solo si hay micrófono)
+    if [[ "$NO_AUDIO" == false ]]; then
+        echo ""
+        CH_CHOSEN=$(pick "Canales de audio:" \
+            "Mono   — 1 canal  (recomendado: BOYA, voz, menor CPU)" \
+            "Stereo — 2 canales (música, ambiente, webcam integrada)")
+        case "$CH_CHOSEN" in
+            Mono*)   MIC_CH=1; ok "Audio: mono"   ;;
+            Stereo*) MIC_CH=2; ok "Audio: stereo" ;;
+        esac
     fi
 fi
 
@@ -339,7 +352,8 @@ echo -e "  Bitrate    : ${C_BOLD}$((BITRATE / 1000)) kbps${C_RESET}"
 if [[ "$NO_AUDIO" == true ]]; then
     echo -e "  Audio      : ${C_DIM}deshabilitado${C_RESET}"
 else
-    echo -e "  Audio      : ${C_BOLD}$MIC_NAME${C_RESET} ($MIC_DEV — ${MIC_RATE}Hz)"
+    CH_LABEL="mono"; [[ "$MIC_CH" -eq 2 ]] && CH_LABEL="stereo"
+    echo -e "  Audio      : ${C_BOLD}$MIC_NAME${C_RESET} ($MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL})"
 fi
 echo -e "  Plataforma : ${C_BOLD}$PLATFORM${C_RESET}"
 echo -e "  Destino    : ${C_DIM}${RTMP_URL:0:54}${C_RESET}"
@@ -362,7 +376,7 @@ echo ""
 # Construir argumentos de audio
 AUDIO_ARGS=()
 if [[ "$NO_AUDIO" == false ]]; then
-    AUDIO_ARGS=(--audio-dev "$MIC_DEV" --audio-rate "$MIC_RATE")
+    AUDIO_ARGS=(--audio-dev "$MIC_DEV" --audio-rate "$MIC_RATE" --audio-ch "$MIC_CH")
 else
     AUDIO_ARGS=(--no-audio)
 fi
