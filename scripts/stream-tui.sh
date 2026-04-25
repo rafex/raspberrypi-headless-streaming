@@ -107,7 +107,7 @@ detect_mics() {
         local card_num dev_num card_name
         card_num=$(echo "$line" | grep -oE 'card [0-9]+' | grep -oE '[0-9]+')
         dev_num=$(echo  "$line" | grep -oE 'device [0-9]+' | grep -oE '[0-9]+')
-        card_name=$(echo "$line" | grep -oP '\[.*?\]' | head -1 | tr -d '[]')
+        card_name=$(echo "$line" | grep -oE '\[[^]]+\]' | head -1 | tr -d '[]')
         echo "plughw:${card_num},${dev_num}|${card_name}"
     done
 }

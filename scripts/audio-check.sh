@@ -127,7 +127,7 @@ if [[ "$MODE" == "set-default" ]]; then
     [[ -n "$DEVICE" ]] || die "Especificar dispositivo. Ej: --set-default hw:1,0"
 
     # Extraer card number del dispositivo (hw:CARD,DEV o plughw:CARD,DEV)
-    CARD_NUM=$(echo "$DEVICE" | grep -oP '(?<=hw:)\d+' || true)
+    CARD_NUM=$(echo "$DEVICE" | grep -oE 'hw:[0-9]+' | grep -oE '[0-9]+' || true)
     [[ -n "$CARD_NUM" ]] || die "Formato de dispositivo inválido: $DEVICE. Usar hw:N,N"
 
     echo "Configurando micrófono USB como dispositivo default..."

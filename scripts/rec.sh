@@ -118,9 +118,9 @@ detect_mic() {
         [[ "$line" =~ ^card ]] || continue
         local card_num dev_num card_name
 
-        card_num=$(echo "$line" | grep -oP 'card \K[0-9]+')
-        dev_num=$(echo  "$line" | grep -oP 'device \K[0-9]+')
-        card_name=$(echo "$line" | grep -oP '\[.*?\]' | head -1 | tr -d '[]')
+        card_num=$(echo "$line" | grep -oE 'card [0-9]+'  | grep -oE '[0-9]+')
+        dev_num=$(echo  "$line" | grep -oE 'device [0-9]+' | grep -oE '[0-9]+')
+        card_name=$(echo "$line" | grep -oE '\[[^]]+\]' | head -1 | tr -d '[]')
 
         local dev="plughw:${card_num},${dev_num}"
         local priority=1
@@ -193,7 +193,7 @@ if [[ "$NO_AUDIO" == false ]]; then
             CARD_NUM=$(echo "$MIC_DEV" | grep -oE '[0-9]+' | head -1)
             MIC_NAME=$(arecord -l 2>/dev/null \
                 | grep "^card ${CARD_NUM}:" \
-                | grep -oP '\[.*?\]' | head -1 | tr -d '[]' || echo "$MIC_DEV")
+                | grep -oE '\[[^]]+\]' | head -1 | tr -d '[]' || echo "$MIC_DEV")
             echo "  [✓] Micrófono: $MIC_NAME ($MIC_DEV — ${MIC_RATE}Hz) [autodetectado]"
         fi
     else

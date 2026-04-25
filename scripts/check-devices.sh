@@ -79,7 +79,7 @@ else
 
         # Verificar que capture video real (no solo metadata)
         FORMATS=$(v4l2-ctl --device="$dev" --list-formats 2>/dev/null \
-            | grep -oP "'\w+'" | tr -d "'" | tr '\n' ' ' || true)
+            | grep -oE "'[^']+'" | tr -d "'" | tr '\n' ' ' || true)
         [[ -z "$FORMATS" ]] && continue
 
         # Filtrar formatos de video reales (no metadata ni output-only)
@@ -172,11 +172,11 @@ else
         while IFS= read -r line; do
             [[ "$line" =~ ^card ]] || continue
 
-            CARD_NUM=$(echo "$line" | grep -oP 'card \K[0-9]+')
-            CARD_ID=$(echo "$line" | grep -oP 'card [0-9]+: \K[^\s]+')
-            CARD_NAME=$(echo "$line" | grep -oP '\[.*?\]' | head -1 | tr -d '[]')
-            DEV_NUM=$(echo "$line" | grep -oP 'device \K[0-9]+')
-            DEV_NAME=$(echo "$line" | grep -oP '\[.*?\]' | tail -1 | tr -d '[]')
+            CARD_NUM=$(echo "$line" | grep -oE 'card [0-9]+'    | grep -oE '[0-9]+')
+            CARD_ID=$(echo  "$line" | grep -oE 'card [0-9]+: \S+' | grep -oE ':\s*\S+' | tr -d ': ')
+            CARD_NAME=$(echo "$line" | grep -oE '\[[^]]+\]' | head -1 | tr -d '[]')
+            DEV_NUM=$(echo "$line"  | grep -oE 'device [0-9]+' | grep -oE '[0-9]+')
+            DEV_NAME=$(echo "$line" | grep -oE '\[[^]]+\]' | tail -1 | tr -d '[]')
 
             DEVICE_STR="plughw:${CARD_NUM},${DEV_NUM}"
 
