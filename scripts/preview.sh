@@ -221,6 +221,12 @@ ffmpeg \
     -vcodec libx264 \
     -preset ultrafast \
     -tune zerolatency \
+    -g "$FPS" \
+    -keyint_min "$FPS" \
+    -sc_threshold 0 \
     -b:v "$BITRATE" \
     -fps_mode cfr \
+    -muxdelay 0 \
+    -muxpreload 0 \
+    -flush_packets 1 \
     "${_output_args[@]}"
