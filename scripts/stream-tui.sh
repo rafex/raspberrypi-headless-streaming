@@ -13,6 +13,14 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
+# Variables globales de configuración (se rellenan en los pasos del TUI)
+# ---------------------------------------------------------------------------
+WIDTH=1280
+HEIGHT=720
+FPS=30
+BITRATE=2500000
+
+# ---------------------------------------------------------------------------
 # Colores y helpers visuales
 # ---------------------------------------------------------------------------
 C_RESET='\033[0m'
@@ -243,19 +251,26 @@ fi
 # ---------------------------------------------------------------------------
 header "3 / 4  Plataforma de streaming"
 
-_PLAT_OPTS=("YouTube Live" "Facebook / Meta Live" "URL personalizada")
+_PLAT_OPTS=(
+    "YouTube Live"
+    "Facebook / Meta Live"
+    "URL personalizada"
+    "★ Dual stream — YouTube + Facebook  [experimental]"
+)
 pick _IDX "Plataforma:" "${_PLAT_OPTS[@]}"
 PLATFORM="${_PLAT_OPTS[$_IDX]}"
 
 RTMP_URL=""
 STREAM_KEY=""
+DUAL_STREAM=false   # flag para el modo dual
+YT_URL=""
+META_URL=""
 
 case "$PLATFORM" in
 
     "YouTube Live")
         RTMP_BASE="rtmp://a.rtmp.youtube.com/live2"
         echo ""
-        # Buscar en variable de entorno
         if [[ -n "${YOUTUBE_STREAM_KEY:-}" ]]; then
             STREAM_KEY="$YOUTUBE_STREAM_KEY"
             ok "Stream key leída de \$YOUTUBE_STREAM_KEY"
@@ -290,9 +305,51 @@ case "$PLATFORM" in
         ask "URL RTMP completa (incluyendo stream key)" RTMP_URL
         [[ -n "$RTMP_URL" ]] || die "URL requerida."
         ;;
+
+    *"Dual stream"*)
+        DUAL_STREAM=true
+        echo ""
+        warn "Modo experimental: ambas plataformas reciben el mismo stream."
+        warn "Si una falla, la otra continúa (onfail=ignore)."
+        echo ""
+
+        # YouTube
+        if [[ -n "${YOUTUBE_STREAM_KEY:-}" ]]; then
+            YT_KEY="$YOUTUBE_STREAM_KEY"
+            ok "YouTube key leída de \$YOUTUBE_STREAM_KEY"
+            info "${YT_KEY:0:4}****${YT_KEY: -4}"
+        else
+            warn "\$YOUTUBE_STREAM_KEY no definida."
+            ask "Stream key de YouTube" YT_KEY
+        fi
+        [[ -n "$YT_KEY" ]] || die "Stream key de YouTube requerida."
+        YT_URL="rtmp://a.rtmp.youtube.com/live2/${YT_KEY}"
+
+        echo ""
+
+        # Facebook / Meta
+        if [[ -n "${META_STREAM_KEY:-}" ]]; then
+            META_KEY="$META_STREAM_KEY"
+            ok "Facebook key leída de \$META_STREAM_KEY"
+            info "${META_KEY:0:4}****${META_KEY: -4}"
+        else
+            warn "\$META_STREAM_KEY no definida."
+            ask "Stream key de Facebook/Meta" META_KEY
+        fi
+        [[ -n "$META_KEY" ]] || die "Stream key de Facebook requerida."
+        META_URL="rtmps://live-api-s.facebook.com:443/rtmp/${META_KEY}"
+
+        # URL de display (no se usa para enviar, solo para el resumen)
+        RTMP_URL="$YT_URL"
+        ;;
 esac
 
-ok "Destino: ${RTMP_URL:0:40}..."
+if [[ "$DUAL_STREAM" == false ]]; then
+    ok "Destino: ${RTMP_URL:0:40}..."
+else
+    ok "YouTube : ${YT_URL:0:45}..."
+    ok "Facebook: ${META_URL:0:45}..."
+fi
 
 # ---------------------------------------------------------------------------
 # PASO 4 — Opciones adicionales
@@ -337,7 +394,12 @@ else
     echo -e "  Audio      : ${C_BOLD}$MIC_NAME${C_RESET} ($MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL})"
 fi
 echo -e "  Plataforma : ${C_BOLD}$PLATFORM${C_RESET}"
-echo -e "  Destino    : ${C_DIM}${RTMP_URL:0:54}${C_RESET}"
+if [[ "$DUAL_STREAM" == true ]]; then
+    echo -e "  YouTube    : ${C_DIM}${YT_URL:0:54}${C_RESET}"
+    echo -e "  Facebook   : ${C_DIM}${META_URL:0:54}${C_RESET}"
+else
+    echo -e "  Destino    : ${C_DIM}${RTMP_URL:0:54}${C_RESET}"
+fi
 echo ""
 
 if ! confirm "¿Iniciar stream?"; then
@@ -354,21 +416,72 @@ echo ""
 echo -e "  ${C_GREEN}${C_BOLD}Iniciando stream... Ctrl+C para detener.${C_RESET}"
 echo ""
 
-# Construir argumentos de audio
-AUDIO_ARGS=()
-if [[ "$NO_AUDIO" == false ]]; then
-    AUDIO_ARGS=(--audio-dev "$MIC_DEV" --audio-rate "$MIC_RATE" --audio-ch "$MIC_CH")
-else
-    AUDIO_ARGS=(--no-audio)
-fi
-
-# Llamar a usb-camera.sh con los parámetros elegidos
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-"${SCRIPT_DIR}/usb-camera.sh" \
-    --dev "$CAM_DEV" \
-    "${AUDIO_ARGS[@]}" \
-    -w "$WIDTH" \
-    -h "$HEIGHT" \
-    -b "$BITRATE" \
-    -u "$RTMP_URL"
+# Formato de entrada de cámara
+if supports_mjpeg "$CAM_DEV"; then
+    _INPUT_FMT="mjpeg"
+else
+    _INPUT_FMT="yuyv422"
+fi
+
+if [[ "$DUAL_STREAM" == true ]]; then
+    # -----------------------------------------------------------------------
+    # Modo dual stream: ffmpeg tee muxer → YouTube + Facebook simultáneamente
+    # El video se codifica UNA sola vez y se envía a las dos plataformas.
+    # onfail=ignore: si una plataforma cae, la otra sigue.
+    # -----------------------------------------------------------------------
+    echo -e "  ${C_YELLOW}[experimental]${C_RESET} Dual stream activo"
+    echo ""
+
+    _AUDIO_FFMPEG_ARGS=()
+    if [[ "$NO_AUDIO" == false ]]; then
+        _AUDIO_FFMPEG_ARGS=(
+            -thread_queue_size 8192
+            -f alsa -ar "$MIC_RATE" -ac "$MIC_CH" -i "$MIC_DEV"
+            -acodec aac -b:a 128k
+            -af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0"
+        )
+    else
+        _AUDIO_FFMPEG_ARGS=(-an)
+    fi
+
+    # tee destino: [f=flv:onfail=ignore]URL|[f=flv:onfail=ignore]URL
+    _TEE_DST="[f=flv:onfail=ignore]${YT_URL}|[f=flv:onfail=ignore]${META_URL}"
+
+    ffmpeg \
+        -hide_banner \
+        -loglevel warning \
+        -stats \
+        -thread_queue_size 8192 \
+        -f v4l2 \
+        -input_format "$_INPUT_FMT" \
+        -video_size "${WIDTH}x${HEIGHT}" \
+        -framerate "$FPS" \
+        -i "$CAM_DEV" \
+        "${_AUDIO_FFMPEG_ARGS[@]}" \
+        -vcodec libx264 \
+        -preset ultrafast \
+        -b:v "$BITRATE" \
+        -fps_mode cfr \
+        -f tee \
+        "$_TEE_DST"
+else
+    # -----------------------------------------------------------------------
+    # Modo stream normal: delegar en usb-camera.sh
+    # -----------------------------------------------------------------------
+    _AUDIO_ARGS=()
+    if [[ "$NO_AUDIO" == false ]]; then
+        _AUDIO_ARGS=(--audio-dev "$MIC_DEV" --audio-rate "$MIC_RATE" --audio-ch "$MIC_CH")
+    else
+        _AUDIO_ARGS=(--no-audio)
+    fi
+
+    "${SCRIPT_DIR}/usb-camera.sh" \
+        --dev "$CAM_DEV" \
+        "${_AUDIO_ARGS[@]}" \
+        -w "$WIDTH" \
+        -h "$HEIGHT" \
+        -b "$BITRATE" \
+        -u "$RTMP_URL"
+fi
