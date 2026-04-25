@@ -58,29 +58,32 @@ confirm() {
 }
 
 pick() {
-    # pick "Título" opción1 opción2 ... → imprime el elegido
+    # pick IDX_VAR "Título" opción1 opción2 ...
+    # Escribe toda la UI en stderr; guarda el índice elegido (0-based) en IDX_VAR
+    local _var="$1"; shift
     local title="$1"; shift
     local options=("$@")
     local i
 
-    echo ""
-    echo -e "  ${C_BOLD}${title}${C_RESET}"
-    echo ""
+    echo "" >&2
+    echo -e "  ${C_BOLD}${title}${C_RESET}" >&2
+    echo "" >&2
     for i in "${!options[@]}"; do
-        printf "    ${C_CYAN}%d)${C_RESET} %s\n" "$((i+1))" "${options[$i]}"
+        printf "    ${C_CYAN}%d)${C_RESET} %s\n" "$((i+1))" "${options[$i]}" >&2
     done
-    echo ""
+    echo "" >&2
 
+    local _n
     while true; do
-        echo -ne "  Elige [1-${#options[@]}]: "
-        read -r _pick
-        if [[ "$_pick" =~ ^[0-9]+$ ]] \
-           && [[ "$_pick" -ge 1 ]] \
-           && [[ "$_pick" -le "${#options[@]}" ]]; then
-            echo "${options[$((--_pick))]}"
+        echo -ne "  Elige [1-${#options[@]}]: " >&2
+        read -r _n
+        if [[ "$_n" =~ ^[0-9]+$ ]] \
+           && [[ "$_n" -ge 1 ]] \
+           && [[ "$_n" -le "${#options[@]}" ]]; then
+            printf -v "$_var" '%d' "$((_n - 1))"
             return
         fi
-        warn "Opción inválida. Elige un número entre 1 y ${#options[@]}."
+        warn "Opción inválida. Elige un número entre 1 y ${#options[@]}." >&2
     done
 }
 
@@ -158,31 +161,20 @@ if [[ "${#CAM_RAW[@]}" -eq 1 ]]; then
     CAM_NAME="${CAM_NAMES[0]}"
     ok "Cámara detectada: $CAM_NAME ($CAM_DEV)"
 else
-    CHOSEN=$(pick "Selecciona la cámara:" "${CAM_LABELS[@]}")
-    # Extraer dev del label elegido
-    for i in "${!CAM_LABELS[@]}"; do
-        if [[ "${CAM_LABELS[$i]}" == "$CHOSEN" ]]; then
-            CAM_DEV="${CAM_DEVS[$i]}"
-            CAM_NAME="${CAM_NAMES[$i]}"
-            break
-        fi
-    done
+    pick _IDX "Selecciona la cámara:" "${CAM_NAMES[@]}"
+    CAM_DEV="${CAM_DEVS[$_IDX]}"
+    CAM_NAME="${CAM_NAMES[$_IDX]}"
     ok "Cámara seleccionada: $CAM_NAME ($CAM_DEV)"
 fi
 
 # Resolución
-echo ""
-RES_CHOSEN=$(pick "Resolución:" \
-    "1920x1080  (Full HD)" \
-    "1280x720   (HD — recomendado Pi 3B)" \
-    "854x480    (480p — menor CPU)" \
-    "640x360    (360p — mínimo uso de CPU)")
-
-case "$RES_CHOSEN" in
-    1920*) WIDTH=1920; HEIGHT=1080 ;;
-    1280*) WIDTH=1280; HEIGHT=720  ;;
-    854*)  WIDTH=854;  HEIGHT=480  ;;
-    640*)  WIDTH=640;  HEIGHT=360  ;;
+_RES_OPTS=("1920x1080  (Full HD)" "1280x720   (HD — recomendado Pi 3B)" "854x480    (480p — menor CPU)" "640x360    (360p — mínimo uso de CPU)")
+pick _IDX "Resolución:" "${_RES_OPTS[@]}"
+case "$_IDX" in
+    0) WIDTH=1920; HEIGHT=1080 ;;
+    1) WIDTH=1280; HEIGHT=720  ;;
+    2) WIDTH=854;  HEIGHT=480  ;;
+    3) WIDTH=640;  HEIGHT=360  ;;
 esac
 ok "Resolución: ${WIDTH}x${HEIGHT}"
 
@@ -222,32 +214,26 @@ else
         MIC_RATE=$(mic_default_rate "$MIC_NAME")
         ok "Micrófono detectado: $MIC_NAME ($MIC_DEV — ${MIC_RATE}Hz)"
     else
-        CHOSEN=$(pick "Selecciona el micrófono:" "${MIC_LABELS[@]}")
-        if [[ "$CHOSEN" == "Sin audio" ]]; then
+        pick _IDX "Selecciona el micrófono:" "${MIC_LABELS[@]}"
+        local_last="${#MIC_RAW[@]}"   # índice de "Sin audio"
+        if [[ "$_IDX" -eq "$local_last" ]]; then
             NO_AUDIO=true
             ok "Sin audio"
         else
-            for i in "${!MIC_LABELS[@]}"; do
-                if [[ "${MIC_LABELS[$i]}" == "$CHOSEN" ]]; then
-                    MIC_DEV="${MIC_DEVS[$i]}"
-                    MIC_NAME="${MIC_NAMES[$i]}"
-                    MIC_RATE=$(mic_default_rate "$MIC_NAME")
-                    break
-                fi
-            done
+            MIC_DEV="${MIC_DEVS[$_IDX]}"
+            MIC_NAME="${MIC_NAMES[$_IDX]}"
+            MIC_RATE=$(mic_default_rate "$MIC_NAME")
             ok "Micrófono: $MIC_NAME ($MIC_DEV — ${MIC_RATE}Hz)"
         fi
     fi
 
     # Canales de audio (solo si hay micrófono)
     if [[ "$NO_AUDIO" == false ]]; then
-        echo ""
-        CH_CHOSEN=$(pick "Canales de audio:" \
-            "Mono   — 1 canal  (recomendado: BOYA, voz, menor CPU)" \
-            "Stereo — 2 canales (música, ambiente, webcam integrada)")
-        case "$CH_CHOSEN" in
-            Mono*)   MIC_CH=1; ok "Audio: mono"   ;;
-            Stereo*) MIC_CH=2; ok "Audio: stereo" ;;
+        _CH_OPTS=("Mono   — 1 canal  (recomendado: BOYA, voz, menor CPU)" "Stereo — 2 canales (música, ambiente, webcam integrada)")
+        pick _IDX "Canales de audio:" "${_CH_OPTS[@]}"
+        case "$_IDX" in
+            0) MIC_CH=1; ok "Audio: mono"   ;;
+            1) MIC_CH=2; ok "Audio: stereo" ;;
         esac
     fi
 fi
@@ -257,10 +243,9 @@ fi
 # ---------------------------------------------------------------------------
 header "3 / 4  Plataforma de streaming"
 
-PLATFORM=$(pick "Plataforma:" \
-    "YouTube Live" \
-    "Facebook / Meta Live" \
-    "URL personalizada")
+_PLAT_OPTS=("YouTube Live" "Facebook / Meta Live" "URL personalizada")
+pick _IDX "Plataforma:" "${_PLAT_OPTS[@]}"
+PLATFORM="${_PLAT_OPTS[$_IDX]}"
 
 RTMP_URL=""
 STREAM_KEY=""
@@ -314,17 +299,13 @@ ok "Destino: ${RTMP_URL:0:40}..."
 # ---------------------------------------------------------------------------
 header "4 / 4  Opciones de video"
 
-BITRATE_CHOSEN=$(pick "Bitrate de video:" \
-    "4500 kbps  (alta calidad — requiere buena subida)" \
-    "2500 kbps  (balance — recomendado)" \
-    "1500 kbps  (bajo ancho de banda)" \
-    "800  kbps  (mínimo)")
-
-case "$BITRATE_CHOSEN" in
-    4500*) BITRATE=4500000 ;;
-    2500*) BITRATE=2500000 ;;
-    1500*) BITRATE=1500000 ;;
-    800*)  BITRATE=800000  ;;
+_BR_OPTS=("4500 kbps  (alta calidad — requiere buena subida)" "2500 kbps  (balance — recomendado)" "1500 kbps  (bajo ancho de banda)" "800  kbps  (mínimo)")
+pick _IDX "Bitrate de video:" "${_BR_OPTS[@]}"
+case "$_IDX" in
+    0) BITRATE=4500000 ;;
+    1) BITRATE=2500000 ;;
+    2) BITRATE=1500000 ;;
+    3) BITRATE=800000  ;;
 esac
 ok "Bitrate: $((BITRATE / 1000)) kbps"
 

@@ -144,7 +144,7 @@ detect_mic() {
         fi
     done < <(arecord -l 2>/dev/null || true)
 
-    echo "${best_dev}:${best_rate}"
+    echo "${best_dev}|${best_rate}"
 }
 
 # ---------------------------------------------------------------------------
@@ -182,8 +182,8 @@ fi
 if [[ "$NO_AUDIO" == false ]]; then
     if [[ -z "$MIC_DEV" ]]; then
         DETECTED=$(detect_mic)
-        MIC_DEV="${DETECTED%%:*}"          # todo antes del último :
-        AUTO_RATE="${DETECTED##*:}"        # todo después del último :
+        MIC_DEV="${DETECTED%%|*}"          # todo antes del |  → plughw:1,0
+        AUTO_RATE="${DETECTED##*|}"        # todo después del | → 48000
 
         if [[ -z "$MIC_DEV" ]]; then
             echo "  [!] Micrófono: no detectado — grabando sin audio"
