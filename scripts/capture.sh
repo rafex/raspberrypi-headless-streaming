@@ -52,9 +52,10 @@ die() {
 }
 
 # --- Detectar automáticamente el primer micrófono USB disponible ---
+# Busca por palabras clave comunes de micrófonos USB y marcas conocidas (BOYA, etc.)
 detect_usb_mic() {
     arecord -l 2>/dev/null \
-        | grep -i "usb\|microphone\|mic\|webcam" \
+        | grep -i "usb\|microphone\|mic\|webcam\|boya\|boyalink\|lavalier\|wireless\|focusrite\|scarlett" \
         | grep "^card" \
         | head -1 \
         | awk '{
@@ -166,7 +167,6 @@ else
     | ffmpeg \
         -hide_banner \
         -loglevel warning \
-        -re \
         -i - \
         -f alsa \
         -ar "$AUDIO_RATE" \

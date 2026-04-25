@@ -238,9 +238,10 @@ build_filter_complex() {
 }
 
 # --- Detectar automáticamente micrófono USB ---
+# Busca por palabras clave comunes de micrófonos USB y marcas conocidas (BOYA, etc.)
 detect_usb_mic() {
     arecord -l 2>/dev/null \
-        | grep -i "usb\|microphone\|mic\|webcam" \
+        | grep -i "usb\|microphone\|mic\|webcam\|boya\|boyalink\|lavalier\|wireless\|focusrite\|scarlett" \
         | grep "^card" \
         | head -1 \
         | awk '{
@@ -362,6 +363,14 @@ else
 
     FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
 
+    # Construir el -map de audio: si hay audio lo mapeamos explícitamente,
+    # de lo contrario ffmpeg lo ignoraría al haber un -map de video manual.
+    AUDIO_MAP_ARGS=()
+    if [[ "$NO_AUDIO" == false ]]; then
+        # El audio entra como el último input tras los de imagen (EXTRA_IDX apunta al siguiente)
+        AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
+    fi
+
     libcamera-vid \
         --width "$WIDTH" \
         --height "$HEIGHT" \
@@ -380,6 +389,7 @@ else
         "${AUDIO_ARGS[@]}" \
         -filter_complex "$FILTER_COMPLEX" \
         -map "$CURRENT" \
+        "${AUDIO_MAP_ARGS[@]}" \
         -vcodec libx264 \
         -preset "$PRESET" \
         -b:v "$BITRATE" \

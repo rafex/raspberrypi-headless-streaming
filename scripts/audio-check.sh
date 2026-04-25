@@ -73,9 +73,9 @@ if [[ "$MODE" == "list" ]]; then
 
     echo "=== Identificar micrófono USB ==="
     echo ""
-    if arecord -l 2>/dev/null | grep -qi "usb\|microphone\|mic\|webcam"; then
+    if arecord -l 2>/dev/null | grep -qi "usb\|microphone\|mic\|webcam\|boya\|boyalink\|lavalier\|wireless\|focusrite\|scarlett"; then
         echo "Dispositivos USB detectados:"
-        arecord -l 2>/dev/null | grep -i "usb\|microphone\|mic\|webcam" || true
+        arecord -l 2>/dev/null | grep -i "usb\|microphone\|mic\|webcam\|boya\|boyalink\|lavalier\|wireless\|focusrite\|scarlett" || true
         echo ""
         echo "Para usar el micrófono USB en los scripts, usar la forma hw:CARD,DEV"
         echo "donde CARD es el número de 'card' y DEV el de 'device' en la lista."
