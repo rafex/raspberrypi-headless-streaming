@@ -124,6 +124,8 @@ command -v ffmpeg >/dev/null 2>&1  || die "ffmpeg no encontrado. Instalar con: s
 command -v curl >/dev/null 2>&1    || die "curl no encontrado. Instalar con: sudo apt install curl"
 command -v base64 >/dev/null 2>&1  || die "base64 no encontrado."
 command -v bc >/dev/null 2>&1      || die "bc no encontrado. Instalar con: sudo apt install bc"
+command -v jq >/dev/null 2>&1      || die "jq no encontrado. Instalar con: sudo apt install jq"
+command -v setsid >/dev/null 2>&1  || die "setsid no encontrado. Instalar con: sudo apt install util-linux"
 
 if command -v libcamera-jpeg >/dev/null 2>&1; then
     CAM_STILL="libcamera-jpeg"
@@ -191,20 +193,17 @@ send_to_llm() {
     frame_b64=$(base64 -w 0 "$frame_path" 2>/dev/null || base64 "$frame_path")
     local timestamp
     timestamp=$(date -Iseconds 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S')
-    local safe_context
-    safe_context=$(echo "$context" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    local source
+    source=$(hostname 2>/dev/null || echo "raspi-3b")
 
     local payload
-    payload=$(cat <<EOF
-{
-  "event": "motion_analysis",
-  "source": "$(hostname 2>/dev/null || echo raspi-3b)",
-  "timestamp": "${timestamp}",
-  "context": "${safe_context}",
-  "frame": "${frame_b64}"
-}
-EOF
-)
+    payload=$(jq -n \
+        --arg event   "motion_analysis" \
+        --arg source  "$source" \
+        --arg ts      "$timestamp" \
+        --arg context "$context" \
+        --arg frame   "$frame_b64" \
+        '{event: $event, source: $source, timestamp: $ts, context: $context, frame: $frame}')
 
     local response
     response=$(curl \
@@ -221,10 +220,7 @@ EOF
     }
 
     local analysis
-    analysis=$(echo "$response" \
-        | grep -o '"analysis"[[:space:]]*:[[:space:]]*"[^"]*"' \
-        | sed 's/"analysis"[[:space:]]*:[[:space:]]*"\(.*\)"/\1/' \
-        || echo "")
+    analysis=$(echo "$response" | jq -r '.analysis // empty' 2>/dev/null || true)
 
     if [[ -n "$analysis" ]]; then
         log "[LLM] ${analysis}"
@@ -240,16 +236,18 @@ start_stream_if_inactive() {
 
     log "Activando stream RTSP → rtsp://${RTSP_HOST}:${RTSP_PORT}/${RTSP_NAME}"
 
-    libcamera-vid \
-        --width 1920 --height 1080 \
-        --framerate 30 \
-        --codec h264 --inline \
-        --timeout 0 --output - \
-    | ffmpeg \
-        -hide_banner -loglevel warning \
-        -re -i - -an \
-        -vcodec copy -f rtsp -rtsp_transport tcp \
-        "rtsp://${RTSP_HOST}:${RTSP_PORT}/${RTSP_NAME}" &
+    RTSP_URL="rtsp://${RTSP_HOST}:${RTSP_PORT}/${RTSP_NAME}" setsid bash -c '
+        libcamera-vid \
+            --width 1920 --height 1080 \
+            --framerate 30 \
+            --codec h264 --inline \
+            --timeout 0 --output - \
+        | ffmpeg \
+            -hide_banner -loglevel warning \
+            -re -i - -an \
+            -vcodec copy -f rtsp -rtsp_transport tcp \
+            "$RTSP_URL"
+    ' &
 
     echo "$!" > "$STREAM_PID_FILE"
     STREAM_ACTIVE=true
@@ -261,8 +259,9 @@ stop_stream_if_active() {
     if [[ -f "$STREAM_PID_FILE" ]]; then
         local pid
         pid=$(cat "$STREAM_PID_FILE")
-        kill "$pid" 2>/dev/null || true
-        pkill -f "libcamera-vid" 2>/dev/null || true
+        # setsid convierte a "$pid" en líder de su propio grupo/sesión,
+        # por lo que matar el grupo negativo sí alcanza a libcamera-vid + ffmpeg.
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
         rm -f "$STREAM_PID_FILE"
     fi
 

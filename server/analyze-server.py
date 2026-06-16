@@ -174,21 +174,7 @@ def create_app(client: OpenAI, model: str, config: dict, system_prompt: str) -> 
     app = Flask(__name__)
     log = logging.getLogger("analyze-server")
 
-    @app.route("/health", methods=["GET"])
-    def health():
-        return jsonify({
-            "status": "ok",
-            "provider": config["label"],
-            "model": model,
-            "timestamp": datetime.now().isoformat(),
-        })
-
-    @app.route("/analyze", methods=["POST"])
-    def analyze():
-        data = request.get_json(silent=True)
-        if not data:
-            return jsonify({"error": "Payload JSON requerido"}), 400
-
+    def _run_analysis(data: dict):
         event = data.get("event", "unknown")
         source = data.get("source", "unknown")
         context = data.get("context", "")
@@ -198,7 +184,6 @@ def create_app(client: OpenAI, model: str, config: dict, system_prompt: str) -> 
         log.info("← evento=%s source=%s frame=%s context=%s",
                  event, source, "sí" if frame_b64 else "no", context[:60])
 
-        # Enriquecer el contexto con metadatos del evento
         full_context = f"Evento: {event}. Fuente: {source}. Timestamp: {timestamp}."
         if context:
             full_context += f" Contexto: {context}"
@@ -231,17 +216,30 @@ def create_app(client: OpenAI, model: str, config: dict, system_prompt: str) -> 
             "timestamp": datetime.now().isoformat(),
         })
 
+    @app.route("/health", methods=["GET"])
+    def health():
+        return jsonify({
+            "status": "ok",
+            "provider": config["label"],
+            "model": model,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+    @app.route("/analyze", methods=["POST"])
+    def analyze():
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "Payload JSON requerido"}), 400
+        return _run_analysis(data)
+
     @app.route("/event", methods=["POST"])
     def event_only():
         """Endpoint para eventos de texto sin frame (eventos de red, alertas, etc.)."""
         data = request.get_json(silent=True)
         if not data:
             return jsonify({"error": "Payload JSON requerido"}), 400
-
-        # Reutilizar /analyze sin frame
-        data["frame"] = ""
-        request._cached_json = (data, data)
-        return analyze()
+        data.setdefault("frame", "")
+        return _run_analysis(data)
 
     return app
 

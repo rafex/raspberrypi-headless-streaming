@@ -91,13 +91,13 @@ else
     CAM_CMD="libcamera-still"
 fi
 
-TMPDIR=$(mktemp -d)
-trap "rm -rf $TMPDIR" EXIT
+_TMPDIR_MD=$(mktemp -d)
+trap 'rm -rf "$_TMPDIR_MD"' EXIT
 
-PREV_FRAME="${TMPDIR}/prev.jpg"
-CURR_FRAME="${TMPDIR}/curr.jpg"
-STATE_FILE="${TMPDIR}/state"  # "idle" o "active"
-LAST_MOTION_FILE="${TMPDIR}/last_motion"
+PREV_FRAME="${_TMPDIR_MD}/prev.jpg"
+CURR_FRAME="${_TMPDIR_MD}/curr.jpg"
+STATE_FILE="${_TMPDIR_MD}/state"  # "idle" o "active"
+LAST_MOTION_FILE="${_TMPDIR_MD}/last_motion"
 
 echo "idle" > "$STATE_FILE"
 echo "0" > "$LAST_MOTION_FILE"
@@ -193,7 +193,7 @@ while true; do
 
             if [[ -n "$ON_MOTION_CMD" ]]; then
                 log "Ejecutando: ${ON_MOTION_CMD}"
-                eval "$ON_MOTION_CMD" &
+                bash -c "$ON_MOTION_CMD" &
             fi
         fi
     else
@@ -207,7 +207,7 @@ while true; do
 
                 if [[ -n "$ON_STOP_CMD" ]]; then
                     log "Ejecutando: ${ON_STOP_CMD}"
-                    eval "$ON_STOP_CMD" &
+                    bash -c "$ON_STOP_CMD" &
                 fi
             fi
         fi
