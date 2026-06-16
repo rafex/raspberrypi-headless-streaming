@@ -44,64 +44,54 @@ que ya gestiona [`scripts/control.sh`](../scripts/control.sh).
 
 ## Instalación paso a paso
 
-### 0. Requisitos en la Raspberry Pi
+Todo el flujo de instalación corre con `make`, en este orden (o de una sola
+vez con `make setup`):
 
-Instalar `age`, `sops`, `uv` y `openssl` con:
+### 1. Instalar dependencias
 
 ```bash
-sudo scripts/install-deps.sh --web-api
+make deps-web-api
 ```
 
-(o `sudo scripts/install-deps.sh --full` si además querés todo lo demás:
+Corre `sudo scripts/install-deps.sh --web-api`, que instala `age`, `sops`,
+`uv`, `openssl` y `python3-yaml`. `uv` se instala como `root` (el script
+corre con `sudo`), quedando en `/usr/local/bin/uv`, visible también para
+`web-api-install.sh` más adelante. `sops` no siempre está empaquetado en
+Debian según la versión — si avisa que no pudo instalarlo por `apt`,
+instalarlo manualmente desde
+[https://github.com/getsops/sops/releases](https://github.com/getsops/sops/releases).
+
+(`sudo scripts/install-deps.sh --full` si además querés todo lo demás:
 cámaras, servidor IA, etc.)
 
-`uv` se instala como `root` (ya que el script corre con `sudo`), quedando en
-`/usr/local/bin/uv`, visible también para `web-api-install.sh` más adelante.
-`sops` no siempre está empaquetado en Debian según la versión — si
-`install-deps.sh` avisa que no pudo instalarlo por `apt`, instalarlo
-manualmente desde [https://github.com/getsops/sops/releases](https://github.com/getsops/sops/releases).
-
-### 1. Generar la age key en la Raspberry Pi
+### 2. Generar la age key y configurar `.sops.yaml`
 
 ```bash
-sudo mkdir -p /etc/raspi-streaming/age
-sudo age-keygen -o /etc/raspi-streaming/age/key.txt
-sudo chmod 600 /etc/raspi-streaming/age/key.txt
+make age-key
 ```
 
-Copiar la "Public key" que se imprime.
-
-### 2. Configurar `.sops.yaml`
-
-Editar `.sops.yaml` en la raíz del repo y reemplazar el placeholder con la
-public key del paso anterior:
-
-```yaml
-creation_rules:
-  - path_regex: server/webapi/secrets\.enc\.yaml$
-    age: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+Corre `scripts/web-api-setup-age.sh`, que genera (si no existe)
+`/etc/raspi-streaming/age/key.txt` y reemplaza automáticamente el
+placeholder de `.sops.yaml` con la public key generada — no hace falta
+editar nada a mano.
 
 ### 3. Crear el primer usuario
 
-Requiere `sops` y `python3` con `pyyaml` instalado (`pip install pyyaml`).
-
 ```bash
-SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt \
-    scripts/manage-users.sh add admin operator
+make add-user WEBAPI_USER=admin WEBAPI_ROLE=operator
 ```
 
-Esto crea `server/webapi/secrets.enc.yaml` (cifrado). Repetir para agregar
-más usuarios, por ejemplo uno `viewer` para revisar el estado sin poder
-controlar el stream:
+Pide la contraseña por terminal (oculta) y crea
+`server/webapi/secrets.enc.yaml` cifrado. Repetir con otro usuario/rol para
+agregar más cuentas, por ejemplo un `viewer` que solo puede ver el estado:
 
 ```bash
-SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt \
-    scripts/manage-users.sh add invitado viewer
+make add-user WEBAPI_USER=invitado WEBAPI_ROLE=viewer
 ```
 
-Comandos disponibles: `add <usuario> <viewer|operator>`, `remove <usuario>`,
-`list`.
+Para administrar usuarios directamente (listar, quitar), usar
+`scripts/manage-users.sh` (`add <usuario> <viewer|operator>`,
+`remove <usuario>`, `list`), con `SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt`.
 
 ### 4. Instalar y habilitar en boot
 
@@ -109,11 +99,12 @@ Comandos disponibles: `add <usuario> <viewer|operator>`, `remove <usuario>`,
 make web-api
 ```
 
-Esto corre `scripts/web-api-install.sh` (que verifica `sops`/`age`, crea el
-usuario de sistema `webapi`, el venv en `/opt/web-api/venv`, el certificado
-TLS autofirmado, `/etc/web-api.env` con un `SECRET_KEY` aleatorio y el
-sudoers acotado) y luego `systemctl enable --now web-api.service`, para que
-el servicio quede arrancando solo en cada boot de la Pi.
+Corre `scripts/web-api-install.sh` (que verifica `sops`/`age`/`uv`, crea el
+usuario de sistema `webapi`, el venv en `/opt/web-api/venv` (con `uv`), el
+certificado TLS autofirmado, `/etc/web-api.env` con un `SECRET_KEY`
+aleatorio y el sudoers acotado) y luego `systemctl enable --now
+web-api.service`, para que el servicio quede arrancando solo en cada boot
+de la Pi.
 
 Equivale a correr por separado:
 
@@ -141,7 +132,7 @@ aceptar y continuar. Iniciar sesión con el usuario creado en el paso 3.
 
 ```bash
 SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt scripts/manage-users.sh list
-SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt scripts/manage-users.sh add admin operator   # sobreescribe si ya existe
+make add-user WEBAPI_USER=admin WEBAPI_ROLE=operator   # sobreescribe si ya existe
 SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt scripts/manage-users.sh remove invitado
 ```
 

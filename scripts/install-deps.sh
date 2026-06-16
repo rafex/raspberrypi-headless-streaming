@@ -237,6 +237,7 @@ if [[ "$OPT_WEB_API" == true ]]; then
     apt_install "openssl" "openssl — certificado TLS autofirmado"
     apt_install "python3" "python3 — intérprete Python"
     apt_install "age"     "age — cifrado de secretos (age-keygen)"
+    apt_install "python3-yaml" "python3-yaml — PyYAML para scripts/manage-users.sh"
 
     # sops no siempre está en los repos de Debian según la versión; si falla
     # la instalación por apt, se avisa en vez de fallar todo el script.
