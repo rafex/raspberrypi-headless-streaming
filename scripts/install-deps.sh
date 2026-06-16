@@ -59,11 +59,16 @@ INSTALLED=()
 SKIPPED=()
 FAILED=()
 
+# Paquetes apt pendientes de instalar: array de "pkg|desc"
+APT_PENDING=()
+
 ok()      { echo "  [✓] $*"; }
 info()    { echo "  [-] $*"; }
 warn()    { echo "  [!] $*"; }
 header()  { echo ""; echo "=== $* ==="; echo ""; }
 
+# Verifica si el paquete apt ya está instalado; si no, lo encola.
+# La instalación real ocurre en apt_flush() para hacer una sola pasada.
 apt_install() {
     local pkg="$1"
     local desc="${2:-$1}"
@@ -71,25 +76,56 @@ apt_install() {
     if dpkg -s "$pkg" >/dev/null 2>&1; then
         ok "$desc (ya instalado)"
         SKIPPED+=("$pkg")
-        return 0
-    fi
-
-    if [[ "$DRY_RUN" == true ]]; then
+    elif [[ "$DRY_RUN" == true ]]; then
         info "$desc (se instalaría)"
-        INSTALLED+=("$pkg")
-        return 0
+        APT_PENDING+=("${pkg}|${desc}")
+    else
+        info "$desc (pendiente)"
+        APT_PENDING+=("${pkg}|${desc}")
     fi
+}
 
-    echo -n "  Instalando $desc... "
-    if apt-get install -y -qq "$pkg" >/dev/null 2>&1; then
+# Instala todos los paquetes encolados en una sola llamada apt-get.
+# Llama apt-get update solo si hay algo que instalar.
+apt_flush() {
+    [[ "${#APT_PENDING[@]}" -eq 0 ]] && return 0
+    [[ "$DRY_RUN" == true ]] && return 0
+
+    local pkgs=()
+    for entry in "${APT_PENDING[@]}"; do
+        pkgs+=("${entry%%|*}")
+    done
+
+    echo ""
+    echo -n "  Actualizando índice apt... "
+    apt-get update -qq && echo "OK" || { echo "FALLO"; warn "apt-get update falló — los paquetes pueden estar desactualizados."; }
+
+    echo -n "  Instalando: ${pkgs[*]}... "
+    if apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1; then
         echo "OK"
-        ok "$desc"
-        INSTALLED+=("$pkg")
+        for entry in "${APT_PENDING[@]}"; do
+            local pkg="${entry%%|*}"
+            local desc="${entry#*|}"
+            ok "$desc"
+            INSTALLED+=("$pkg")
+        done
     else
         echo "FALLO"
-        warn "$desc — fallo al instalar"
-        FAILED+=("$pkg")
+        # Re-intentar uno por uno para identificar cuál falló
+        for entry in "${APT_PENDING[@]}"; do
+            local pkg="${entry%%|*}"
+            local desc="${entry#*|}"
+            if apt-get install -y -qq "$pkg" >/dev/null 2>&1; then
+                ok "$desc"
+                INSTALLED+=("$pkg")
+            else
+                warn "$desc — fallo al instalar"
+                FAILED+=("$pkg")
+            fi
+        done
     fi
+
+    APT_PENDING=()
 }
 
 check_cmd() {
@@ -141,18 +177,6 @@ if [[ -z "$PI_MODEL" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Actualizar índice de paquetes
-# ---------------------------------------------------------------------------
-header "Actualizar repositorios"
-
-if [[ "$DRY_RUN" == false ]]; then
-    echo -n "  Ejecutando apt-get update... "
-    apt-get update -qq && echo "OK" || { echo "FALLO"; warn "apt-get update falló — los paquetes pueden estar desactualizados."; }
-else
-    info "apt-get update (omitido en --dry-run)"
-fi
-
-# ---------------------------------------------------------------------------
 # Paquetes base — necesarios para TODOS los scripts
 # ---------------------------------------------------------------------------
 header "Dependencias base (todos los scripts)"
@@ -174,6 +198,14 @@ if [[ "$OPT_USB_CAMERA" == true ]]; then
     apt_install "usbutils"    "usbutils — lsusb, diagnóstico USB"
 fi
 
+# Instalar paquetes apt encolados (base + cámaras) si ningún bloque posterior
+# va a llamar apt_flush por su cuenta: CSI lo hace internamente (porque la
+# verificación de cámara necesita libcamera instalado), ai-server también
+# (pip necesita python3-venv), y web-api también (antes de sops/uv).
+if [[ "$OPT_CSI_CAMERA" == false && "$OPT_AI_SERVER" == false && "$OPT_WEB_API" == false ]]; then
+    apt_flush
+fi
+
 # ---------------------------------------------------------------------------
 # Módulo CSI (libcamera)
 # ---------------------------------------------------------------------------
@@ -181,6 +213,7 @@ if [[ "$OPT_CSI_CAMERA" == true ]]; then
     header "Módulo CSI oficial (libcamera) — capture.sh, stream.sh, stream-overlay.sh"
 
     apt_install "libcamera-apps" "libcamera-apps — libcamera-vid, libcamera-still, libcamera-jpeg"
+    apt_flush
 
     # Verificar que la cámara CSI esté habilitada
     if [[ "$DRY_RUN" == false ]]; then
@@ -207,6 +240,8 @@ if [[ "$OPT_AI_SERVER" == true ]]; then
     apt_install "python3"       "python3 — intérprete Python"
     apt_install "python3-pip"   "python3-pip — gestor de paquetes Python"
     apt_install "python3-venv"  "python3-venv — entornos virtuales Python"
+
+    apt_flush
 
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     REQUIREMENTS="${SCRIPT_DIR}/../server/requirements.txt"
@@ -238,6 +273,8 @@ if [[ "$OPT_WEB_API" == true ]]; then
     apt_install "python3" "python3 — intérprete Python"
     apt_install "age"     "age — cifrado de secretos (age-keygen)"
     apt_install "python3-yaml" "python3-yaml — PyYAML para scripts/manage-users.sh"
+
+    apt_flush
 
     # sops no siempre está en los repos de Debian según la versión; si falla
     # la instalación por apt, se descarga el .deb de la última release oficial
