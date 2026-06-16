@@ -302,7 +302,10 @@ if [[ "$OPT_USB_CAMERA" == true ]]; then
     # Ver si hay cámaras USB conectadas ahora
     if [[ "$DRY_RUN" == false ]] && command -v v4l2-ctl >/dev/null 2>&1; then
         echo ""
-        CAMS=$(ls /dev/video* 2>/dev/null | wc -l || echo 0)
+        shopt -s nullglob
+        video_devs=(/dev/video*)
+        shopt -u nullglob
+        CAMS="${#video_devs[@]}"
         if [[ "$CAMS" -gt 0 ]]; then
             ok "Dispositivos /dev/video* encontrados: $CAMS"
             for dev in /dev/video*; do
@@ -347,7 +350,7 @@ fi
 # Ver si hay micrófono USB conectado
 if [[ "$DRY_RUN" == false ]] && command -v arecord >/dev/null 2>&1; then
     echo ""
-    MIC_COUNT=$(arecord -l 2>/dev/null | grep "^card" | wc -l || echo 0)
+    MIC_COUNT="$(arecord -l 2>/dev/null | grep -c "^card" || true)"
     if [[ "$MIC_COUNT" -gt 0 ]]; then
         ok "Dispositivos de audio encontrados: $MIC_COUNT"
         arecord -l 2>/dev/null | grep "^card" | while read -r line; do
