@@ -240,23 +240,54 @@ if [[ "$OPT_WEB_API" == true ]]; then
     apt_install "python3-yaml" "python3-yaml — PyYAML para scripts/manage-users.sh"
 
     # sops no siempre está en los repos de Debian según la versión; si falla
-    # la instalación por apt, se avisa en vez de fallar todo el script.
-    if dpkg -s sops >/dev/null 2>&1; then
+    # la instalación por apt, se descarga el .deb de la última release oficial
+    # de GitHub para la arquitectura detectada (solo hay builds para amd64/arm64).
+    if dpkg -s sops >/dev/null 2>&1 || command -v sops >/dev/null 2>&1; then
         ok "sops — cifrado de secretos (ya instalado)"
         SKIPPED+=("sops")
     elif [[ "$DRY_RUN" == true ]]; then
-        info "sops — cifrado de secretos (se instalaría si está en los repos)"
+        info "sops — cifrado de secretos (se instalaría por apt, o el .deb de GitHub si no está en los repos)"
+    elif apt-get install -y -qq sops >/dev/null 2>&1; then
+        ok "sops — cifrado de secretos"
+        INSTALLED+=("sops")
     else
-        echo -n "  Instalando sops — cifrado de secretos... "
-        if apt-get install -y -qq sops >/dev/null 2>&1; then
-            echo "OK"
-            ok "sops — cifrado de secretos"
-            INSTALLED+=("sops")
-        else
-            echo "no disponible en los repos"
-            warn "sops no está empaquetado en esta versión de Debian."
+        DEB_ARCH="$(dpkg --print-architecture)"
+        if [[ "$DEB_ARCH" != "amd64" && "$DEB_ARCH" != "arm64" ]]; then
+            warn "sops no está en los repos y GitHub no publica .deb para '${DEB_ARCH}' (solo amd64/arm64)."
             warn "Instalar manualmente desde https://github.com/getsops/sops/releases"
             FAILED+=("sops")
+        else
+            echo "  sops no está en los repos, buscando el .deb de la última release para ${DEB_ARCH}..."
+            SOPS_DEB_URL="$(curl -fsSL https://api.github.com/repos/getsops/sops/releases/latest 2>/dev/null \
+                | grep -o "https://github.com/getsops/sops/releases/download/[^\"]*_${DEB_ARCH}\.deb" \
+                | head -n1)"
+
+            if [[ -z "$SOPS_DEB_URL" ]]; then
+                warn "sops — no se pudo determinar la URL del .deb más reciente."
+                warn "Instalar manualmente desde https://github.com/getsops/sops/releases"
+                FAILED+=("sops")
+            else
+                SOPS_DEB_TMP="$(mktemp --suffix=.deb)"
+                echo -n "  Descargando $(basename "$SOPS_DEB_URL")... "
+                if curl -fsSL "$SOPS_DEB_URL" -o "$SOPS_DEB_TMP" 2>/dev/null; then
+                    echo "OK"
+                    echo -n "  Instalando sops... "
+                    if dpkg -i "$SOPS_DEB_TMP" >/dev/null 2>&1; then
+                        echo "OK"
+                        ok "sops — cifrado de secretos"
+                        INSTALLED+=("sops")
+                    else
+                        echo "FALLO"
+                        warn "sops — fallo al instalar el .deb descargado (${SOPS_DEB_URL})"
+                        FAILED+=("sops")
+                    fi
+                else
+                    echo "FALLO"
+                    warn "sops — fallo al descargar ${SOPS_DEB_URL}"
+                    FAILED+=("sops")
+                fi
+                rm -f "$SOPS_DEB_TMP"
+            fi
         fi
     fi
 
