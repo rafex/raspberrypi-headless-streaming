@@ -9,7 +9,8 @@
 #   --csi-camera    Instalar soporte para módulo CSI oficial (libcamera)
 #   --all-cameras   Instalar soporte para ambos tipos de cámara
 #   --ai-server     Instalar dependencias del servidor IA (Python, Flask, openai)
-#   --full          Instalar todo (ambas cámaras + servidor IA)
+#   --web-api       Instalar dependencias de web-api (age, sops, uv, openssl)
+#   --full          Instalar todo (ambas cámaras + servidor IA + web-api)
 #   --dry-run       Mostrar qué se instalaría sin instalar nada
 #   --help          Mostrar esta ayuda
 #
@@ -19,6 +20,7 @@
 #   sudo ./install-deps.sh
 #   sudo ./install-deps.sh --usb-camera
 #   sudo ./install-deps.sh --csi-camera
+#   sudo ./install-deps.sh --web-api
 #   sudo ./install-deps.sh --full
 #   sudo ./install-deps.sh --dry-run
 
@@ -30,6 +32,7 @@ set -euo pipefail
 OPT_USB_CAMERA=true
 OPT_CSI_CAMERA=false
 OPT_AI_SERVER=false
+OPT_WEB_API=false
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -38,7 +41,8 @@ while [[ $# -gt 0 ]]; do
         --csi-camera)   OPT_CSI_CAMERA=true;  OPT_USB_CAMERA=false; shift ;;
         --all-cameras)  OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true;  shift ;;
         --ai-server)    OPT_AI_SERVER=true;   shift ;;
-        --full)         OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true; OPT_AI_SERVER=true; shift ;;
+        --web-api)      OPT_WEB_API=true;     shift ;;
+        --full)         OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true; OPT_AI_SERVER=true; OPT_WEB_API=true; shift ;;
         --dry-run)      DRY_RUN=true;         shift ;;
         --help)
             grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -225,6 +229,58 @@ if [[ "$OPT_AI_SERVER" == true ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Web API (control de la transmisión desde el celular)
+# ---------------------------------------------------------------------------
+if [[ "$OPT_WEB_API" == true ]]; then
+    header "Web API — control remoto (ver docs/web-api.md)"
+
+    apt_install "openssl" "openssl — certificado TLS autofirmado"
+    apt_install "python3" "python3 — intérprete Python"
+    apt_install "age"     "age — cifrado de secretos (age-keygen)"
+
+    # sops no siempre está en los repos de Debian según la versión; si falla
+    # la instalación por apt, se avisa en vez de fallar todo el script.
+    if dpkg -s sops >/dev/null 2>&1; then
+        ok "sops — cifrado de secretos (ya instalado)"
+        SKIPPED+=("sops")
+    elif [[ "$DRY_RUN" == true ]]; then
+        info "sops — cifrado de secretos (se instalaría si está en los repos)"
+    else
+        echo -n "  Instalando sops — cifrado de secretos... "
+        if apt-get install -y -qq sops >/dev/null 2>&1; then
+            echo "OK"
+            ok "sops — cifrado de secretos"
+            INSTALLED+=("sops")
+        else
+            echo "no disponible en los repos"
+            warn "sops no está empaquetado en esta versión de Debian."
+            warn "Instalar manualmente desde https://github.com/getsops/sops/releases"
+            FAILED+=("sops")
+        fi
+    fi
+
+    # uv no está empaquetado en apt; se instala con el script oficial de Astral.
+    if command -v uv >/dev/null 2>&1; then
+        ok "uv — gestor de entornos Python (ya instalado)"
+        SKIPPED+=("uv")
+    elif [[ "$DRY_RUN" == true ]]; then
+        info "uv — gestor de entornos Python (se instalaría con el instalador oficial)"
+    else
+        echo -n "  Instalando uv — gestor de entornos Python... "
+        if curl -LsSf https://astral.sh/uv/install.sh 2>/dev/null \
+            | env UV_INSTALL_DIR=/usr/local/bin sh >/dev/null 2>&1; then
+            echo "OK"
+            ok "uv — gestor de entornos Python"
+            INSTALLED+=("uv")
+        else
+            echo "FALLO"
+            warn "uv — fallo al instalar. Ver https://docs.astral.sh/uv/getting-started/installation/"
+            FAILED+=("uv")
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Verificación final
 # ---------------------------------------------------------------------------
 header "Verificación del entorno"
@@ -269,6 +325,22 @@ fi
 if [[ "$OPT_AI_SERVER" == true ]]; then
     echo ""
     check_cmd "python3"  "python3"  "python3"
+fi
+
+if [[ "$OPT_WEB_API" == true ]]; then
+    echo ""
+    check_cmd "openssl"    "openssl" "openssl"
+    check_cmd "age-keygen" "age"     "age-keygen"
+    if command -v sops >/dev/null 2>&1; then
+        ok "sops"
+    else
+        warn "sops — no encontrado. Instalar manualmente: https://github.com/getsops/sops/releases"
+    fi
+    if command -v uv >/dev/null 2>&1; then
+        ok "uv"
+    else
+        warn "uv — no encontrado. Ver https://docs.astral.sh/uv/getting-started/installation/"
+    fi
 fi
 
 # Ver si hay micrófono USB conectado
@@ -340,6 +412,13 @@ if [[ "$DRY_RUN" == false && "${#FAILED[@]}" -eq 0 ]]; then
         echo "  Servidor IA:"
         echo "       Editar server/server.env con tu API key"
         echo "       sudo scripts/ai-server-install.sh"
+    fi
+
+    if [[ "$OPT_WEB_API" == true ]]; then
+        echo ""
+        echo "  Web API (control desde el celular):"
+        echo "       Ver docs/web-api.md para el flujo completo (age key,"
+        echo "       .sops.yaml, primer usuario, make web-api)."
     fi
 
     echo ""

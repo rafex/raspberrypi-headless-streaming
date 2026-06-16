@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Instala y configura el servidor de análisis IA en Raspberry Pi 4B.
-# Configura un virtualenv Python, instala dependencias y registra el servicio systemd.
+# Configura un virtualenv con uv, instala dependencias y registra el servicio systemd.
 #
 # Uso:
 #   sudo ./ai-server-install.sh [opciones]
@@ -10,6 +10,11 @@
 #   --model MODEL                   Modelo a usar (default del proveedor si no se indica)
 #   --port PORT                     Puerto del servidor (default: 8080)
 #   --help                          Mostrar esta ayuda
+#
+# Requisito previo (no lo instala este script):
+#   - uv instalado y visible para root (sudo). Si lo instalaste con tu
+#     usuario normal, instalarlo también para root con:
+#       curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 #
 # Tras instalar:
 #   1. Editar /etc/ai-server.env con las API keys
@@ -54,6 +59,8 @@ done
 [[ "$EUID" -eq 0 ]] || die "Requiere root. Ejecutar con: sudo $0"
 [[ "$PROVIDER" == "deepseek" || "$PROVIDER" == "openrouter" ]] \
     || die "Proveedor inválido: $PROVIDER. Usar: deepseek | openrouter"
+command -v uv >/dev/null 2>&1 \
+    || die "uv no encontrado para root. Instalar con: curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh"
 
 echo "=== Instalación del servidor IA ==="
 echo "  Proveedor : ${PROVIDER}"
@@ -63,20 +70,21 @@ echo "==================================="
 echo ""
 
 # --- 1. Dependencias del sistema ---
+# uv gestiona el venv y los paquetes Python; solo necesitamos el
+# intérprete base del sistema.
 echo "Instalando dependencias del sistema..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-pip python3-venv
+apt-get install -y -qq python3
 
 # --- 2. Directorio de instalación ---
 mkdir -p "$INSTALL_DIR"
 cp "${SERVER_DIR}/analyze-server.py" "${INSTALL_DIR}/analyze-server.py"
 cp "${SERVER_DIR}/requirements.txt" "${INSTALL_DIR}/requirements.txt"
 
-# --- 3. Virtualenv ---
-echo "Creando entorno virtual Python..."
-python3 -m venv "$VENV_DIR"
-"${VENV_DIR}/bin/pip" install --upgrade pip -q
-"${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/requirements.txt" -q
+# --- 3. Virtualenv (uv) ---
+echo "Creando entorno virtual con uv..."
+uv venv "$VENV_DIR" --python python3
+uv pip install --python "${VENV_DIR}/bin/python" -r "${INSTALL_DIR}/requirements.txt"
 echo "Dependencias instaladas."
 
 # --- 4. Archivo de entorno ---

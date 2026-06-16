@@ -11,6 +11,9 @@
 #
 # Requisitos previos (no los instala este script, ver docs/web-api.md):
 #   - sops y age (age-keygen) instalados
+#   - uv instalado y visible para root (sudo). Si lo instalaste con tu
+#     usuario normal, instalarlo también para root con:
+#       curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 #   - server/webapi/secrets.enc.yaml ya creado con al menos un usuario
 #     (ejecutar primero: scripts/manage-users.sh add <usuario> <rol>)
 #
@@ -65,6 +68,8 @@ command -v sops >/dev/null 2>&1 \
     || die "sops no encontrado. Instalar según https://github.com/getsops/sops antes de continuar."
 command -v age-keygen >/dev/null 2>&1 \
     || die "age no encontrado. Instalar con: sudo apt install age"
+command -v uv >/dev/null 2>&1 \
+    || die "uv no encontrado para root. Instalar con: curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh"
 
 [[ -f "${WEBAPI_SRC}/secrets.enc.yaml" ]] \
     || die "Falta ${WEBAPI_SRC}/secrets.enc.yaml. Crear el primer usuario con: scripts/manage-users.sh add <usuario> <viewer|operator>"
@@ -72,9 +77,11 @@ command -v age-keygen >/dev/null 2>&1 \
 SYSTEMCTL_BIN="$(command -v systemctl)" || die "systemctl no encontrado."
 
 # --- 2. Dependencias del sistema ---
+# uv gestiona el venv y los paquetes Python; solo necesitamos el
+# intérprete base del sistema y openssl para el certificado.
 echo "Instalando dependencias del sistema..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-pip python3-venv openssl
+apt-get install -y -qq python3 openssl
 
 # --- 3. Usuario de servicio dedicado, sin privilegios ---
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
@@ -88,11 +95,10 @@ rm -rf "${INSTALL_DIR}/webapi"
 cp -r "$WEBAPI_SRC" "${INSTALL_DIR}/webapi"
 rm -f "${INSTALL_DIR}/webapi/requirements.txt"
 
-# --- 5. Virtualenv ---
-echo "Creando entorno virtual Python..."
-python3 -m venv "$VENV_DIR"
-"${VENV_DIR}/bin/pip" install --upgrade pip -q
-"${VENV_DIR}/bin/pip" install -r "${WEBAPI_SRC}/requirements.txt" -q
+# --- 5. Virtualenv (uv) ---
+echo "Creando entorno virtual con uv..."
+uv venv "$VENV_DIR" --python python3
+uv pip install --python "${VENV_DIR}/bin/python" -r "${WEBAPI_SRC}/requirements.txt"
 echo "Dependencias instaladas."
 
 # --- 6. Certificado TLS autofirmado ---

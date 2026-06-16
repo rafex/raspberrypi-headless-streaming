@@ -19,7 +19,7 @@ que ya gestiona [`scripts/control.sh`](../scripts/control.sh).
 | `server/webapi/config_store.py` | lee/escribe `/etc/streaming.env` |
 | `server/webapi/static/` | frontend (HTML/CSS/JS vanilla, sin build) |
 | `scripts/manage-users.sh` | alta/baja/listado de usuarios cifrados |
-| `scripts/web-api-install.sh` | instala venv, TLS, sudoers, systemd unit |
+| `scripts/web-api-install.sh` | instala venv (con `uv`), TLS, sudoers, systemd unit |
 
 ### Roles
 
@@ -43,6 +43,23 @@ que ya gestiona [`scripts/control.sh`](../scripts/control.sh).
 ---
 
 ## Instalación paso a paso
+
+### 0. Requisitos en la Raspberry Pi
+
+Instalar `age`, `sops`, `uv` y `openssl` con:
+
+```bash
+sudo scripts/install-deps.sh --web-api
+```
+
+(o `sudo scripts/install-deps.sh --full` si además querés todo lo demás:
+cámaras, servidor IA, etc.)
+
+`uv` se instala como `root` (ya que el script corre con `sudo`), quedando en
+`/usr/local/bin/uv`, visible también para `web-api-install.sh` más adelante.
+`sops` no siempre está empaquetado en Debian según la versión — si
+`install-deps.sh` avisa que no pudo instalarlo por `apt`, instalarlo
+manualmente desde [https://github.com/getsops/sops/releases](https://github.com/getsops/sops/releases).
 
 ### 1. Generar la age key en la Raspberry Pi
 
