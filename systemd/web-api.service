@@ -1,0 +1,42 @@
+[Unit]
+Description=API REST + frontend de control de transmisión (web-api)
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=webapi
+Group=webapi
+
+# Variables generadas por scripts/web-api-install.sh: SECRET_KEY, PORT,
+# TLS_CERT, TLS_KEY, SECRETS_PATH, STREAMING_ENV_PATH, SOPS_AGE_KEY_FILE
+EnvironmentFile=/etc/web-api.env
+
+# Rutas definidas por web-api-install.sh al instalar
+# __VENV_DIR__ → /opt/web-api/venv
+WorkingDirectory=/opt/web-api
+
+ExecStart=__VENV_DIR__/bin/gunicorn \
+    --certfile=${TLS_CERT} \
+    --keyfile=${TLS_KEY} \
+    --bind 0.0.0.0:${PORT} \
+    --workers 2 \
+    --factory \
+    webapi.app:create_app
+
+Restart=on-failure
+RestartSec=10
+
+# No necesita privilegios de archivo más allá de leer su propio código,
+# certificados y la age key (todos con permisos restringidos al usuario webapi).
+# El único privilegio elevado es systemctl start/stop sobre las dos unidades
+# de streaming, concedido vía /etc/sudoers.d/web-api (ver web-api-install.sh).
+NoNewPrivileges=false
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=web-api
+
+[Install]
+WantedBy=multi-user.target

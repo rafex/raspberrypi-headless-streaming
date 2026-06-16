@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de transmisión</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <h1>Raspi Streaming</h1>
+
+    <section id="login-view">
+      <div class="form-container">
+        <p>Login</p>
+        <form id="login-form" class="form">
+          <label for="username">Usuario</label>
+          <input type="text" id="username" class="input" placeholder="Ingresa tu usuario" autocomplete="username" required>
+
+          <label for="password">Password</label>
+          <input type="password" id="password" class="input" placeholder="Password" autocomplete="current-password" required>
+
+          <button type="submit">Submit</button>
+          <p id="login-error" class="error" hidden></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="dashboard-view" hidden>
+      <div class="topbar">
+        <span id="session-info"></span>
+        <button id="logout-btn" class="link">Salir</button>
+      </div>
+
+      <div class="services" id="services"></div>
+
+      <section id="config-section" hidden>
+        <h2>Configuración</h2>
+        <form id="config-form">
+          <label>
+            URL RTMP
+            <input type="text" id="cfg-rtmp-url" placeholder="rtmp://...">
+          </label>
+          <div class="grid2">
+            <label>Ancho <input type="number" id="cfg-width"></label>
+            <label>Alto <input type="number" id="cfg-height"></label>
+            <label>FPS <input type="number" id="cfg-fps"></label>
+            <label>Bitrate <input type="number" id="cfg-bitrate"></label>
+          </div>
+          <label>
+            Preset
+            <select id="cfg-preset">
+              <option>ultrafast</option>
+              <option>superfast</option>
+              <option>veryfast</option>
+              <option>faster</option>
+              <option>fast</option>
+            </select>
+          </label>
+          <button type="submit">Guardar configuración</button>
+          <p id="config-msg" hidden></p>
+        </form>
+      </section>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

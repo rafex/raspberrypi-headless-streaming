@@ -1,0 +1,15 @@
+# Configuración de sops para cifrar server/webapi/secrets.enc.yaml.
+#
+# 1. Generar la age key en la Raspberry Pi (no en tu máquina de desarrollo,
+#    para que la clave privada nunca salga del dispositivo que la necesita):
+#      age-keygen -o /etc/raspi-streaming/age/key.txt
+#      chmod 600 /etc/raspi-streaming/age/key.txt
+#
+# 2. Copiar la "Public key" que imprime age-keygen y reemplazar el
+#    placeholder de abajo.
+#
+# 3. Crear/editar usuarios con scripts/manage-users.sh, que invoca sops
+#    usando esta configuración (no se edita secrets.enc.yaml a mano).
+creation_rules:
+  - path_regex: server/webapi/secrets\.enc\.yaml$
+    age: AGE_PUBLIC_KEY_PLACEHOLDER_REEMPLAZAR
