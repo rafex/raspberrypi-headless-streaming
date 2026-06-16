@@ -22,8 +22,7 @@ ExecStart=__VENV_DIR__/bin/gunicorn \
     --keyfile=${TLS_KEY} \
     --bind 0.0.0.0:${PORT} \
     --workers 2 \
-    --factory \
-    webapi.app:create_app
+    "webapi.app:create_app()"
 
 Restart=on-failure
 RestartSec=10
