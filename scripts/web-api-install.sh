@@ -136,7 +136,26 @@ chmod 600 "$AGE_KEY_FILE"
 
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$TLS_DIR" "$AGE_DIR"
 
-# --- 8. Archivo de entorno ---
+# --- 8a. streaming.env — crearlo si no existe y asignar permisos a webapi ---
+STREAMING_ENV="/etc/streaming.env"
+if [[ ! -f "$STREAMING_ENV" ]]; then
+    cat > "$STREAMING_ENV" <<'EOF'
+RTMP_URL=
+STREAM_WIDTH=1280
+STREAM_HEIGHT=720
+STREAM_FPS=30
+STREAM_BITRATE=2500000
+STREAM_PRESET=veryfast
+OVERLAY_TEXT=
+OVERLAY_TEXT_POS=bl
+OVERLAY_TIMESTAMP=false
+EOF
+    echo "Archivo de streaming creado: ${STREAMING_ENV}"
+fi
+chown "${SERVICE_USER}:${SERVICE_USER}" "$STREAMING_ENV"
+chmod 640 "$STREAMING_ENV"
+
+# --- 8b. Archivo de entorno ---
 if [[ ! -f "$ENV_DST" ]]; then
     SECRET_KEY="$(openssl rand -hex 32)"
     cat > "$ENV_DST" <<EOF

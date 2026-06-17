@@ -116,14 +116,32 @@
     "1080p": { width: 1920, height: 1080, fps: 30, bitrate: 4500000 },
   };
 
+  function setResolution({ width, height, fps, bitrate }) {
+    $("cfg-width").value      = width;
+    $("cfg-height").value     = height;
+    $("cfg-fps").value        = fps;
+    $("cfg-bitrate").value    = bitrate;
+    $("cfg-width-vis").value  = width;
+    $("cfg-height-vis").value = height;
+    $("cfg-fps-vis").value    = fps;
+    $("cfg-bitrate-vis").value = bitrate;
+    document.querySelectorAll(".preset-bar button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.preset && RESOLUTION_PRESETS[b.dataset.preset]?.width === width)
+    );
+  }
+
   document.querySelectorAll(".preset-bar button[data-preset]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const p = RESOLUTION_PRESETS[btn.dataset.preset];
-      if (!p) return;
-      $("cfg-width").value = p.width;
-      $("cfg-height").value = p.height;
-      $("cfg-fps").value = p.fps;
-      $("cfg-bitrate").value = p.bitrate;
+      if (p) setResolution(p);
+    });
+  });
+
+  ["cfg-width-vis", "cfg-height-vis", "cfg-fps-vis", "cfg-bitrate-vis"].forEach((id) => {
+    $(id)?.addEventListener("input", () => {
+      const key = id.replace("-vis", "").replace("cfg-", "cfg-");
+      $(key).value = $(id).value;
+      document.querySelectorAll(".preset-bar button").forEach((b) => b.classList.remove("active"));
     });
   });
 
@@ -132,10 +150,12 @@
     try {
       const cfg = await api("/api/config");
       $("cfg-rtmp-url").value = cfg.RTMP_URL || "";
-      $("cfg-width").value = cfg.STREAM_WIDTH || "";
-      $("cfg-height").value = cfg.STREAM_HEIGHT || "";
-      $("cfg-fps").value = cfg.STREAM_FPS || "";
-      $("cfg-bitrate").value = cfg.STREAM_BITRATE || "";
+      setResolution({
+        width:   cfg.STREAM_WIDTH   || 1280,
+        height:  cfg.STREAM_HEIGHT  || 720,
+        fps:     cfg.STREAM_FPS     || 30,
+        bitrate: cfg.STREAM_BITRATE || 2500000,
+      });
       $("cfg-preset").value = cfg.STREAM_PRESET || "veryfast";
       $("cfg-overlay-text").value = cfg.OVERLAY_TEXT || "";
       $("cfg-overlay-text-pos").value = cfg.OVERLAY_TEXT_POS || "bl";

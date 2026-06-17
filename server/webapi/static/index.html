@@ -42,30 +42,37 @@
             <input type="text" id="cfg-rtmp-url" placeholder="rtmp://..." autocomplete="off">
           </label>
 
-          <p class="section-label">Resolución rápida</p>
+          <p class="section-label">Resolución</p>
           <div class="preset-bar">
             <button type="button" data-preset="480p">480p</button>
             <button type="button" data-preset="720p">720p</button>
             <button type="button" data-preset="1080p">1080p</button>
           </div>
 
-          <div class="grid2">
-            <label>Ancho (px) <input type="number" id="cfg-width" min="320" max="1920"></label>
-            <label>Alto (px) <input type="number" id="cfg-height" min="240" max="1080"></label>
-            <label>FPS <input type="number" id="cfg-fps" min="1" max="60"></label>
-            <label>Bitrate (bps) <input type="number" id="cfg-bitrate" min="200000" max="25000000"></label>
-          </div>
+          <input type="hidden" id="cfg-width">
+          <input type="hidden" id="cfg-height">
+          <input type="hidden" id="cfg-fps">
+          <input type="hidden" id="cfg-bitrate">
 
-          <label>
-            Preset de codificación
-            <select id="cfg-preset">
-              <option value="ultrafast">ultrafast — máxima velocidad, menor calidad</option>
-              <option value="superfast">superfast</option>
-              <option value="veryfast">veryfast — recomendado Pi 3B</option>
-              <option value="faster">faster</option>
-              <option value="fast">fast — mejor calidad, más CPU</option>
-            </select>
-          </label>
+          <details id="cfg-advanced">
+            <summary>Personalizado</summary>
+            <div class="grid2" style="margin-top:12px">
+              <label>Ancho (px) <input type="number" id="cfg-width-vis" min="320" max="1920"></label>
+              <label>Alto (px)  <input type="number" id="cfg-height-vis" min="240" max="1080"></label>
+              <label>FPS        <input type="number" id="cfg-fps-vis" min="1" max="60"></label>
+              <label>Bitrate (bps) <input type="number" id="cfg-bitrate-vis" min="200000" max="25000000"></label>
+            </div>
+            <label>
+              Preset de codificación
+              <select id="cfg-preset">
+                <option value="ultrafast">ultrafast — máxima velocidad, menor calidad</option>
+                <option value="superfast">superfast</option>
+                <option value="veryfast">veryfast — recomendado Pi 3B</option>
+                <option value="faster">faster</option>
+                <option value="fast">fast — mejor calidad, más CPU</option>
+              </select>
+            </label>
+          </details>
 
           <h3>Overlay (Stream con overlay)</h3>
           <label>
@@ -82,10 +89,13 @@
               <option value="center">Centro</option>
             </select>
           </label>
-          <label class="label-checkbox">
-            <input type="checkbox" id="cfg-overlay-timestamp">
-            Mostrar hora en tiempo real
-          </label>
+          <div class="toggle-row">
+            <span>Mostrar hora en tiempo real</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfg-overlay-timestamp">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
 
           <button type="submit">Guardar configuración</button>
           <p id="config-msg" hidden></p>
