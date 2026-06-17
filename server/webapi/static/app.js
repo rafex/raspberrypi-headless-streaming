@@ -12,6 +12,11 @@
 
   const $ = (id) => document.getElementById(id);
 
+  const PLATFORM_BASE = {
+    youtube:  "rtmp://a.rtmp.youtube.com/live2/",
+    facebook: "rtmps://live-api-s.facebook.com:443/rtmp/",
+  };
+
   async function api(path, { method = "GET", body } = {}) {
     const headers = { "Content-Type": "application/json" };
     if (csrfToken && method !== "GET") headers["X-CSRF-Token"] = csrfToken;
@@ -122,20 +127,22 @@
     };
   }
 
+  // --- Resolución ---
   const RESOLUTION_PRESETS = {
+    "360p":  { width: 640,  height: 360,  fps: 30, bitrate: 800000 },
     "480p":  { width: 854,  height: 480,  fps: 30, bitrate: 1500000 },
     "720p":  { width: 1280, height: 720,  fps: 30, bitrate: 2500000 },
     "1080p": { width: 1920, height: 1080, fps: 30, bitrate: 4500000 },
   };
 
   function setResolution({ width, height, fps, bitrate }) {
-    $("cfg-width").value      = width;
-    $("cfg-height").value     = height;
-    $("cfg-fps").value        = fps;
-    $("cfg-bitrate").value    = bitrate;
-    $("cfg-width-vis").value  = width;
-    $("cfg-height-vis").value = height;
-    $("cfg-fps-vis").value    = fps;
+    $("cfg-width").value       = width;
+    $("cfg-height").value      = height;
+    $("cfg-fps").value         = fps;
+    $("cfg-bitrate").value     = bitrate;
+    $("cfg-width-vis").value   = width;
+    $("cfg-height-vis").value  = height;
+    $("cfg-fps-vis").value     = fps;
     $("cfg-bitrate-vis").value = bitrate;
     document.querySelectorAll(".preset-bar button").forEach((b) =>
       b.classList.toggle("active", b.dataset.preset && RESOLUTION_PRESETS[b.dataset.preset]?.width === width)
@@ -151,14 +158,31 @@
 
   ["cfg-width-vis", "cfg-height-vis", "cfg-fps-vis", "cfg-bitrate-vis"].forEach((id) => {
     $(id)?.addEventListener("input", () => {
-      const key = id.replace("-vis", "").replace("cfg-", "cfg-");
-      $(key).value = $(id).value;
+      $(id.replace("-vis", "")).value = $(id).value;
       document.querySelectorAll(".preset-bar button").forEach((b) => b.classList.remove("active"));
     });
   });
 
+  // --- Platform picker ---
+  function updatePlatformUI(platform) {
+    const isCustom = platform === "custom";
+    $("cfg-stream-key-row").hidden = isCustom;
+    $("cfg-rtmp-url-row").hidden   = !isCustom;
+  }
+
+  function detectPlatform(rtmpUrl) {
+    if (!rtmpUrl) return { platform: "youtube", key: "" };
+    if (rtmpUrl.includes("youtube.com"))  return { platform: "youtube",  key: rtmpUrl.split("/").pop() };
+    if (rtmpUrl.includes("facebook.com")) return { platform: "facebook", key: rtmpUrl.split("/").pop() };
+    return { platform: "custom", key: "" };
+  }
+
+  $("cfg-platform").addEventListener("change", () => {
+    updatePlatformUI($("cfg-platform").value);
+  });
+
+  // --- Detección de dispositivos ---
   function populateDeviceSelect(selectEl, items, currentValue) {
-    // Conserva opción "Auto-detectar" (value="") y opciones fijas al inicio
     const fixed = Array.from(selectEl.options).filter((o) => o.dataset.fixed === "1");
     selectEl.innerHTML = "";
     fixed.forEach((o) => selectEl.appendChild(o));
@@ -179,17 +203,11 @@
     statusEl.textContent = "Escaneando...";
     try {
       const { cameras, mics } = await api("/api/devices");
-
-      const camSel = $("cfg-video-device");
-      populateDeviceSelect(camSel, cameras, currentVideo);
+      populateDeviceSelect($("cfg-video-device"), cameras, currentVideo);
+      populateDeviceSelect($("cfg-audio-device"), mics,    currentAudio);
       statusEl.textContent =
-        cameras.length === 0
-          ? "No se detectaron cámaras"
-          : `${cameras.length} cámara(s) encontrada(s)`;
-
-      const micSel = $("cfg-audio-device");
-      populateDeviceSelect(micSel, mics, currentAudio);
-      if (mics.length === 0) statusEl.textContent += " · No se detectaron micrófonos";
+        `${cameras.length} cámara(s) · ${mics.length} micrófono(s)` +
+        (cameras.length === 0 ? " — no se detectaron cámaras" : "");
     } catch (err) {
       statusEl.textContent = `Error al escanear: ${err.message}`;
     }
@@ -197,11 +215,13 @@
 
   $("btn-scan-devices").addEventListener("click", () => loadDevices("", ""));
 
+  // --- Cargar configuración guardada ---
   async function loadConfig() {
     if (role !== "operator") return;
     try {
       const cfg = await api("/api/config");
-      $("cfg-rtmp-url").value = cfg.RTMP_URL || "";
+
+      // Resolución
       setResolution({
         width:   cfg.STREAM_WIDTH   || 1280,
         height:  cfg.STREAM_HEIGHT  || 720,
@@ -209,15 +229,33 @@
         bitrate: cfg.STREAM_BITRATE || 2500000,
       });
       $("cfg-preset").value = cfg.STREAM_PRESET || "veryfast";
-      $("cfg-overlay-text").value = cfg.OVERLAY_TEXT || "";
-      $("cfg-overlay-text-pos").value = cfg.OVERLAY_TEXT_POS || "bl";
-      $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
-      $("cfg-overlay-logo-file").value = cfg.OVERLAY_LOGO_FILE || "";
-      $("cfg-overlay-logo-pos").value = cfg.OVERLAY_LOGO_POS || "br";
-      $("cfg-overlay-logo-pad").value = cfg.OVERLAY_LOGO_PAD || "20";
 
+      // Plataforma — usar STREAM_PLATFORM/STREAM_KEY guardados; si no, inferir de RTMP_URL
+      let platform  = cfg.STREAM_PLATFORM || "";
+      let streamKey = cfg.STREAM_KEY      || "";
+      if (!platform) {
+        const det = detectPlatform(cfg.RTMP_URL || "");
+        platform  = det.platform;
+        streamKey = det.key;
+      }
+      $("cfg-platform").value   = platform || "youtube";
+      $("cfg-stream-key").value = streamKey;
+      $("cfg-rtmp-url").value   = cfg.RTMP_URL || "";
+      updatePlatformUI($("cfg-platform").value);
+
+      // Audio
       const noAudio = cfg.STREAM_NO_AUDIO === "true";
       $("cfg-audio-stereo").checked = (cfg.AUDIO_CHANNELS || "1") === "2";
+      $("cfg-audio-rate").value     = cfg.AUDIO_RATE || "44100";
+
+      // Overlay
+      $("cfg-overlay-text").value       = cfg.OVERLAY_TEXT      || "";
+      $("cfg-overlay-text-pos").value   = cfg.OVERLAY_TEXT_POS  || "bl";
+      $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
+      $("cfg-overlay-logo-file").value  = cfg.OVERLAY_LOGO_FILE || "";
+      $("cfg-overlay-logo-pos").value   = cfg.OVERLAY_LOGO_POS  || "br";
+      $("cfg-overlay-logo-pad").value   = cfg.OVERLAY_LOGO_PAD  || "20";
+      $("cfg-overlay-logo-w").value     = cfg.OVERLAY_LOGO_W    || "0";
 
       await loadDevices(cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_DEVICE || "");
       if (noAudio) $("cfg-audio-device").value = "__none__";
@@ -226,6 +264,7 @@
     }
   }
 
+  // --- Logo upload ---
   $("logo-file-input").addEventListener("change", async () => {
     const file = $("logo-file-input").files[0];
     if (!file) return;
@@ -256,6 +295,7 @@
     $("logo-file-input").value = "";
   });
 
+  // --- Login / logout ---
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     $("login-error").hidden = true;
@@ -289,26 +329,37 @@
     showLogin();
   });
 
+  // --- Construir y guardar config ---
   function buildConfigBody() {
-    const audioVal = $("cfg-audio-device").value;
-    const noAudio  = audioVal === "__none__";
+    const audioVal  = $("cfg-audio-device").value;
+    const noAudio   = audioVal === "__none__";
+    const platform  = $("cfg-platform").value;
+    const streamKey = $("cfg-stream-key").value.trim();
+    const rtmpUrl   = platform === "custom"
+      ? $("cfg-rtmp-url").value.trim()
+      : (PLATFORM_BASE[platform] || "") + streamKey;
+
     return {
-      rtmp_url:           $("cfg-rtmp-url").value,
-      width:              Number($("cfg-width").value),
-      height:             Number($("cfg-height").value),
-      fps:                Number($("cfg-fps").value),
-      bitrate:            Number($("cfg-bitrate").value),
-      preset:             $("cfg-preset").value,
-      video_device:       $("cfg-video-device").value,
-      audio_device:       noAudio ? "" : audioVal,
-      audio_channels:     $("cfg-audio-stereo").checked ? 2 : 1,
-      stream_no_audio:    noAudio,
-      overlay_text:       $("cfg-overlay-text").value,
-      overlay_text_pos:   $("cfg-overlay-text-pos").value,
-      overlay_timestamp:  $("cfg-overlay-timestamp").checked,
-      overlay_logo_file:  $("cfg-overlay-logo-file").value,
-      overlay_logo_pos:   $("cfg-overlay-logo-pos").value,
-      overlay_logo_pad:   Number($("cfg-overlay-logo-pad").value) || 20,
+      platform,
+      stream_key:        streamKey,
+      rtmp_url:          rtmpUrl,
+      width:             Number($("cfg-width").value),
+      height:            Number($("cfg-height").value),
+      fps:               Number($("cfg-fps").value),
+      bitrate:           Number($("cfg-bitrate").value),
+      preset:            $("cfg-preset").value,
+      video_device:      $("cfg-video-device").value,
+      audio_device:      noAudio ? "" : audioVal,
+      audio_channels:    $("cfg-audio-stereo").checked ? 2 : 1,
+      audio_rate:        Number($("cfg-audio-rate").value),
+      stream_no_audio:   noAudio,
+      overlay_text:      $("cfg-overlay-text").value,
+      overlay_text_pos:  $("cfg-overlay-text-pos").value,
+      overlay_timestamp: $("cfg-overlay-timestamp").checked,
+      overlay_logo_file: $("cfg-overlay-logo-file").value,
+      overlay_logo_pos:  $("cfg-overlay-logo-pos").value,
+      overlay_logo_pad:  Number($("cfg-overlay-logo-pad").value) || 20,
+      overlay_logo_w:    Number($("cfg-overlay-logo-w").value)   || 0,
     };
   }
 

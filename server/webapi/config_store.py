@@ -2,23 +2,33 @@
 Lectura/escritura de /etc/streaming.env — el mismo archivo que ya leen
 los servicios systemd "streaming" y "streaming-overlay"
 (ver systemd/streaming.env.example). web-api no inventa variables
-nuevas, reutiliza exactamente estas seis claves.
+nuevas, reutiliza exactamente estas claves.
 """
 
 import re
 
 FIELDS = (
-    "RTMP_URL", "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
-    "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "STREAM_NO_AUDIO",
+    "RTMP_URL", "STREAM_PLATFORM", "STREAM_KEY",
+    "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
+    "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
     "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
-    "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD",
+    "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD", "OVERLAY_LOGO_W",
 )
 
-VALID_PRESETS = ("ultrafast", "superfast", "veryfast", "faster", "fast")
-VALID_TEXT_POS = ("tl", "tr", "bl", "br", "center")
-VALID_LOGO_POS = ("tl", "tr", "bl", "br")
-RTMP_URL_RE = re.compile(r"^rtmps?://[^\s]+$")
-LOGO_PATH_RE = re.compile(r"^[^\x00\n\r;|&`$<>]+$")
+VALID_PRESETS    = ("ultrafast", "superfast", "veryfast", "faster", "fast")
+VALID_TEXT_POS   = ("tl", "tr", "bl", "br", "center")
+VALID_LOGO_POS   = ("tl", "tr", "bl", "br")
+VALID_PLATFORMS  = ("youtube", "facebook", "custom")
+VALID_AUDIO_RATES = (44100, 48000)
+
+PLATFORM_BASE_URLS = {
+    "youtube":  "rtmp://a.rtmp.youtube.com/live2/",
+    "facebook": "rtmps://live-api-s.facebook.com:443/rtmp/",
+}
+
+RTMP_URL_RE   = re.compile(r"^rtmps?://[^\s]+$")
+LOGO_PATH_RE  = re.compile(r"^[^\x00\n\r;|&`$<>]+$")
+STREAM_KEY_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
 class ConfigValidationError(ValueError):
@@ -61,9 +71,23 @@ def validate_config(data: dict) -> dict:
     """Valida el payload entrante de PUT /api/config. Lanza ConfigValidationError si algo no sirve."""
     errors = []
 
-    rtmp_url = str(data.get("rtmp_url", "")).strip()
-    if not RTMP_URL_RE.match(rtmp_url):
-        errors.append("rtmp_url debe ser una URL rtmp:// o rtmps:// válida")
+    # --- Plataforma y destino RTMP ---
+    platform = str(data.get("platform", "custom")).strip()
+    if platform not in VALID_PLATFORMS:
+        errors.append(f"platform debe ser uno de: {', '.join(VALID_PLATFORMS)}")
+        platform = "custom"
+
+    stream_key = str(data.get("stream_key", "")).strip()
+    if platform != "custom":
+        if not stream_key:
+            errors.append("stream_key es requerido para YouTube y Facebook")
+        elif not STREAM_KEY_RE.match(stream_key):
+            errors.append("stream_key solo puede contener letras, números, guiones y guiones bajos")
+        rtmp_url = PLATFORM_BASE_URLS.get(platform, "") + stream_key
+    else:
+        rtmp_url = str(data.get("rtmp_url", "")).strip()
+        if not RTMP_URL_RE.match(rtmp_url):
+            errors.append("rtmp_url debe ser una URL rtmp:// o rtmps:// válida")
 
     def _int_in_range(key, lo, hi):
         raw = data.get(key)
@@ -77,15 +101,49 @@ def validate_config(data: dict) -> dict:
             return None
         return value
 
-    width = _int_in_range("width", 320, 1920)
-    height = _int_in_range("height", 240, 1080)
-    fps = _int_in_range("fps", 1, 60)
-    bitrate = _int_in_range("bitrate", 200_000, 25_000_000)
+    width   = _int_in_range("width",   320,       1920)
+    height  = _int_in_range("height",  240,       1080)
+    fps     = _int_in_range("fps",     1,         60)
+    bitrate = _int_in_range("bitrate", 200_000,   25_000_000)
 
     preset = str(data.get("preset", "veryfast")).strip()
     if preset not in VALID_PRESETS:
         errors.append(f"preset debe ser uno de: {', '.join(VALID_PRESETS)}")
 
+    # --- Audio ---
+    audio_rate_raw = data.get("audio_rate", 44100)
+    try:
+        audio_rate = int(audio_rate_raw)
+        if audio_rate not in VALID_AUDIO_RATES:
+            errors.append(f"audio_rate debe ser uno de: {', '.join(str(r) for r in VALID_AUDIO_RATES)}")
+    except (TypeError, ValueError):
+        errors.append("audio_rate debe ser un entero")
+        audio_rate = 44100
+
+    audio_channels_raw = data.get("audio_channels", 1)
+    try:
+        audio_channels = int(audio_channels_raw)
+        if audio_channels not in (1, 2):
+            errors.append("audio_channels debe ser 1 (mono) o 2 (stereo)")
+    except (TypeError, ValueError):
+        errors.append("audio_channels debe ser 1 o 2")
+        audio_channels = 1
+
+    no_audio_raw = data.get("stream_no_audio", False)
+    if isinstance(no_audio_raw, str):
+        no_audio = no_audio_raw.lower() in ("true", "1", "yes")
+    else:
+        no_audio = bool(no_audio_raw)
+
+    video_device = str(data.get("video_device", "")).strip()
+    if video_device and not re.match(r"^/dev/video\d+$", video_device):
+        errors.append("video_device debe ser /dev/videoN")
+
+    audio_device = str(data.get("audio_device", "")).strip()
+    if audio_device and not re.match(r"^(plughw|hw):\d+,\d+$", audio_device):
+        errors.append("audio_device debe ser plughw:N,M o hw:N,M")
+
+    # --- Overlay ---
     overlay_text = str(data.get("overlay_text", "")).strip().replace("\n", " ").replace("\r", "")[:200]
 
     overlay_text_pos = str(data.get("overlay_text_pos", "bl")).strip()
@@ -115,49 +173,39 @@ def validate_config(data: dict) -> dict:
         errors.append("overlay_logo_pad debe ser un entero")
         overlay_logo_pad = 20
 
-    video_device = str(data.get("video_device", "")).strip()
-    if video_device and not re.match(r"^/dev/video\d+$", video_device):
-        errors.append("video_device debe ser /dev/videoN")
-
-    audio_device = str(data.get("audio_device", "")).strip()
-    if audio_device and not re.match(r"^(plughw|hw):\d+,\d+$", audio_device):
-        errors.append("audio_device debe ser plughw:N,M o hw:N,M")
-
-    audio_channels_raw = data.get("audio_channels", 1)
+    overlay_logo_w = data.get("overlay_logo_w", 0)
     try:
-        audio_channels = int(audio_channels_raw)
-        if audio_channels not in (1, 2):
-            errors.append("audio_channels debe ser 1 (mono) o 2 (stereo)")
+        overlay_logo_w = int(overlay_logo_w)
+        if not (0 <= overlay_logo_w <= 500):
+            errors.append("overlay_logo_w debe estar entre 0 y 500")
     except (TypeError, ValueError):
-        errors.append("audio_channels debe ser 1 o 2")
-        audio_channels = 1
-
-    no_audio_raw = data.get("stream_no_audio", False)
-    if isinstance(no_audio_raw, str):
-        no_audio = no_audio_raw.lower() in ("true", "1", "yes")
-    else:
-        no_audio = bool(no_audio_raw)
+        errors.append("overlay_logo_w debe ser un entero")
+        overlay_logo_w = 0
 
     if errors:
         raise ConfigValidationError("; ".join(errors))
 
     return {
-        "RTMP_URL": rtmp_url,
-        "STREAM_WIDTH": str(width),
-        "STREAM_HEIGHT": str(height),
-        "STREAM_FPS": str(fps),
-        "STREAM_BITRATE": str(bitrate),
-        "STREAM_PRESET": preset,
-        "VIDEO_DEVICE": video_device,
-        "AUDIO_DEVICE": audio_device,
-        "AUDIO_CHANNELS": str(audio_channels),
-        "STREAM_NO_AUDIO": "true" if no_audio else "false",
-        "OVERLAY_TEXT": overlay_text,
-        "OVERLAY_TEXT_POS": overlay_text_pos,
+        "RTMP_URL":          rtmp_url,
+        "STREAM_PLATFORM":   platform,
+        "STREAM_KEY":        stream_key,
+        "STREAM_WIDTH":      str(width),
+        "STREAM_HEIGHT":     str(height),
+        "STREAM_FPS":        str(fps),
+        "STREAM_BITRATE":    str(bitrate),
+        "STREAM_PRESET":     preset,
+        "VIDEO_DEVICE":      video_device,
+        "AUDIO_DEVICE":      audio_device,
+        "AUDIO_CHANNELS":    str(audio_channels),
+        "AUDIO_RATE":        str(audio_rate),
+        "STREAM_NO_AUDIO":   "true" if no_audio else "false",
+        "OVERLAY_TEXT":      overlay_text,
+        "OVERLAY_TEXT_POS":  overlay_text_pos,
         "OVERLAY_TIMESTAMP": "true" if overlay_timestamp else "false",
         "OVERLAY_LOGO_FILE": overlay_logo_file,
-        "OVERLAY_LOGO_POS": overlay_logo_pos,
-        "OVERLAY_LOGO_PAD": str(overlay_logo_pad),
+        "OVERLAY_LOGO_POS":  overlay_logo_pos,
+        "OVERLAY_LOGO_PAD":  str(overlay_logo_pad),
+        "OVERLAY_LOGO_W":    str(overlay_logo_w),
     }
 
 

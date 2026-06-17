@@ -47,19 +47,25 @@
           <input type="file" id="logo-file-input" accept=".png,.jpg,.jpeg" style="display:none">
         </div>
         <p id="logo-upload-msg" class="section-label" hidden></p>
-        <label style="margin-top:10px">
-          Posición del logo
-          <select id="cfg-overlay-logo-pos">
-            <option value="br">Abajo derecha (default)</option>
-            <option value="bl">Abajo izquierda</option>
-            <option value="tr">Arriba derecha</option>
-            <option value="tl">Arriba izquierda</option>
-          </select>
-        </label>
-        <label>
-          Margen del logo (px)
-          <input type="number" id="cfg-overlay-logo-pad" min="0" max="200" value="20">
-        </label>
+        <div class="grid2" style="margin-top:10px">
+          <label>
+            Posición
+            <select id="cfg-overlay-logo-pos">
+              <option value="br">Abajo derecha</option>
+              <option value="bl">Abajo izquierda</option>
+              <option value="tr">Arriba derecha</option>
+              <option value="tl">Arriba izquierda</option>
+            </select>
+          </label>
+          <label>
+            Margen (px)
+            <input type="number" id="cfg-overlay-logo-pad" min="0" max="200" value="20">
+          </label>
+          <label>
+            Ancho px (0 = original)
+            <input type="number" id="cfg-overlay-logo-w" min="0" max="500" value="0">
+          </label>
+        </div>
 
         <!-- Texto -->
         <p class="section-label" style="margin-top:14px">Texto en pantalla (opcional)</p>
@@ -87,7 +93,7 @@
         <p id="overlay-msg" hidden></p>
       </div>
 
-      <!-- Configuración general: URL + resolución -->
+      <!-- Configuración general -->
       <section id="config-section" hidden>
         <h2>Configuración</h2>
         <form id="config-form">
@@ -105,23 +111,47 @@
           <p class="section-label" style="margin-top:14px">Micrófono</p>
           <select id="cfg-audio-device">
             <option value="" data-fixed="1">Auto-detectar</option>
-            <option value="__none__" data-fixed="1">Sin audio</option>
+            <option value="__none__" data-fixed="1">Sin audio (silencio AAC)</option>
           </select>
-          <div id="cfg-audio-channels-row" class="toggle-row" style="margin-top:10px">
-            <span>Stereo (2 canales)</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="cfg-audio-stereo">
-              <span class="toggle-slider"></span>
+          <div class="grid2" style="margin-top:10px">
+            <div class="toggle-row" style="margin:0">
+              <span>Stereo (2 canales)</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="cfg-audio-stereo">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <label>
+              Frecuencia
+              <select id="cfg-audio-rate">
+                <option value="44100">44100 Hz</option>
+                <option value="48000">48000 Hz</option>
+              </select>
             </label>
           </div>
 
-          <label style="margin-top:14px">
-            URL RTMP
+          <!-- Plataforma y destino -->
+          <p class="section-label" style="margin-top:14px">Plataforma</p>
+          <select id="cfg-platform">
+            <option value="youtube">YouTube Live</option>
+            <option value="facebook">Facebook / Meta Live</option>
+            <option value="custom">URL personalizada</option>
+          </select>
+
+          <label id="cfg-stream-key-row" style="margin-top:10px">
+            Stream Key
+            <input type="password" id="cfg-stream-key" placeholder="xxxx-xxxx-xxxx-xxxx" autocomplete="off">
+          </label>
+
+          <label id="cfg-rtmp-url-row" style="margin-top:10px" hidden>
+            URL RTMP personalizada
             <input type="text" id="cfg-rtmp-url" placeholder="rtmp://..." autocomplete="off">
           </label>
 
-          <p class="section-label">Resolución</p>
+          <!-- Resolución -->
+          <p class="section-label" style="margin-top:14px">Resolución</p>
           <div class="preset-bar">
+            <button type="button" data-preset="360p">360p</button>
             <button type="button" data-preset="480p">480p</button>
             <button type="button" data-preset="720p">720p</button>
             <button type="button" data-preset="1080p">1080p</button>

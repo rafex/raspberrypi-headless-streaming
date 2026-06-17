@@ -72,6 +72,7 @@ NO_AUDIO=false
 LOGO_FILE="${OVERLAY_LOGO_FILE:-}"
 LOGO_POS="${OVERLAY_LOGO_POS:-br}"
 LOGO_PAD="${OVERLAY_LOGO_PAD:-20}"
+LOGO_W="${OVERLAY_LOGO_W:-0}"
 FRAME_FILE=""
 TEXT_CONTENT="${OVERLAY_TEXT:-}"
 TEXT_POS="${OVERLAY_TEXT_POS:-bl}"
@@ -333,7 +334,12 @@ fi
 if [[ -n "$LOGO_FILE" ]]; then
     POS=$(overlay_position "$LOGO_POS" "$LOGO_PAD")
     EXTRA_INPUTS+=(-i "$LOGO_FILE")
-    FILTER_PARTS+=("${CURRENT}[${EXTRA_IDX}:v]overlay=${POS}[vlogo]")
+    if [[ "$LOGO_W" -gt 0 ]]; then
+        FILTER_PARTS+=("[${EXTRA_IDX}:v]scale=${LOGO_W}:-1[logo_s]")
+        FILTER_PARTS+=("${CURRENT}[logo_s]overlay=${POS}[vlogo]")
+    else
+        FILTER_PARTS+=("${CURRENT}[${EXTRA_IDX}:v]overlay=${POS}[vlogo]")
+    fi
     CURRENT="[vlogo]"; (( EXTRA_IDX++ ))
 fi
 if [[ -n "$TEXT_CONTENT" ]]; then
