@@ -68,7 +68,8 @@ echo "Permisos de repo asignados: ${REPO_DIR} → grupo ${STREAM_USER} (lectura/
 # Solo aseguramos que root pueda leerlo (ya es el caso por defecto).
 if [[ -f /etc/streaming.env ]]; then
     chmod 640 /etc/streaming.env
-    echo "Permisos de /etc/streaming.env: 640 (root:webapi)"
+    owner="$(stat -c '%U:%G' /etc/streaming.env)"
+    echo "Permisos de /etc/streaming.env: 640 (${owner})"
 fi
 
 # --- 5. Instalar unit files con sustitución de placeholders ---
