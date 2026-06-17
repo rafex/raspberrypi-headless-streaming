@@ -19,6 +19,8 @@ AGE_KEY_FILE := /etc/raspi-streaming/age/key.txt
 INSTALL_DIR  := /opt/web-api
 VENV_DIR     := $(INSTALL_DIR)/venv
 SYSTEMD_DIR  := /etc/systemd/system
+STREAM_USER  ?= $(shell id -un)
+REPO_DIR     := $(shell pwd)
 
 help:
 	@echo "Setup inicial (en orden, ver docs/web-api.md):"
@@ -94,8 +96,14 @@ deploy-web-api:
 update-services:
 	sed "s|__VENV_DIR__|$(VENV_DIR)|g" systemd/web-api.service \
 	    | sudo tee $(SYSTEMD_DIR)/web-api.service > /dev/null
-	sudo cp systemd/streaming.service         $(SYSTEMD_DIR)/streaming.service
-	sudo cp systemd/streaming-overlay.service $(SYSTEMD_DIR)/streaming-overlay.service
+	sed -e "s|__STREAM_USER__|$(STREAM_USER)|g" \
+	    -e "s|__REPO_DIR__|$(REPO_DIR)|g" \
+	    systemd/streaming.service \
+	    | sudo tee $(SYSTEMD_DIR)/streaming.service > /dev/null
+	sed -e "s|__STREAM_USER__|$(STREAM_USER)|g" \
+	    -e "s|__REPO_DIR__|$(REPO_DIR)|g" \
+	    systemd/streaming-overlay.service \
+	    | sudo tee $(SYSTEMD_DIR)/streaming-overlay.service > /dev/null
 	sudo systemctl daemon-reload
 	sudo systemctl restart web-api.service
-	@echo "Servicios actualizados y daemon recargado"
+	@echo "Servicios actualizados: user=$(STREAM_USER), repo=$(REPO_DIR)"

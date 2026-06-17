@@ -10,7 +10,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-User=pi
+User=__STREAM_USER__
 
 # --- Configuración del stream ---
 # Editar estas variables o usar un archivo .env externo
@@ -25,7 +25,7 @@ Environment="STREAM_BITRATE=4500000"
 EnvironmentFile=-/etc/streaming.env
 
 # Directorio de trabajo: raíz del repositorio clonado
-WorkingDirectory=/home/pi/raspberrypi-headless-streaming
+WorkingDirectory=__REPO_DIR__
 
 # Comando principal
 ExecStart=/bin/bash scripts/stream.sh \
