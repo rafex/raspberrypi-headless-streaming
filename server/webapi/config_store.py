@@ -9,6 +9,7 @@ import re
 
 FIELDS = (
     "RTMP_URL", "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
+    "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "STREAM_NO_AUDIO",
     "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
     "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD",
 )
@@ -114,6 +115,29 @@ def validate_config(data: dict) -> dict:
         errors.append("overlay_logo_pad debe ser un entero")
         overlay_logo_pad = 20
 
+    video_device = str(data.get("video_device", "")).strip()
+    if video_device and not re.match(r"^/dev/video\d+$", video_device):
+        errors.append("video_device debe ser /dev/videoN")
+
+    audio_device = str(data.get("audio_device", "")).strip()
+    if audio_device and not re.match(r"^(plughw|hw):\d+,\d+$", audio_device):
+        errors.append("audio_device debe ser plughw:N,M o hw:N,M")
+
+    audio_channels_raw = data.get("audio_channels", 1)
+    try:
+        audio_channels = int(audio_channels_raw)
+        if audio_channels not in (1, 2):
+            errors.append("audio_channels debe ser 1 (mono) o 2 (stereo)")
+    except (TypeError, ValueError):
+        errors.append("audio_channels debe ser 1 o 2")
+        audio_channels = 1
+
+    no_audio_raw = data.get("stream_no_audio", False)
+    if isinstance(no_audio_raw, str):
+        no_audio = no_audio_raw.lower() in ("true", "1", "yes")
+    else:
+        no_audio = bool(no_audio_raw)
+
     if errors:
         raise ConfigValidationError("; ".join(errors))
 
@@ -124,6 +148,10 @@ def validate_config(data: dict) -> dict:
         "STREAM_FPS": str(fps),
         "STREAM_BITRATE": str(bitrate),
         "STREAM_PRESET": preset,
+        "VIDEO_DEVICE": video_device,
+        "AUDIO_DEVICE": audio_device,
+        "AUDIO_CHANNELS": str(audio_channels),
+        "STREAM_NO_AUDIO": "true" if no_audio else "false",
         "OVERLAY_TEXT": overlay_text,
         "OVERLAY_TEXT_POS": overlay_text_pos,
         "OVERLAY_TIMESTAMP": "true" if overlay_timestamp else "false",

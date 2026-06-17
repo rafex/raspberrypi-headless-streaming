@@ -157,6 +157,46 @@
     });
   });
 
+  function populateDeviceSelect(selectEl, items, currentValue) {
+    // Conserva opción "Auto-detectar" (value="") y opciones fijas al inicio
+    const fixed = Array.from(selectEl.options).filter((o) => o.dataset.fixed === "1");
+    selectEl.innerHTML = "";
+    fixed.forEach((o) => selectEl.appendChild(o));
+
+    items.forEach(({ dev, name }) => {
+      const opt = document.createElement("option");
+      opt.value = dev;
+      opt.textContent = `${name}  (${dev})`;
+      selectEl.appendChild(opt);
+    });
+
+    selectEl.value = currentValue || "";
+    if (selectEl.value !== (currentValue || "")) selectEl.value = "";
+  }
+
+  async function loadDevices(currentVideo, currentAudio) {
+    const statusEl = $("device-status");
+    statusEl.textContent = "Escaneando...";
+    try {
+      const { cameras, mics } = await api("/api/devices");
+
+      const camSel = $("cfg-video-device");
+      populateDeviceSelect(camSel, cameras, currentVideo);
+      statusEl.textContent =
+        cameras.length === 0
+          ? "No se detectaron cámaras"
+          : `${cameras.length} cámara(s) encontrada(s)`;
+
+      const micSel = $("cfg-audio-device");
+      populateDeviceSelect(micSel, mics, currentAudio);
+      if (mics.length === 0) statusEl.textContent += " · No se detectaron micrófonos";
+    } catch (err) {
+      statusEl.textContent = `Error al escanear: ${err.message}`;
+    }
+  }
+
+  $("btn-scan-devices").addEventListener("click", () => loadDevices("", ""));
+
   async function loadConfig() {
     if (role !== "operator") return;
     try {
@@ -175,6 +215,12 @@
       $("cfg-overlay-logo-file").value = cfg.OVERLAY_LOGO_FILE || "";
       $("cfg-overlay-logo-pos").value = cfg.OVERLAY_LOGO_POS || "br";
       $("cfg-overlay-logo-pad").value = cfg.OVERLAY_LOGO_PAD || "20";
+
+      const noAudio = cfg.STREAM_NO_AUDIO === "true";
+      $("cfg-audio-stereo").checked = (cfg.AUDIO_CHANNELS || "1") === "2";
+
+      await loadDevices(cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_DEVICE || "");
+      if (noAudio) $("cfg-audio-device").value = "__none__";
     } catch (err) {
       // ignorar, el formulario queda vacío
     }
@@ -244,6 +290,8 @@
   });
 
   function buildConfigBody() {
+    const audioVal = $("cfg-audio-device").value;
+    const noAudio  = audioVal === "__none__";
     return {
       rtmp_url:           $("cfg-rtmp-url").value,
       width:              Number($("cfg-width").value),
@@ -251,6 +299,10 @@
       fps:                Number($("cfg-fps").value),
       bitrate:            Number($("cfg-bitrate").value),
       preset:             $("cfg-preset").value,
+      video_device:       $("cfg-video-device").value,
+      audio_device:       noAudio ? "" : audioVal,
+      audio_channels:     $("cfg-audio-stereo").checked ? 2 : 1,
+      stream_no_audio:    noAudio,
       overlay_text:       $("cfg-overlay-text").value,
       overlay_text_pos:   $("cfg-overlay-text-pos").value,
       overlay_timestamp:  $("cfg-overlay-timestamp").checked,

@@ -367,6 +367,40 @@ details#cfg-advanced[open] summary::before {
   color: white;
 }
 
+/* --- Devices header --- */
+.devices-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.devices-header .section-label {
+  margin: 0;
+}
+
+.btn-scan {
+  width: auto;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--panel);
+  border: 1px solid #2a3340;
+  color: var(--text);
+}
+
+.btn-scan:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.device-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+  min-height: 1.2em;
+}
+
 /* --- Logo upload row --- */
 .logo-path-row {
   display: flex;

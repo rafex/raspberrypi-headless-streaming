@@ -22,7 +22,7 @@ from datetime import timedelta
 from flask import Flask, Response, jsonify, request, send_from_directory, session, stream_with_context
 from werkzeug.utils import secure_filename
 
-from . import auth, config_store, secrets_store, stream_control
+from . import auth, config_store, device_detect, secrets_store, stream_control
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 LOGO_ALLOWED_EXT = {".png", ".jpg", ".jpeg"}
@@ -105,6 +105,14 @@ def create_app(test_config: dict | None = None) -> Flask:
             mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.get("/api/devices")
+    @auth.require_role("operator")
+    def get_devices():
+        return jsonify({
+            "cameras": device_detect.list_cameras(),
+            "mics":    device_detect.list_mics(),
+        })
 
     @app.get("/api/config")
     @auth.require_role("viewer")

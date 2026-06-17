@@ -91,7 +91,31 @@
       <section id="config-section" hidden>
         <h2>Configuración</h2>
         <form id="config-form">
-          <label>
+
+          <!-- Dispositivos -->
+          <div class="devices-header">
+            <p class="section-label">Cámara</p>
+            <button type="button" id="btn-scan-devices" class="btn-scan">Escanear</button>
+          </div>
+          <div id="device-status" class="device-status"></div>
+          <select id="cfg-video-device">
+            <option value="" data-fixed="1">Auto-detectar</option>
+          </select>
+
+          <p class="section-label" style="margin-top:14px">Micrófono</p>
+          <select id="cfg-audio-device">
+            <option value="" data-fixed="1">Auto-detectar</option>
+            <option value="__none__" data-fixed="1">Sin audio</option>
+          </select>
+          <div id="cfg-audio-channels-row" class="toggle-row" style="margin-top:10px">
+            <span>Stereo (2 canales)</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfg-audio-stereo">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <label style="margin-top:14px">
             URL RTMP
             <input type="text" id="cfg-rtmp-url" placeholder="rtmp://..." autocomplete="off">
           </label>
