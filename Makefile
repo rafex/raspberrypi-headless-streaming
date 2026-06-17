@@ -11,7 +11,8 @@
 .PHONY: help setup deps-web-api age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
-        deploy-web-api update-services
+        deploy-web-api update-services \
+        streaming start-streaming stop-streaming status-streaming logs-streaming
 
 WEBAPI_USER  ?= admin
 WEBAPI_ROLE  ?= operator
@@ -19,7 +20,7 @@ AGE_KEY_FILE := /etc/raspi-streaming/age/key.txt
 INSTALL_DIR  := /opt/web-api
 VENV_DIR     := $(INSTALL_DIR)/venv
 SYSTEMD_DIR  := /etc/systemd/system
-STREAM_USER  ?= $(shell id -un)
+STREAM_USER  := streamer
 REPO_DIR     := $(shell pwd)
 
 help:
@@ -39,6 +40,13 @@ help:
 	@echo "  make restart-web-api - reinicia el servicio"
 	@echo "  make status-web-api  - muestra el estado del servicio"
 	@echo "  make logs-web-api    - sigue los logs en tiempo real (journalctl)"
+	@echo ""
+	@echo "Streaming:"
+	@echo "  make streaming         - crea usuario 'streamer' e instala servicios systemd"
+	@echo "  make start-streaming   - inicia el stream (sin overlay)"
+	@echo "  make stop-streaming    - detiene el stream"
+	@echo "  make status-streaming  - muestra el estado del stream"
+	@echo "  make logs-streaming    - sigue los logs en tiempo real"
 	@echo ""
 	@echo "Actualización rápida (sin reinstalar):"
 	@echo "  make deploy-web-api  - copia código Python+estáticos al destino y reinicia"
@@ -82,6 +90,22 @@ status-web-api:
 
 logs-web-api:
 	journalctl -u web-api.service -f
+
+# Crea usuario "streamer" e instala los unit files de systemd para streaming.
+streaming:
+	sudo ./scripts/streaming-install.sh
+
+start-streaming:
+	sudo systemctl start streaming.service
+
+stop-streaming:
+	sudo systemctl stop streaming.service
+
+status-streaming:
+	systemctl status streaming.service --no-pager -l
+
+logs-streaming:
+	journalctl -u streaming.service -f
 
 # Copia código Python y estáticos al directorio de instalación y reinicia el servicio.
 # Usar después de hacer "git pull" cuando solo cambian archivos de server/webapi/.
