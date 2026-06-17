@@ -260,3 +260,12 @@ h3 {
   margin: 0;
   cursor: pointer;
 }
+
+.overlay-toggle {
+  margin: 12px 0 4px;
+}
+
+.overlay-toggle.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

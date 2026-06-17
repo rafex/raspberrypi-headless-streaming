@@ -9,11 +9,6 @@
   let role = null;
   let eventSource = null;
 
-  const SERVICE_LABELS = {
-    streaming: "Stream (sin overlay)",
-    "streaming-overlay": "Stream (con overlay)",
-  };
-
   const $ = (id) => document.getElementById(id);
 
   async function api(path, { method = "GET", body } = {}) {
@@ -45,30 +40,41 @@
   }
 
   function renderServices(statusByService) {
-    const container = $("services");
-    container.innerHTML = "";
+    const plain   = statusByService["streaming"]         || { active: false, state: "desconocido" };
+    const overlay = statusByService["streaming-overlay"] || { active: false, state: "desconocido" };
 
-    for (const [service, label] of Object.entries(SERVICE_LABELS)) {
-      const info = statusByService[service] || { active: false, state: "desconocido" };
-      const card = document.createElement("div");
-      card.className = "service-card";
-      card.innerHTML = `
-        <div class="name">${label}</div>
-        <span class="badge ${info.active ? "active" : "inactive"}">
-          ${info.active ? "Activo" : "Detenido"} — ${info.state}
+    const isActive     = plain.active || overlay.active;
+    const withOverlay  = overlay.active;
+    const activeService = plain.active ? "streaming" : overlay.active ? "streaming-overlay" : null;
+    const state        = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
+
+    const container = $("services");
+    container.innerHTML = `
+      <div class="service-card">
+        <div class="name">Stream</div>
+        <span class="badge ${isActive ? "active" : "inactive"}">
+          ${isActive ? "Activo" + (withOverlay ? " — con overlay" : "") : "Detenido"} — ${state}
         </span>
         ${role === "operator" ? `
+          <label class="label-checkbox overlay-toggle${isActive ? " is-disabled" : ""}">
+            <input type="checkbox" id="stream-overlay-toggle"
+              ${withOverlay ? "checked" : ""} ${isActive ? "disabled" : ""}>
+            Con overlay
+          </label>
           <div class="service-actions">
-            <button data-action="start" data-service="${service}" ${info.active ? "disabled" : ""}>Iniciar</button>
-            <button data-action="stop" data-service="${service}" class="btn-stop" ${!info.active ? "disabled" : ""}>Detener</button>
+            <button id="btn-stream-start" ${isActive ? "disabled" : ""}>Iniciar</button>
+            <button id="btn-stream-stop" class="btn-stop" ${!isActive ? "disabled" : ""}>Detener</button>
           </div>` : ""}
-      `;
-      container.appendChild(card);
-    }
+      </div>
+    `;
 
     if (role === "operator") {
-      container.querySelectorAll("button[data-action]").forEach((btn) => {
-        btn.addEventListener("click", () => handleStreamAction(btn.dataset.service, btn.dataset.action));
+      document.getElementById("btn-stream-start")?.addEventListener("click", () => {
+        const useOverlay = document.getElementById("stream-overlay-toggle")?.checked;
+        handleStreamAction(useOverlay ? "streaming-overlay" : "streaming", "start");
+      });
+      document.getElementById("btn-stream-stop")?.addEventListener("click", () => {
+        handleStreamAction(activeService || "streaming", "stop");
       });
     }
   }
