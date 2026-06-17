@@ -268,8 +268,9 @@ detect_usb_mic() {
 
 # --- Construir argumentos de audio ---
 if [[ "$NO_AUDIO" == true ]]; then
-    AUDIO_ARGS=(-an)
-    AUDIO_INFO="deshabilitado"
+    # YouTube Live requiere audio; usar fuente silenciosa en lugar de -an
+    AUDIO_ARGS=(-f lavfi -i "anullsrc=r=44100:cl=stereo" -acodec aac -b:a 32k)
+    AUDIO_INFO="silencio (AAC 32k — sin micrófono)"
 else
     if [[ -z "$AUDIO_DEV" ]]; then
         AUDIO_DEV=$(detect_usb_mic)
@@ -346,8 +347,7 @@ if [[ "$USE_TIMESTAMP" == true ]]; then
     CURRENT="[vts]"
 fi
 
-AUDIO_MAP_ARGS=()
-[[ "$NO_AUDIO" == false ]] && AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
+AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
 
 if [[ "$CAPTURE_MODE" == "libcamera" ]]; then
     # --- CSI camera: libcamera-vid → pipe → ffmpeg ---
