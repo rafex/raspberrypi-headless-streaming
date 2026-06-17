@@ -10,11 +10,15 @@
 
 .PHONY: help setup deps-web-api age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
-        start-web-api stop-web-api restart-web-api status-web-api logs-web-api
+        start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
+        deploy-web-api update-services
 
-WEBAPI_USER ?= admin
-WEBAPI_ROLE ?= operator
+WEBAPI_USER  ?= admin
+WEBAPI_ROLE  ?= operator
 AGE_KEY_FILE := /etc/raspi-streaming/age/key.txt
+INSTALL_DIR  := /opt/web-api
+VENV_DIR     := $(INSTALL_DIR)/venv
+SYSTEMD_DIR  := /etc/systemd/system
 
 help:
 	@echo "Setup inicial (en orden, ver docs/web-api.md):"
@@ -33,6 +37,10 @@ help:
 	@echo "  make restart-web-api - reinicia el servicio"
 	@echo "  make status-web-api  - muestra el estado del servicio"
 	@echo "  make logs-web-api    - sigue los logs en tiempo real (journalctl)"
+	@echo ""
+	@echo "Actualización rápida (sin reinstalar):"
+	@echo "  make deploy-web-api  - copia código Python+estáticos al destino y reinicia"
+	@echo "  make update-services - actualiza unit files systemd y recarga daemon"
 
 # Setup inicial completo de punta a punta (deps -> age key -> usuario -> servicio).
 setup: deps-web-api age-key add-user web-api
@@ -72,3 +80,22 @@ status-web-api:
 
 logs-web-api:
 	journalctl -u web-api.service -f
+
+# Copia código Python y estáticos al directorio de instalación y reinicia el servicio.
+# Usar después de hacer "git pull" cuando solo cambian archivos de server/webapi/.
+deploy-web-api:
+	sudo cp -r server/webapi/. $(INSTALL_DIR)/webapi/
+	sudo chown -R webapi:webapi $(INSTALL_DIR)/webapi
+	sudo systemctl restart web-api.service
+	@echo "Desplegado: $(INSTALL_DIR)/webapi  →  web-api reiniciado"
+
+# Actualiza los unit files de systemd desde el repositorio y recarga el daemon.
+# Usar después de hacer "git pull" cuando cambian archivos de systemd/.
+update-services:
+	sed "s|__VENV_DIR__|$(VENV_DIR)|g" systemd/web-api.service \
+	    | sudo tee $(SYSTEMD_DIR)/web-api.service > /dev/null
+	sudo cp systemd/streaming.service         $(SYSTEMD_DIR)/streaming.service
+	sudo cp systemd/streaming-overlay.service $(SYSTEMD_DIR)/streaming-overlay.service
+	sudo systemctl daemon-reload
+	sudo systemctl restart web-api.service
+	@echo "Servicios actualizados y daemon recargado"
