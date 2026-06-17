@@ -156,7 +156,7 @@ else
     CAPTURE_MODE="v4l2"
     if [[ -z "$VIDEO_DEV" ]]; then
         VIDEO_DEV=$(v4l2-ctl --list-devices 2>/dev/null \
-            | grep "/dev/video" | head -1 | tr -d ' ' || true)
+            | grep "/dev/video" | head -1 | tr -d ' \t' || true)
         VIDEO_DEV="${VIDEO_DEV:-/dev/video0}"
     fi
     [[ -e "$VIDEO_DEV" ]] || die "Dispositivo de video no encontrado: $VIDEO_DEV. Usar --device /dev/videoN"
