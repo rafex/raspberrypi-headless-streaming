@@ -206,6 +206,10 @@ button:disabled {
   flex: 1;
 }
 
+.btn-start {
+  background: var(--good);
+}
+
 .btn-stop {
   background: var(--bad);
 }

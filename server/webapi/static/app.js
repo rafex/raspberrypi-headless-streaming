@@ -8,6 +8,7 @@
   let csrfToken = null;
   let role = null;
   let eventSource = null;
+  let overlayPref = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -58,20 +59,23 @@
         ${role === "operator" ? `
           <label class="label-checkbox overlay-toggle${isActive ? " is-disabled" : ""}">
             <input type="checkbox" id="stream-overlay-toggle"
-              ${withOverlay ? "checked" : ""} ${isActive ? "disabled" : ""}>
+              ${(isActive ? withOverlay : overlayPref) ? "checked" : ""} ${isActive ? "disabled" : ""}>
             Con overlay
           </label>
           <div class="service-actions">
-            <button id="btn-stream-start" ${isActive ? "disabled" : ""}>Iniciar</button>
+            <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
             <button id="btn-stream-stop" class="btn-stop" ${!isActive ? "disabled" : ""}>Detener</button>
           </div>` : ""}
       </div>
     `;
 
     if (role === "operator") {
+      document.getElementById("stream-overlay-toggle")?.addEventListener("change", (e) => {
+        overlayPref = e.target.checked;
+      });
+
       document.getElementById("btn-stream-start")?.addEventListener("click", () => {
-        const useOverlay = document.getElementById("stream-overlay-toggle")?.checked;
-        handleStreamAction(useOverlay ? "streaming-overlay" : "streaming", "start");
+        handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start");
       });
       document.getElementById("btn-stream-stop")?.addEventListener("click", () => {
         handleStreamAction(activeService || "streaming", "stop");
