@@ -234,7 +234,7 @@ build_filter_complex() {
     # --- Timestamp dinámico ---
     if [[ "$USE_TIMESTAMP" == true ]]; then
         next_label="[vts]"
-        filters+=("${current_label}drawtext=text='%{localtime\\:%Y-%m-%d %H\\\\:%M\\\\:%S}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5${next_label}")
+        filters+=("${current_label}drawtext=text='%{localtime\\:%Y-%m-%d %H\\:%M\\:%S}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5${next_label}")
         current_label="$next_label"
     fi
 
@@ -342,7 +342,7 @@ if [[ -n "$TEXT_CONTENT" ]]; then
     CURRENT="[vtext]"
 fi
 if [[ "$USE_TIMESTAMP" == true ]]; then
-    FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%Y-%m-%d %H\\\\:%M\\\\:%S}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
+    FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%Y-%m-%d %H\\:%M\\:%S}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
     CURRENT="[vts]"
 fi
 
