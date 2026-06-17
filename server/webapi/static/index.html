@@ -32,8 +32,38 @@
         <button id="logout-btn" class="link">Salir</button>
       </div>
 
-      <div class="services" id="services"></div>
+      <!-- Tarjeta de stream -->
+      <div id="services"></div>
 
+      <!-- Configuración de overlay — visible cuando el toggle "Con overlay" está ON -->
+      <div id="overlay-config" hidden>
+        <h3>Configuración de overlay</h3>
+        <label>
+          Texto en pantalla
+          <input type="text" id="cfg-overlay-text" placeholder="Ej: Cámara 1 — Entrada Principal" maxlength="200">
+        </label>
+        <label>
+          Posición del texto
+          <select id="cfg-overlay-text-pos">
+            <option value="tl">Arriba izquierda</option>
+            <option value="tr">Arriba derecha</option>
+            <option value="bl">Abajo izquierda (default)</option>
+            <option value="br">Abajo derecha</option>
+            <option value="center">Centro</option>
+          </select>
+        </label>
+        <div class="toggle-row">
+          <span>Mostrar hora en tiempo real</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="cfg-overlay-timestamp">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <button id="save-overlay-btn">Guardar configuración overlay</button>
+        <p id="overlay-msg" hidden></p>
+      </div>
+
+      <!-- Configuración general: URL + resolución -->
       <section id="config-section" hidden>
         <h2>Configuración</h2>
         <form id="config-form">
@@ -57,9 +87,9 @@
           <details id="cfg-advanced">
             <summary>Personalizado</summary>
             <div class="grid2" style="margin-top:12px">
-              <label>Ancho (px) <input type="number" id="cfg-width-vis" min="320" max="1920"></label>
-              <label>Alto (px)  <input type="number" id="cfg-height-vis" min="240" max="1080"></label>
-              <label>FPS        <input type="number" id="cfg-fps-vis" min="1" max="60"></label>
+              <label>Ancho (px)    <input type="number" id="cfg-width-vis"   min="320"    max="1920"></label>
+              <label>Alto (px)     <input type="number" id="cfg-height-vis"  min="240"    max="1080"></label>
+              <label>FPS           <input type="number" id="cfg-fps-vis"     min="1"      max="60"></label>
               <label>Bitrate (bps) <input type="number" id="cfg-bitrate-vis" min="200000" max="25000000"></label>
             </div>
             <label>
@@ -73,29 +103,6 @@
               </select>
             </label>
           </details>
-
-          <h3>Overlay (Stream con overlay)</h3>
-          <label>
-            Texto en pantalla
-            <input type="text" id="cfg-overlay-text" placeholder="Ej: Cámara 1 — Entrada Principal" maxlength="200">
-          </label>
-          <label>
-            Posición del texto
-            <select id="cfg-overlay-text-pos">
-              <option value="tl">Arriba izquierda</option>
-              <option value="tr">Arriba derecha</option>
-              <option value="bl">Abajo izquierda (default)</option>
-              <option value="br">Abajo derecha</option>
-              <option value="center">Centro</option>
-            </select>
-          </label>
-          <div class="toggle-row">
-            <span>Mostrar hora en tiempo real</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="cfg-overlay-timestamp">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
 
           <button type="submit">Guardar configuración</button>
           <p id="config-msg" hidden></p>

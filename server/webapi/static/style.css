@@ -326,6 +326,18 @@ h3 {
   transform: translateX(20px);
 }
 
+/* --- Overlay config block --- */
+#overlay-config {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+#overlay-config h3 {
+  margin-top: 0;
+}
+
 /* --- Details / Personalizado --- */
 details#cfg-advanced {
   margin-bottom: 14px;

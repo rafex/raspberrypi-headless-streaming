@@ -49,6 +49,8 @@
     const activeService = plain.active ? "streaming" : overlay.active ? "streaming-overlay" : null;
     const state        = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
 
+    const showOverlay = isActive ? withOverlay : overlayPref;
+
     const container = $("services");
     container.innerHTML = `
       <div class="service-card">
@@ -57,11 +59,14 @@
           ${isActive ? "Activo" + (withOverlay ? " — con overlay" : "") : "Detenido"} — ${state}
         </span>
         ${role === "operator" ? `
-          <label class="label-checkbox overlay-toggle${isActive ? " is-disabled" : ""}">
-            <input type="checkbox" id="stream-overlay-toggle"
-              ${(isActive ? withOverlay : overlayPref) ? "checked" : ""} ${isActive ? "disabled" : ""}>
-            Con overlay
-          </label>
+          <div class="toggle-row overlay-toggle${isActive ? " is-disabled" : ""}">
+            <span>Con overlay</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="stream-overlay-toggle"
+                ${showOverlay ? "checked" : ""} ${isActive ? "disabled" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
           <div class="service-actions">
             <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
             <button id="btn-stream-stop" class="btn-stop" ${!isActive ? "disabled" : ""}>Detener</button>
@@ -69,11 +74,14 @@
       </div>
     `;
 
+    const overlayConfig = $("overlay-config");
+    if (overlayConfig) overlayConfig.hidden = !showOverlay;
+
     if (role === "operator") {
       document.getElementById("stream-overlay-toggle")?.addEventListener("change", (e) => {
         overlayPref = e.target.checked;
+        if (overlayConfig) overlayConfig.hidden = !overlayPref;
       });
-
       document.getElementById("btn-stream-start")?.addEventListener("click", () => {
         handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start");
       });
@@ -202,33 +210,40 @@
     showLogin();
   });
 
-  $("config-form").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const msg = $("config-msg");
-    msg.hidden = true;
+  function buildConfigBody() {
+    return {
+      rtmp_url:          $("cfg-rtmp-url").value,
+      width:             Number($("cfg-width").value),
+      height:            Number($("cfg-height").value),
+      fps:               Number($("cfg-fps").value),
+      bitrate:           Number($("cfg-bitrate").value),
+      preset:            $("cfg-preset").value,
+      overlay_text:      $("cfg-overlay-text").value,
+      overlay_text_pos:  $("cfg-overlay-text-pos").value,
+      overlay_timestamp: $("cfg-overlay-timestamp").checked,
+    };
+  }
 
+  async function saveConfig(msgEl) {
+    msgEl.hidden = true;
     try {
-      await api("/api/config", {
-        method: "PUT",
-        body: {
-          rtmp_url: $("cfg-rtmp-url").value,
-          width: Number($("cfg-width").value),
-          height: Number($("cfg-height").value),
-          fps: Number($("cfg-fps").value),
-          bitrate: Number($("cfg-bitrate").value),
-          preset: $("cfg-preset").value,
-          overlay_text: $("cfg-overlay-text").value,
-          overlay_text_pos: $("cfg-overlay-text-pos").value,
-          overlay_timestamp: $("cfg-overlay-timestamp").checked,
-        },
-      });
-      msg.textContent = "Configuración guardada.";
-      msg.className = "";
-      msg.hidden = false;
+      await api("/api/config", { method: "PUT", body: buildConfigBody() });
+      msgEl.textContent = "Guardado.";
+      msgEl.className = "";
+      msgEl.hidden = false;
     } catch (err) {
-      msg.textContent = err.message;
-      msg.className = "error";
-      msg.hidden = false;
+      msgEl.textContent = err.message;
+      msgEl.className = "error";
+      msgEl.hidden = false;
     }
+  }
+
+  $("config-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    saveConfig($("config-msg"));
+  });
+
+  $("save-overlay-btn").addEventListener("click", () => {
+    saveConfig($("overlay-msg"));
   });
 })();
