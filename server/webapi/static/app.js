@@ -7,7 +7,7 @@
   // exitoso + un nuevo login para refrescar el token si se necesita mutar.
   let csrfToken = null;
   let role = null;
-  let pollHandle = null;
+  let eventSource = null;
 
   const SERVICE_LABELS = {
     streaming: "Stream (sin overlay)",
@@ -41,7 +41,7 @@
   function showLogin() {
     $("dashboard-view").hidden = true;
     $("login-view").hidden = false;
-    if (pollHandle) clearInterval(pollHandle);
+    if (eventSource) { eventSource.close(); eventSource = null; }
   }
 
   function renderServices(statusByService) {
@@ -87,9 +87,21 @@
       const data = await api("/api/status");
       renderServices(data);
     } catch (err) {
-      // Sesión expirada u otro error de auth: volver al login.
       showLogin();
     }
+  }
+
+  function startEventSource() {
+    if (eventSource) eventSource.close();
+    eventSource = new EventSource("/api/events");
+    eventSource.onmessage = (e) => {
+      try { renderServices(JSON.parse(e.data)); } catch {}
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
+      eventSource = null;
+      showLogin();
+    };
   }
 
   const RESOLUTION_PRESETS = {
@@ -142,7 +154,7 @@
       showDashboard();
       await refreshStatus();
       await loadConfig();
-      pollHandle = setInterval(refreshStatus, 5000);
+      startEventSource();
     } catch (err) {
       $("login-error").textContent = err.message;
       $("login-error").hidden = false;

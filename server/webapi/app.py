@@ -14,10 +14,12 @@ Variables de entorno relevantes (ver systemd/web-api.service / /etc/web-api.env)
     PORT                  puerto HTTP interno (gunicorn lo bindea, no Flask)
 """
 
+import json
 import os
+import time
 from datetime import timedelta
 
-from flask import Flask, jsonify, request, send_from_directory, session
+from flask import Flask, Response, jsonify, request, send_from_directory, session, stream_with_context
 
 from . import auth, config_store, secrets_store, stream_control
 
@@ -79,6 +81,23 @@ def create_app(test_config: dict | None = None) -> Flask:
     @auth.require_role("viewer")
     def status():
         return jsonify({svc: stream_control.status(svc) for svc in stream_control.SERVICES})
+
+    @app.get("/api/events")
+    @auth.require_role("viewer")
+    def events():
+        def generate():
+            try:
+                while True:
+                    data = {svc: stream_control.status(svc) for svc in stream_control.SERVICES}
+                    yield f"data: {json.dumps(data)}\n\n"
+                    time.sleep(5)
+            except GeneratorExit:
+                pass
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/api/config")
     @auth.require_role("viewer")

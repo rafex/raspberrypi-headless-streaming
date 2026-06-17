@@ -21,7 +21,9 @@ ExecStart=__VENV_DIR__/bin/gunicorn \
     --certfile=${TLS_CERT} \
     --keyfile=${TLS_KEY} \
     --bind 0.0.0.0:${PORT} \
+    --worker-class gthread \
     --workers 2 \
+    --threads 4 \
     "webapi.app:create_app()"
 
 Restart=on-failure
