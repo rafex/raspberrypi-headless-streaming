@@ -26,7 +26,7 @@ def _unit(service: str) -> str:
 def is_active(service: str) -> bool:
     unit = _unit(service)
     result = subprocess.run(
-        ["systemctl", "is-active", "--quiet", unit],
+        ["sudo", "systemctl", "is-active", "--quiet", unit],
         capture_output=True,
     )
     return result.returncode == 0
@@ -34,18 +34,11 @@ def is_active(service: str) -> bool:
 
 def status(service: str) -> dict:
     unit = _unit(service)
-    result = subprocess.run(
-        ["systemctl", "show", unit, "--property=ActiveState,SubState"],
-        capture_output=True,
-        text=True,
-    )
-    props = dict(
-        line.split("=", 1) for line in result.stdout.strip().splitlines() if "=" in line
-    )
+    active = is_active(service)
     return {
         "service": service,
-        "active": props.get("ActiveState") == "active",
-        "state": props.get("SubState", "unknown"),
+        "active": active,
+        "state": "running" if active else "dead",
     }
 
 

@@ -193,8 +193,10 @@ SUDOERS_DST="/etc/sudoers.d/web-api"
 cat > "${SUDOERS_DST}.tmp" <<EOF
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start streaming.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop streaming.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active streaming.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start streaming-overlay.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop streaming-overlay.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active streaming-overlay.service
 EOF
 visudo -c -f "${SUDOERS_DST}.tmp" || die "El sudoers generado no es válido, abortando."
 mv "${SUDOERS_DST}.tmp" "$SUDOERS_DST"
