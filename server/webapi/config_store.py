@@ -7,9 +7,13 @@ nuevas, reutiliza exactamente estas seis claves.
 
 import re
 
-FIELDS = ("RTMP_URL", "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET")
+FIELDS = (
+    "RTMP_URL", "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
+    "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
+)
 
 VALID_PRESETS = ("ultrafast", "superfast", "veryfast", "faster", "fast")
+VALID_TEXT_POS = ("tl", "tr", "bl", "br", "center")
 RTMP_URL_RE = re.compile(r"^rtmps?://[^\s]+$")
 
 
@@ -78,6 +82,18 @@ def validate_config(data: dict) -> dict:
     if preset not in VALID_PRESETS:
         errors.append(f"preset debe ser uno de: {', '.join(VALID_PRESETS)}")
 
+    overlay_text = str(data.get("overlay_text", "")).strip().replace("\n", " ").replace("\r", "")[:200]
+
+    overlay_text_pos = str(data.get("overlay_text_pos", "bl")).strip()
+    if overlay_text_pos not in VALID_TEXT_POS:
+        errors.append(f"overlay_text_pos debe ser uno de: {', '.join(VALID_TEXT_POS)}")
+
+    overlay_timestamp_raw = data.get("overlay_timestamp", False)
+    if isinstance(overlay_timestamp_raw, str):
+        overlay_timestamp = overlay_timestamp_raw.lower() in ("true", "1", "yes")
+    else:
+        overlay_timestamp = bool(overlay_timestamp_raw)
+
     if errors:
         raise ConfigValidationError("; ".join(errors))
 
@@ -88,6 +104,9 @@ def validate_config(data: dict) -> dict:
         "STREAM_FPS": str(fps),
         "STREAM_BITRATE": str(bitrate),
         "STREAM_PRESET": preset,
+        "OVERLAY_TEXT": overlay_text,
+        "OVERLAY_TEXT_POS": overlay_text_pos,
+        "OVERLAY_TIMESTAMP": "true" if overlay_timestamp else "false",
     }
 
 

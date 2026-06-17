@@ -209,3 +209,54 @@ button:disabled {
 .btn-stop {
   background: var(--bad);
 }
+
+h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 24px 0 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.section-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.preset-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.preset-bar button {
+  flex: 1;
+  padding: 10px;
+  font-size: 0.9rem;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #2a3340;
+}
+
+.preset-bar button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.label-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.label-checkbox input[type="checkbox"] {
+  display: inline;
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}

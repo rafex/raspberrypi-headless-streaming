@@ -72,9 +72,10 @@ LOGO_FILE=""
 LOGO_POS="br"
 LOGO_PAD=20
 FRAME_FILE=""
-TEXT_CONTENT=""
-TEXT_POS="bl"
+TEXT_CONTENT="${OVERLAY_TEXT:-}"
+TEXT_POS="${OVERLAY_TEXT_POS:-bl}"
 USE_TIMESTAMP=false
+[[ "${OVERLAY_TIMESTAMP:-false}" == "true" ]] && USE_TIMESTAMP=true
 
 usage() {
     grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'

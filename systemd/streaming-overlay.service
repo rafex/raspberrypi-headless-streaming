@@ -29,9 +29,6 @@ ExecStart=/bin/bash scripts/stream-overlay.sh \
     -f ${STREAM_FPS} \
     -b ${STREAM_BITRATE} \
     --preset ${STREAM_PRESET} \
-    --logo assets/logo.png \
-    --logo-pos br \
-    --timestamp \
     --no-audio
 
 RestartSec=10

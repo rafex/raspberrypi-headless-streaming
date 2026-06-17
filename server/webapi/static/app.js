@@ -92,6 +92,23 @@
     }
   }
 
+  const RESOLUTION_PRESETS = {
+    "480p":  { width: 854,  height: 480,  fps: 30, bitrate: 1500000 },
+    "720p":  { width: 1280, height: 720,  fps: 30, bitrate: 2500000 },
+    "1080p": { width: 1920, height: 1080, fps: 30, bitrate: 4500000 },
+  };
+
+  document.querySelectorAll(".preset-bar button[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = RESOLUTION_PRESETS[btn.dataset.preset];
+      if (!p) return;
+      $("cfg-width").value = p.width;
+      $("cfg-height").value = p.height;
+      $("cfg-fps").value = p.fps;
+      $("cfg-bitrate").value = p.bitrate;
+    });
+  });
+
   async function loadConfig() {
     if (role !== "operator") return;
     try {
@@ -102,6 +119,9 @@
       $("cfg-fps").value = cfg.STREAM_FPS || "";
       $("cfg-bitrate").value = cfg.STREAM_BITRATE || "";
       $("cfg-preset").value = cfg.STREAM_PRESET || "veryfast";
+      $("cfg-overlay-text").value = cfg.OVERLAY_TEXT || "";
+      $("cfg-overlay-text-pos").value = cfg.OVERLAY_TEXT_POS || "bl";
+      $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
     } catch (err) {
       // ignorar, el formulario queda vacío
     }
@@ -155,6 +175,9 @@
           fps: Number($("cfg-fps").value),
           bitrate: Number($("cfg-bitrate").value),
           preset: $("cfg-preset").value,
+          overlay_text: $("cfg-overlay-text").value,
+          overlay_text_pos: $("cfg-overlay-text-pos").value,
+          overlay_timestamp: $("cfg-overlay-timestamp").checked,
         },
       });
       msg.textContent = "Configuración guardada.";
