@@ -27,7 +27,7 @@ def _unit(service: str) -> str:
 def is_active(service: str) -> bool:
     unit = _unit(service)
     result = subprocess.run(
-        ["sudo", "systemctl", "is-active", "--quiet", unit],
+        ["sudo", "systemctl", "is-active", unit],
         capture_output=True,
     )
     return result.returncode == 0
