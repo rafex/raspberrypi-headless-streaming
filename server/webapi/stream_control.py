@@ -9,6 +9,7 @@ libre en ningún punto de la API: siempre se valida contra SERVICES.
 """
 
 import subprocess
+import time
 
 SERVICES = ("streaming", "streaming-overlay")
 
@@ -58,6 +59,8 @@ def start(service: str) -> dict:
     if result.returncode != 0:
         raise StreamControlError(f"No se pudo iniciar {unit}: {result.stderr.strip()}")
 
+    # Type=simple: el proceso arranca de inmediato pero puede tardar ~1s en activarse.
+    time.sleep(1)
     return status(service)
 
 
