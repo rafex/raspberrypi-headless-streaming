@@ -76,6 +76,7 @@ TEXT_CONTENT="${OVERLAY_TEXT:-}"
 TEXT_POS="${OVERLAY_TEXT_POS:-bl}"
 USE_TIMESTAMP=false
 [[ "${OVERLAY_TIMESTAMP:-false}" == "true" ]] && USE_TIMESTAMP=true
+VIDEO_DEV="${VIDEO_DEVICE:-}"
 
 usage() {
     grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -139,14 +140,26 @@ while [[ $# -gt 0 ]]; do
         --text-pos)   TEXT_POS="$2"; shift 2 ;;
         --timestamp)  USE_TIMESTAMP=true; shift ;;
         --no-audio)   NO_AUDIO=true; shift ;;
+        --device)     VIDEO_DEV="$2"; shift 2 ;;
         --help)      usage ;;
         *) die "Opción desconocida: $1. Usa --help para ver las opciones." ;;
     esac
 done
 
-# --- Validaciones ---
-command -v libcamera-vid >/dev/null 2>&1 || die "libcamera-vid no encontrado. Instalar con: sudo apt install libcamera-apps"
-command -v ffmpeg >/dev/null 2>&1         || die "ffmpeg no encontrado. Instalar con: sudo apt install ffmpeg"
+# --- Detección de fuente de video ---
+command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg no encontrado. Instalar con: sudo apt install ffmpeg"
+
+if command -v libcamera-vid >/dev/null 2>&1; then
+    CAPTURE_MODE="libcamera"
+else
+    CAPTURE_MODE="v4l2"
+    if [[ -z "$VIDEO_DEV" ]]; then
+        VIDEO_DEV=$(v4l2-ctl --list-devices 2>/dev/null \
+            | grep "/dev/video" | head -1 | tr -d ' ' || true)
+        VIDEO_DEV="${VIDEO_DEV:-/dev/video0}"
+    fi
+    [[ -e "$VIDEO_DEV" ]] || die "Dispositivo de video no encontrado: $VIDEO_DEV. Usar --device /dev/videoN"
+fi
 
 [[ "$WIDTH" =~ ^[0-9]+$ ]]         || die "Ancho inválido: $WIDTH"
 [[ "$HEIGHT" =~ ^[0-9]+$ ]]        || die "Alto inválido: $HEIGHT"
@@ -304,96 +317,81 @@ if [[ "$HAS_OVERLAY" == true ]]; then
 fi
 
 # --- Pipeline ---
-if [[ "$HAS_OVERLAY" == false ]]; then
-    # Sin overlays: vcodec copy (hardware H264, sin re-encoding)
-    libcamera-vid \
-        --width "$WIDTH" \
-        --height "$HEIGHT" \
-        --framerate "$FPS" \
-        --bitrate "$BITRATE" \
-        --codec h264 \
-        --inline \
-        --timeout "$DURATION_MS" \
-        --output - \
-    | ffmpeg \
-        -hide_banner \
-        -loglevel warning \
-        -re \
-        -i - \
-        "${AUDIO_ARGS[@]}" \
-        -vcodec copy \
-        -f flv \
-        "$URL"
+# Construir filter_complex e inputs extra (logo, frame)
+EXTRA_INPUTS=()
+FILTER_PARTS=()
+CURRENT="[0:v]"
+EXTRA_IDX=1
+
+if [[ -n "$FRAME_FILE" ]]; then
+    EXTRA_INPUTS+=(-i "$FRAME_FILE")
+    FILTER_PARTS+=("${CURRENT}[${EXTRA_IDX}:v]overlay=0:0[vframe]")
+    CURRENT="[vframe]"; (( EXTRA_IDX++ ))
+fi
+if [[ -n "$LOGO_FILE" ]]; then
+    POS=$(overlay_position "$LOGO_POS" "$LOGO_PAD")
+    EXTRA_INPUTS+=(-i "$LOGO_FILE")
+    FILTER_PARTS+=("${CURRENT}[${EXTRA_IDX}:v]overlay=${POS}[vlogo]")
+    CURRENT="[vlogo]"; (( EXTRA_IDX++ ))
+fi
+if [[ -n "$TEXT_CONTENT" ]]; then
+    TPOS=$(text_position "$TEXT_POS")
+    SAFE_TEXT=$(echo "$TEXT_CONTENT" | sed "s/'/\\\\'/g")
+    FILTER_PARTS+=("${CURRENT}drawtext=text='${SAFE_TEXT}':fontcolor=white:fontsize=24:${TPOS}:box=1:boxcolor=black@0.5:boxborderw=6[vtext]")
+    CURRENT="[vtext]"
+fi
+if [[ "$USE_TIMESTAMP" == true ]]; then
+    FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%Y-%m-%d %H\\\\:%M\\\\:%S}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
+    CURRENT="[vts]"
+fi
+
+AUDIO_MAP_ARGS=()
+[[ "$NO_AUDIO" == false ]] && AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
+
+if [[ "$CAPTURE_MODE" == "libcamera" ]]; then
+    # --- CSI camera: libcamera-vid → pipe → ffmpeg ---
+    if [[ "$HAS_OVERLAY" == false ]]; then
+        libcamera-vid \
+            --width "$WIDTH" --height "$HEIGHT" --framerate "$FPS" \
+            --bitrate "$BITRATE" --codec h264 --inline \
+            --timeout "$DURATION_MS" --output - \
+        | ffmpeg -hide_banner -loglevel warning -re -i - \
+            "${AUDIO_ARGS[@]}" \
+            -vcodec copy -f flv "$URL"
+    else
+        FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
+        libcamera-vid \
+            --width "$WIDTH" --height "$HEIGHT" --framerate "$FPS" \
+            --bitrate "$BITRATE" --codec h264 --inline \
+            --timeout "$DURATION_MS" --output - \
+        | ffmpeg -hide_banner -loglevel warning -re -i - \
+            "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
+            -filter_complex "$FILTER_COMPLEX" \
+            -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
+            -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
+            -f flv "$URL"
+    fi
 else
-    # Con overlays: decode + filtros + re-encode libx264
-    EXTRA_INPUTS=()
-    FILTER_PARTS=()
-    CURRENT="[0:v]"
-    EXTRA_IDX=1
+    # --- USB camera: ffmpeg v4l2 directo ---
+    DURATION_ARGS=()
+    [[ "$DURATION" -gt 0 ]] && DURATION_ARGS=(-t "$DURATION")
 
-    # Frame
-    if [[ -n "$FRAME_FILE" ]]; then
-        EXTRA_INPUTS+=(-i "$FRAME_FILE")
-        FILTER_PARTS+=("${CURRENT}[${EXTRA_IDX}:v]overlay=0:0[vframe]")
-        CURRENT="[vframe]"
-        (( EXTRA_IDX++ ))
+    if [[ "$HAS_OVERLAY" == false ]]; then
+        ffmpeg -hide_banner -loglevel warning \
+            -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+            "${AUDIO_ARGS[@]}" \
+            "${DURATION_ARGS[@]}" \
+            -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
+            -f flv "$URL"
+    else
+        FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
+        ffmpeg -hide_banner -loglevel warning \
+            -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+            "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
+            "${DURATION_ARGS[@]}" \
+            -filter_complex "$FILTER_COMPLEX" \
+            -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
+            -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
+            -f flv "$URL"
     fi
-
-    # Logo
-    if [[ -n "$LOGO_FILE" ]]; then
-        POS=$(overlay_position "$LOGO_POS" "$LOGO_PAD")
-        EXTRA_INPUTS+=(-i "$LOGO_FILE")
-        FILTER_PARTS+=("${CURRENT}[${EXTRA_IDX}:v]overlay=${POS}[vlogo]")
-        CURRENT="[vlogo]"
-        (( EXTRA_IDX++ ))
-    fi
-
-    # Texto estático
-    if [[ -n "$TEXT_CONTENT" ]]; then
-        TPOS=$(text_position "$TEXT_POS")
-        SAFE_TEXT=$(echo "$TEXT_CONTENT" | sed "s/'/\\\\'/g")
-        FILTER_PARTS+=("${CURRENT}drawtext=text='${SAFE_TEXT}':fontcolor=white:fontsize=24:${TPOS}:box=1:boxcolor=black@0.5:boxborderw=6[vtext]")
-        CURRENT="[vtext]"
-    fi
-
-    # Timestamp
-    if [[ "$USE_TIMESTAMP" == true ]]; then
-        FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%Y-%m-%d %H\\\\:%M\\\\:%S}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
-        CURRENT="[vts]"
-    fi
-
-    FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
-
-    # Construir el -map de audio: si hay audio lo mapeamos explícitamente,
-    # de lo contrario ffmpeg lo ignoraría al haber un -map de video manual.
-    AUDIO_MAP_ARGS=()
-    if [[ "$NO_AUDIO" == false ]]; then
-        # El audio entra como el último input tras los de imagen (EXTRA_IDX apunta al siguiente)
-        AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
-    fi
-
-    libcamera-vid \
-        --width "$WIDTH" \
-        --height "$HEIGHT" \
-        --framerate "$FPS" \
-        --bitrate "$BITRATE" \
-        --codec h264 \
-        --inline \
-        --timeout "$DURATION_MS" \
-        --output - \
-    | ffmpeg \
-        -hide_banner \
-        -loglevel warning \
-        -re \
-        -i - \
-        "${EXTRA_INPUTS[@]}" \
-        "${AUDIO_ARGS[@]}" \
-        -filter_complex "$FILTER_COMPLEX" \
-        -map "$CURRENT" \
-        "${AUDIO_MAP_ARGS[@]}" \
-        -vcodec libx264 \
-        -preset "$PRESET" \
-        -b:v "$BITRATE" \
-        -f flv \
-        "$URL"
 fi
