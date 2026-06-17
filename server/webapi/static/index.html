@@ -38,8 +38,32 @@
       <!-- Configuración de overlay — visible cuando el toggle "Con overlay" está ON -->
       <div id="overlay-config" hidden>
         <h3>Configuración de overlay</h3>
+
+        <!-- Logo -->
+        <p class="section-label">Logo PNG (opcional)</p>
+        <div class="logo-path-row">
+          <input type="text" id="cfg-overlay-logo-file" placeholder="/var/lib/raspi-streaming/assets/logos/logo.png" autocomplete="off">
+          <label class="btn-upload" for="logo-file-input" title="Subir archivo">&#128194;</label>
+          <input type="file" id="logo-file-input" accept=".png,.jpg,.jpeg" style="display:none">
+        </div>
+        <p id="logo-upload-msg" class="section-label" hidden></p>
+        <label style="margin-top:10px">
+          Posición del logo
+          <select id="cfg-overlay-logo-pos">
+            <option value="br">Abajo derecha (default)</option>
+            <option value="bl">Abajo izquierda</option>
+            <option value="tr">Arriba derecha</option>
+            <option value="tl">Arriba izquierda</option>
+          </select>
+        </label>
         <label>
-          Texto en pantalla
+          Margen del logo (px)
+          <input type="number" id="cfg-overlay-logo-pad" min="0" max="200" value="20">
+        </label>
+
+        <!-- Texto -->
+        <p class="section-label" style="margin-top:14px">Texto en pantalla (opcional)</p>
+        <label>
           <input type="text" id="cfg-overlay-text" placeholder="Ej: Cámara 1 — Entrada Principal" maxlength="200">
         </label>
         <label>

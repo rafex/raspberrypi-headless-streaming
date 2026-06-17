@@ -10,11 +10,14 @@ import re
 FIELDS = (
     "RTMP_URL", "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
     "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
+    "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD",
 )
 
 VALID_PRESETS = ("ultrafast", "superfast", "veryfast", "faster", "fast")
 VALID_TEXT_POS = ("tl", "tr", "bl", "br", "center")
+VALID_LOGO_POS = ("tl", "tr", "bl", "br")
 RTMP_URL_RE = re.compile(r"^rtmps?://[^\s]+$")
+LOGO_PATH_RE = re.compile(r"^[^\x00\n\r;|&`$<>]+$")
 
 
 class ConfigValidationError(ValueError):
@@ -94,6 +97,23 @@ def validate_config(data: dict) -> dict:
     else:
         overlay_timestamp = bool(overlay_timestamp_raw)
 
+    overlay_logo_file = str(data.get("overlay_logo_file", "")).strip()
+    if overlay_logo_file and not LOGO_PATH_RE.match(overlay_logo_file):
+        errors.append("overlay_logo_file contiene caracteres no permitidos")
+
+    overlay_logo_pos = str(data.get("overlay_logo_pos", "br")).strip()
+    if overlay_logo_pos not in VALID_LOGO_POS:
+        errors.append(f"overlay_logo_pos debe ser uno de: {', '.join(VALID_LOGO_POS)}")
+
+    overlay_logo_pad = data.get("overlay_logo_pad", 20)
+    try:
+        overlay_logo_pad = int(overlay_logo_pad)
+        if not (0 <= overlay_logo_pad <= 200):
+            errors.append("overlay_logo_pad debe estar entre 0 y 200")
+    except (TypeError, ValueError):
+        errors.append("overlay_logo_pad debe ser un entero")
+        overlay_logo_pad = 20
+
     if errors:
         raise ConfigValidationError("; ".join(errors))
 
@@ -107,6 +127,9 @@ def validate_config(data: dict) -> dict:
         "OVERLAY_TEXT": overlay_text,
         "OVERLAY_TEXT_POS": overlay_text_pos,
         "OVERLAY_TIMESTAMP": "true" if overlay_timestamp else "false",
+        "OVERLAY_LOGO_FILE": overlay_logo_file,
+        "OVERLAY_LOGO_POS": overlay_logo_pos,
+        "OVERLAY_LOGO_PAD": str(overlay_logo_pad),
     }
 
 

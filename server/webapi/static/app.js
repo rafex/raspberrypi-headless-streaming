@@ -172,10 +172,43 @@
       $("cfg-overlay-text").value = cfg.OVERLAY_TEXT || "";
       $("cfg-overlay-text-pos").value = cfg.OVERLAY_TEXT_POS || "bl";
       $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
+      $("cfg-overlay-logo-file").value = cfg.OVERLAY_LOGO_FILE || "";
+      $("cfg-overlay-logo-pos").value = cfg.OVERLAY_LOGO_POS || "br";
+      $("cfg-overlay-logo-pad").value = cfg.OVERLAY_LOGO_PAD || "20";
     } catch (err) {
       // ignorar, el formulario queda vacío
     }
   }
+
+  $("logo-file-input").addEventListener("change", async () => {
+    const file = $("logo-file-input").files[0];
+    if (!file) return;
+    const msgEl = $("logo-upload-msg");
+    msgEl.textContent = "Subiendo...";
+    msgEl.className = "section-label";
+    msgEl.hidden = false;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/logo", {
+        method: "POST",
+        headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
+        credentials: "same-origin",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+      $("cfg-overlay-logo-file").value = data.path;
+      msgEl.textContent = `Subido: ${data.filename}`;
+      msgEl.className = "section-label";
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.className = "error";
+    }
+    $("logo-file-input").value = "";
+  });
 
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -212,15 +245,18 @@
 
   function buildConfigBody() {
     return {
-      rtmp_url:          $("cfg-rtmp-url").value,
-      width:             Number($("cfg-width").value),
-      height:            Number($("cfg-height").value),
-      fps:               Number($("cfg-fps").value),
-      bitrate:           Number($("cfg-bitrate").value),
-      preset:            $("cfg-preset").value,
-      overlay_text:      $("cfg-overlay-text").value,
-      overlay_text_pos:  $("cfg-overlay-text-pos").value,
-      overlay_timestamp: $("cfg-overlay-timestamp").checked,
+      rtmp_url:           $("cfg-rtmp-url").value,
+      width:              Number($("cfg-width").value),
+      height:             Number($("cfg-height").value),
+      fps:                Number($("cfg-fps").value),
+      bitrate:            Number($("cfg-bitrate").value),
+      preset:             $("cfg-preset").value,
+      overlay_text:       $("cfg-overlay-text").value,
+      overlay_text_pos:   $("cfg-overlay-text-pos").value,
+      overlay_timestamp:  $("cfg-overlay-timestamp").checked,
+      overlay_logo_file:  $("cfg-overlay-logo-file").value,
+      overlay_logo_pos:   $("cfg-overlay-logo-pos").value,
+      overlay_logo_pad:   Number($("cfg-overlay-logo-pad").value) || 20,
     };
   }
 

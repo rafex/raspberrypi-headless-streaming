@@ -149,13 +149,23 @@ STREAM_PRESET=veryfast
 OVERLAY_TEXT=
 OVERLAY_TEXT_POS=bl
 OVERLAY_TIMESTAMP=false
+OVERLAY_LOGO_FILE=
+OVERLAY_LOGO_POS=br
+OVERLAY_LOGO_PAD=20
 EOF
     echo "Archivo de streaming creado: ${STREAMING_ENV}"
 fi
 chown "${SERVICE_USER}:${SERVICE_USER}" "$STREAMING_ENV"
 chmod 640 "$STREAMING_ENV"
 
-# --- 8b. Archivo de entorno ---
+# --- 8b. Directorio de logos subidos desde la web ---
+LOGO_DIR="/var/lib/raspi-streaming/assets/logos"
+mkdir -p "$LOGO_DIR"
+chown "${SERVICE_USER}:${SERVICE_USER}" "$LOGO_DIR"
+chmod 755 "$LOGO_DIR"   # webapi escribe; streamer y otros usuarios pueden leer
+echo "Directorio de logos: ${LOGO_DIR}"
+
+# --- 8c. Archivo de entorno ---
 if [[ ! -f "$ENV_DST" ]]; then
     SECRET_KEY="$(openssl rand -hex 32)"
     cat > "$ENV_DST" <<EOF
@@ -165,6 +175,7 @@ TLS_CERT=${TLS_DIR}/cert.pem
 TLS_KEY=${TLS_DIR}/key.pem
 SECRETS_PATH=${INSTALL_DIR}/webapi/secrets.enc.yaml
 STREAMING_ENV_PATH=/etc/streaming.env
+LOGO_UPLOAD_DIR=/var/lib/raspi-streaming/assets/logos
 SOPS_AGE_KEY_FILE=${AGE_KEY_FILE}
 EOF
     chmod 600 "$ENV_DST"

@@ -146,6 +146,52 @@ make restart-web-api
 
 ---
 
+## Configuración de overlay desde la web
+
+El panel **Configuración de overlay** (visible al activar el toggle "Con overlay")
+permite configurar:
+
+### Logo PNG
+
+| Campo | Descripción |
+|---|---|
+| Ruta del logo | Ruta absoluta en el sistema de la Pi, p.ej. `/var/lib/raspi-streaming/assets/logos/logo.png` |
+| Botón 📁 | Sube un archivo PNG/JPG desde el navegador (máx. 5 MB) directamente al directorio de logos de la Pi |
+| Posición | `br` abajo derecha (default), `bl`, `tr`, `tl` |
+| Margen (px) | Distancia al borde en píxeles (default 20) |
+
+Los archivos subidos se guardan en `/var/lib/raspi-streaming/assets/logos/`
+(permisos `755`), accesibles tanto por `webapi` (escritura) como por `streamer` (lectura).
+
+### Texto en pantalla
+
+Texto libre (máx. 200 caracteres) superpuesto en la posición elegida.
+Posiciones: arriba izquierda, arriba derecha, abajo izquierda (default), abajo derecha, centro.
+
+### Hora en tiempo real
+
+Activa el drawtext con timestamp dinámico (`%{localtime:...}`) en la esquina superior izquierda.
+
+---
+
+## Variables de `/etc/streaming.env`
+
+| Variable | Descripción |
+|---|---|
+| `RTMP_URL` | URL RTMP completa incluyendo stream key |
+| `STREAM_WIDTH` / `STREAM_HEIGHT` | Resolución de video en píxeles |
+| `STREAM_FPS` | Fotogramas por segundo |
+| `STREAM_BITRATE` | Bitrate de video en bps |
+| `STREAM_PRESET` | Preset de codificación libx264 (`ultrafast`…`fast`) |
+| `OVERLAY_TEXT` | Texto superpuesto en el stream |
+| `OVERLAY_TEXT_POS` | Posición del texto (`tl`/`tr`/`bl`/`br`/`center`) |
+| `OVERLAY_TIMESTAMP` | `true` para mostrar hora en tiempo real |
+| `OVERLAY_LOGO_FILE` | Ruta absoluta al PNG del logo |
+| `OVERLAY_LOGO_POS` | Posición del logo (`br`/`bl`/`tr`/`tl`) |
+| `OVERLAY_LOGO_PAD` | Margen del logo en píxeles |
+
+---
+
 ## Variables de `/etc/web-api.env`
 
 | Variable | Descripción |
@@ -155,6 +201,7 @@ make restart-web-api
 | `TLS_CERT` / `TLS_KEY` | certificado autofirmado generado en la instalación |
 | `SECRETS_PATH` | ruta al `secrets.enc.yaml` instalado |
 | `STREAMING_ENV_PATH` | ruta a `/etc/streaming.env` (compartido con los servicios de streaming) |
+| `LOGO_UPLOAD_DIR` | directorio donde se guardan los logos subidos (default `/var/lib/raspi-streaming/assets/logos`) |
 | `SOPS_AGE_KEY_FILE` | ruta a la age key privada usada para descifrar `SECRETS_PATH` |
 
 ---

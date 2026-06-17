@@ -20,10 +20,13 @@ import time
 from datetime import timedelta
 
 from flask import Flask, Response, jsonify, request, send_from_directory, session, stream_with_context
+from werkzeug.utils import secure_filename
 
 from . import auth, config_store, secrets_store, stream_control
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+LOGO_ALLOWED_EXT = {".png", ".jpg", ".jpeg"}
+LOGO_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -39,6 +42,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     streaming_env_path = (test_config or {}).get(
         "STREAMING_ENV_PATH", os.environ.get("STREAMING_ENV_PATH", "/etc/streaming.env")
     )
+    logo_upload_dir = (test_config or {}).get(
+        "LOGO_UPLOAD_DIR", os.environ.get("LOGO_UPLOAD_DIR", "/var/lib/raspi-streaming/assets/logos")
+    )
 
     app.config.update(
         SECRET_KEY=secret_key,
@@ -47,6 +53,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         SESSION_COOKIE_SAMESITE="Strict",
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         STREAMING_ENV_PATH=streaming_env_path,
+        LOGO_UPLOAD_DIR=logo_upload_dir,
     )
 
     if (test_config or {}).get("USERS") is not None:
@@ -135,6 +142,35 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify(stream_control.stop(service))
         except stream_control.StreamControlError as exc:
             return jsonify({"error": str(exc)}), 400
+
+    @app.post("/api/logo")
+    @auth.require_role("operator")
+    def upload_logo():
+        if "file" not in request.files:
+            return jsonify({"error": "Campo 'file' requerido"}), 400
+        f = request.files["file"]
+        if not f.filename:
+            return jsonify({"error": "Nombre de archivo vacío"}), 400
+
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in LOGO_ALLOWED_EXT:
+            return jsonify({"error": f"Formato no soportado. Usar: {', '.join(LOGO_ALLOWED_EXT)}"}), 400
+
+        # Leer primero para validar tamaño sin guardar en disco
+        data = f.read(LOGO_MAX_BYTES + 1)
+        if len(data) > LOGO_MAX_BYTES:
+            return jsonify({"error": "Archivo demasiado grande (máx. 5 MB)"}), 400
+
+        upload_dir = app.config["LOGO_UPLOAD_DIR"]
+        os.makedirs(upload_dir, mode=0o755, exist_ok=True)
+
+        filename = secure_filename(f.filename)
+        dest = os.path.join(upload_dir, filename)
+        with open(dest, "wb") as fh:
+            fh.write(data)
+        os.chmod(dest, 0o644)
+
+        return jsonify({"path": dest, "filename": filename})
 
     @app.get("/")
     def index():

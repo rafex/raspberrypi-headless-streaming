@@ -366,3 +366,37 @@ details#cfg-advanced[open] summary::before {
   border-color: var(--accent);
   color: white;
 }
+
+/* --- Logo upload row --- */
+.logo-path-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.logo-path-row input[type="text"] {
+  flex: 1;
+  margin: 0;
+}
+
+.btn-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border: 1px solid #2a3340;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--text);
+  user-select: none;
+}
+
+.btn-upload:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
