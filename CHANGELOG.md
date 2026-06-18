@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-06-17
+
+### Added
+
+- **Web API: acordeón de 5 pasos con paridad total al TUI**
+  - Interfaz reorganizada como asistente de configuración colapsable
+  - Paso 1 — Cámara: grid 2×2 de resoluciones (360p/480p/720p/1080p) con
+    descripción, sección Personalizado colapsable
+  - Paso 2 — Audio: sample rate, toggle stereo/mono, boost ×2, hint
+    automático para BOYA/Focusrite/Scarlett → 48 000 Hz
+  - Paso 3 — Destino: YouTube, Facebook, Dual (★) y URL personalizada;
+    segundo campo de stream key para modo dual
+  - Paso 4 — Video: cards 2×2 de calidad nombradas (Alta calidad / Balance /
+    Bajo ancho / Mínimo); sección Avanzado con bitrate y preset libres
+  - Paso 5 — Overlays: chips de ancho de logo (Original/80/100/120/150/200 px),
+    chips de margen (10–50 px), grids visuales de posición (2×2 logo, 3×3
+    texto), toggle de banner con posición footer/header
+  - Chips de resumen en tiempo real en cada cabecera del acordeón
+
+- **Banner overlay (Overlay 5)**
+  - Nuevo flag `--banner TEXT` y `--banner-pos footer|header` en
+    `stream-overlay.sh`
+  - Implementado con `drawbox` (46 px, `black@0.72`) + `drawtext` centrado
+    (`x=(w-text_w)/2`)
+  - Escapa automáticamente `:` → `\:` y `'` → `\'` en el texto del banner
+  - Variables de entorno: `OVERLAY_BANNER`, `OVERLAY_BANNER_POS`
+
+- **Audio boost ×2**
+  - Nuevo flag `--audio-boost` en `stream-overlay.sh`
+  - Aplica `-af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0"`
+  - Útil para micrófonos de solapa con nivel bajo (ej. BOYA CC)
+  - Variable de entorno: `STREAM_AUDIO_BOOST`
+
+- **Ancho de logo configurable**
+  - Nuevo flag `--logo-w N` (N=0 → original)
+  - Variable de entorno: `OVERLAY_LOGO_W`
+
+- **Dual stream via web API**
+  - La opción "★ Dual" en la web compose y envía ambas URLs RTMP al script
+  - Variables nuevas: `STREAM_PLATFORM`, `STREAM_KEY`, `STREAM_DUAL`,
+    `STREAM_KEY_META`, `RTMP_URL_SECONDARY`
+
+- **Auto-detección de sample rate**
+  - Nombres de micrófono con BOYA, Focusrite o Scarlett auto-seleccionan
+    48 000 Hz en la UI web y en el TUI
+
+### Fixed
+
+- `streaming-overlay.service`: eliminado `--no-audio` hardcodeado de
+  `ExecStart`; el silencio AAC ahora se controla exclusivamente mediante
+  `STREAM_NO_AUDIO` en `/etc/streaming.env`
+- Escaping del texto del banner: corregido número de backslashes en `sed`
+  para producir exactamente `\'` en los filtros ffmpeg
+
+---
+
 ## [0.2.0] - 2026-04-25
 
 ### Added
@@ -185,5 +241,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.3.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.1.0
