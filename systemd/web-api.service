@@ -16,6 +16,9 @@ EnvironmentFile=/etc/web-api.env
 # Rutas definidas por web-api-install.sh al instalar
 # __VENV_DIR__ → /opt/web-api/venv
 WorkingDirectory=/opt/web-api
+# HOME evita que gunicorn intente escribir su socket de control en /home/webapi
+# (que no existe para usuarios de sistema sin directorio home).
+Environment="HOME=/opt/web-api"
 
 ExecStart=__VENV_DIR__/bin/gunicorn \
     --certfile=${TLS_CERT} \
@@ -24,6 +27,7 @@ ExecStart=__VENV_DIR__/bin/gunicorn \
     --worker-class gthread \
     --workers 2 \
     --threads 4 \
+    --worker-tmp-dir /dev/shm \
     "webapi.app:create_app()"
 
 Restart=on-failure

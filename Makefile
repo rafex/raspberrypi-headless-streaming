@@ -112,8 +112,10 @@ logs-streaming:
 deploy-web-api:
 	sudo cp -r server/webapi/. $(INSTALL_DIR)/webapi/
 	sudo chown -R webapi:webapi $(INSTALL_DIR)/webapi
+	sudo uv pip install --quiet --python $(VENV_DIR)/bin/python \
+	    -r server/webapi/requirements.txt
 	sudo systemctl restart web-api.service
-	@echo "Desplegado: $(INSTALL_DIR)/webapi  →  web-api reiniciado"
+	@echo "Desplegado: $(INSTALL_DIR)/webapi  →  dependencias actualizadas  →  web-api reiniciado"
 
 # Actualiza los unit files de systemd desde el repositorio y recarga el daemon.
 # Usar después de hacer "git pull" cuando cambian archivos de systemd/.
