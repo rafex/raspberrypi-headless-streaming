@@ -107,7 +107,15 @@
     if (eventSource) eventSource.close();
     eventSource = new EventSource("/api/events");
     eventSource.onmessage = (e) => { try { renderServices(JSON.parse(e.data)); } catch {} };
-    eventSource.onerror = () => { eventSource.close(); eventSource = null; showLogin(); };
+    eventSource.onerror = () => {
+      eventSource.close(); eventSource = null;
+      // Verificar si la sesión sigue activa o si es un error transitorio (429, red, etc.)
+      fetch("/api/status", { credentials: "same-origin" }).then((r) => {
+        if (r.status === 401) { showLogin(); return; }
+        // Sesión OK — reintentar SSE en 30s (puede ser 429 u otro error transitorio)
+        setTimeout(startEventSource, 30_000);
+      }).catch(() => setTimeout(startEventSource, 30_000));
+    };
   }
 
   // ──────────────────────────────────────────────────

@@ -16,13 +16,23 @@ Variables de entorno relevantes (ver systemd/web-api.service / /etc/web-api.env)
 
 import json
 import os
+import threading
 import time
 from datetime import timedelta
 
 from flask import Flask, Response, jsonify, request, send_from_directory, session, stream_with_context
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
 
 from . import auth, config_store, device_detect, secrets_store, stream_control
+
+# Límite de conexiones SSE simultáneas — cada una ocupa un worker de gunicorn.
+_SSE_MAX = 5
+_sse_sem = threading.Semaphore(_SSE_MAX)
+
+# Rate limiter compartido entre todas las instancias de app (factory pattern).
+_limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 LOGO_ALLOWED_EXT = {".png", ".jpg", ".jpeg"}
@@ -54,7 +64,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         STREAMING_ENV_PATH=streaming_env_path,
         LOGO_UPLOAD_DIR=logo_upload_dir,
+        RATELIMIT_ENABLED=True,
     )
+
+    _limiter.init_app(app)
+
+    @app.errorhandler(429)
+    def ratelimit_handler(e):
+        return jsonify({"error": "Demasiados intentos. Espera antes de reintentar."}), 429
 
     if (test_config or {}).get("USERS") is not None:
         users = test_config["USERS"]
@@ -67,6 +84,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         return jsonify({"status": "ok"})
 
     @app.post("/api/login")
+    @_limiter.limit("5 per minute")
     def login():
         data = request.get_json(silent=True) or {}
         username = str(data.get("username", ""))
@@ -92,14 +110,18 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/events")
     @auth.require_role("viewer")
     def events():
+        if not _sse_sem.acquire(blocking=False):
+            return jsonify({"error": "Demasiadas conexiones de eventos activas"}), 429
+
         def generate():
             try:
                 while True:
                     data = {svc: stream_control.status(svc) for svc in stream_control.SERVICES}
                     yield f"data: {json.dumps(data)}\n\n"
                     time.sleep(5)
-            except GeneratorExit:
-                pass
+            finally:
+                _sse_sem.release()
+
         return Response(
             stream_with_context(generate()),
             mimetype="text/event-stream",
