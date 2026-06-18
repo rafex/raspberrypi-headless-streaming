@@ -28,6 +28,7 @@ REC_DIR=""; REC_FILE=""; REC_DURATION=0; OUTPUT_FILE=""
 # Modo stream
 RTMP_URL=""; STREAM_KEY=""; DUAL_STREAM=false
 YT_URL=""; META_URL=""; PLATFORM=""
+LOCAL_RTMP=false; LOCAL_STREAM_NAME=""; LAN_VIEW_URL=""
 
 # ---------------------------------------------------------------------------
 # Banner
@@ -75,6 +76,7 @@ if [[ "$MODE" == "stream" ]]; then
     _PLAT_OPTS=(
         "YouTube Live"
         "Facebook / Meta Live"
+        "RTMP local (LAN) — vía mediamtx en esta Pi"
         "URL personalizada"
         "★ Dual stream — YouTube + Facebook  [experimental]"
     )
@@ -113,6 +115,26 @@ if [[ "$MODE" == "stream" ]]; then
             fi
             [[ -n "$STREAM_KEY" ]] || die "Stream key requerida para Facebook/Meta."
             RTMP_URL="${RTMP_BASE}/${STREAM_KEY}"
+            ;;
+
+        "RTMP local (LAN) — vía mediamtx en esta Pi")
+            LOCAL_RTMP=true
+            echo ""
+            info "Requiere mediamtx corriendo en esta Pi."
+            info "Si no está instalado: sudo ./scripts/mediamtx-install.sh"
+            info "Si no está activo:    ./scripts/control.sh start mediamtx"
+            echo ""
+            ask "Nombre del stream (path)" LOCAL_STREAM_NAME "cam"
+            RTMP_URL="rtmp://localhost:1935/${LOCAL_STREAM_NAME}"
+
+            if command -v nc >/dev/null 2>&1 && ! nc -z localhost 1935 2>/dev/null; then
+                echo ""
+                warn "No se detecta mediamtx escuchando en localhost:1935."
+                warn "El stream fallará al iniciar si no se levanta antes."
+            fi
+
+            LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+            LAN_VIEW_URL="rtmp://${LAN_IP:-<IP-de-la-Pi>}:1935/${LOCAL_STREAM_NAME}"
             ;;
 
         "URL personalizada")
@@ -157,6 +179,9 @@ if [[ "$MODE" == "stream" ]]; then
     else
         ok "YouTube : ${YT_URL:0:45}..."
         ok "Facebook: ${META_URL:0:45}..."
+    fi
+    if [[ "$LOCAL_RTMP" == true ]]; then
+        ok "Ver desde otra máquina con VLC: ${LAN_VIEW_URL}"
     fi
 
 else  # MODE == record
@@ -248,6 +273,9 @@ if [[ "$MODE" == "stream" ]]; then
     else
         echo -e "  Destino    : ${C_DIM}${RTMP_URL:0:54}${C_RESET}"
     fi
+    if [[ "$LOCAL_RTMP" == true ]]; then
+        echo -e "  Ver (VLC)  : ${C_BOLD}${LAN_VIEW_URL}${C_RESET}"
+    fi
 else
     echo -e "  Salida     : ${C_BOLD}$OUTPUT_FILE${C_RESET}"
     if [[ "$REC_DURATION" -gt 0 ]]; then
@@ -336,6 +364,9 @@ fi
 
 # ── MODO STREAM ─────────────────────────────────────────────────────────────
 echo -e "  ${C_GREEN}${C_BOLD}Iniciando stream... Ctrl+C para detener.${C_RESET}"
+if [[ "$LOCAL_RTMP" == true ]]; then
+    echo -e "  ${C_DIM}Ver desde otra máquina con VLC: ${LAN_VIEW_URL}${C_RESET}"
+fi
 echo ""
 
 # Sin overlays y sin dual stream: delegar en usb-camera.sh (ruta simple)
