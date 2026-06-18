@@ -88,8 +88,8 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
     echo "Usuario de sistema creado: ${SERVICE_USER}"
 fi
-# Grupos necesarios para detectar cámaras (video) y micrófonos (audio)
-for grp in video audio; do
+# Grupos necesarios: video/audio (detección de dispositivos), systemd-journal (journalctl para last_errors)
+for grp in video audio systemd-journal; do
     if getent group "$grp" >/dev/null 2>&1; then
         usermod -aG "$grp" "$SERVICE_USER"
         echo "Usuario ${SERVICE_USER} agregado al grupo ${grp}"

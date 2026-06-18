@@ -198,69 +198,6 @@ fi
 
 DURATION_MS=$(( DURATION * 1000 ))
 
-# --- Construir filter_complex dinámicamente ---
-# Cada overlay se encadena al anterior usando etiquetas [vN]
-build_filter_complex() {
-    local filters=()
-    local input_count=1  # entrada 0 = video principal
-    local current_label="[0:v]"
-    local next_label
-    local input_args=()
-
-    # Índice para entradas adicionales (logo, frame son inputs separados en ffmpeg)
-    local extra_idx=1
-
-    # --- Frame (se aplica primero, debajo del logo) ---
-    if [[ -n "$FRAME_FILE" ]]; then
-        next_label="[vframe]"
-        filters+=("${current_label}[${extra_idx}:v]overlay=0:0${next_label}")
-        input_args+=(-i "$FRAME_FILE")
-        (( extra_idx++ ))
-        current_label="$next_label"
-    fi
-
-    # --- Logo ---
-    if [[ -n "$LOGO_FILE" ]]; then
-        local pos
-        pos=$(overlay_position "$LOGO_POS" "$LOGO_PAD")
-        next_label="[vlogo]"
-        filters+=("${current_label}[${extra_idx}:v]overlay=${pos}${next_label}")
-        input_args+=(-i "$LOGO_FILE")
-        (( extra_idx++ ))
-        current_label="$next_label"
-    fi
-
-    # --- Texto estático ---
-    if [[ -n "$TEXT_CONTENT" ]]; then
-        local tpos
-        tpos=$(text_position "$TEXT_POS")
-        local safe_text
-        safe_text=$(echo "$TEXT_CONTENT" | sed "s/'/\\\\'/g")
-        next_label="[vtext]"
-        filters+=("${current_label}drawtext=text='${safe_text}':fontcolor=white:fontsize=24:${tpos}:box=1:boxcolor=black@0.5:boxborderw=6${next_label}")
-        current_label="$next_label"
-    fi
-
-    # --- Timestamp dinámico ---
-    if [[ "$USE_TIMESTAMP" == true ]]; then
-        next_label="[vts]"
-        filters+=("${current_label}drawtext=text='%{localtime\\:%F %T}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5${next_label}")
-        current_label="$next_label"
-    fi
-
-    # Si no se aplicó ningún overlay, no hay filter_complex
-    if [[ ${#filters[@]} -eq 0 ]]; then
-        echo ""
-        return
-    fi
-
-    # Unir todos los filtros con coma
-    local filter_str
-    filter_str=$(IFS=","; echo "${filters[*]}")
-
-    # Devolver: primero los -i adicionales, luego el filter_complex y el mapa de salida
-    echo "${input_args[@]:-} -filter_complex \"${filter_str}\" -map \"${current_label}\""
-}
 
 # --- Detectar automáticamente micrófono USB ---
 # Busca por palabras clave comunes de micrófonos USB y marcas conocidas (BOYA, etc.)

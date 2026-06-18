@@ -3,15 +3,25 @@ Control de los servicios systemd de streaming desde web-api.
 
 El proceso corre como el usuario de sistema sin privilegios "webapi"
 (ver scripts/web-api-install.sh), que tiene permiso sudo sin password
-SOLO para systemctl start|stop|status sobre estas dos unidades exactas
+SOLO para systemctl start|stop|is-active sobre estas dos unidades exactas
 (/etc/sudoers.d/web-api). No se acepta el nombre de servicio como texto
 libre en ningún punto de la API: siempre se valida contra SERVICES.
+
+Para leer el journal (last_errors) el usuario webapi debe pertenecer al
+grupo systemd-journal (lo agrega web-api-install.sh).
 """
 
+import re
 import subprocess
 import time
 
 SERVICES = ("streaming", "streaming-overlay")
+
+# Patrón para detectar líneas de error/advertencia relevantes en el journal.
+_ERROR_RE = re.compile(
+    r"error|fail|warn|refused|lost|drop|disconnect|reset|timeout",
+    re.IGNORECASE,
+)
 
 
 class StreamControlError(RuntimeError):
@@ -33,6 +43,22 @@ def is_active(service: str) -> bool:
     return result.returncode == 0
 
 
+def last_errors(service: str, scan_lines: int = 40, max_return: int = 5) -> list[str]:
+    """Retorna las últimas líneas relevantes (error/warn/fail) del journal del servicio."""
+    unit = _unit(service)
+    try:
+        result = subprocess.run(
+            ["journalctl", "-u", unit, "-n", str(scan_lines), "--no-pager", "-o", "cat"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return []
+        matches = [line for line in result.stdout.splitlines() if _ERROR_RE.search(line)]
+        return matches[-max_return:]
+    except Exception:
+        return []
+
+
 def status(service: str) -> dict:
     unit = _unit(service)
     active = is_active(service)
@@ -40,6 +66,7 @@ def status(service: str) -> dict:
         "service": service,
         "active": active,
         "state": "running" if active else "dead",
+        "last_errors": last_errors(service) if not active else [],
     }
 
 
@@ -59,8 +86,12 @@ def start(service: str) -> dict:
     if result.returncode != 0:
         raise StreamControlError(f"No se pudo iniciar {unit}: {result.stderr.strip()}")
 
-    # Type=simple: el proceso arranca de inmediato pero puede tardar ~1s en activarse.
-    time.sleep(1)
+    # Polling en lugar de sleep fijo: espera hasta 3s en pasos de 300ms.
+    for _ in range(10):
+        time.sleep(0.3)
+        if is_active(service):
+            break
+
     return status(service)
 
 
