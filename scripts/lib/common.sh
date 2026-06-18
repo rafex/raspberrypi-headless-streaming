@@ -529,3 +529,89 @@ tui_mic_channels() {
         esac
     fi
 }
+
+# ---------------------------------------------------------------------------
+# tui_bitrate
+# Paso interactivo genérico de selección de bitrate. Recibe pares
+# "etiqueta|valor_bps" — cada TUI define sus propias etiquetas/opciones
+# pero comparten el mismo flujo de selección.
+# Uso:
+#   tui_bitrate BITRATE \
+#       "4500 kbps  (alta calidad)|4500000" \
+#       "2500 kbps  (balance)|2500000"
+# ---------------------------------------------------------------------------
+tui_bitrate() {
+    local _var="$1"; shift
+    local -a _labels=() _values=()
+    local _entry
+    for _entry in "$@"; do
+        _labels+=("${_entry%%|*}")
+        _values+=("${_entry##*|}")
+    done
+    pick _IDX "Bitrate de video:" "${_labels[@]}"
+    printf -v "$_var" '%s' "${_values[$_IDX]}"
+}
+
+# ---------------------------------------------------------------------------
+# print_summary_capture
+# Imprime las líneas de resumen comunes a cualquier captura: cámara,
+# resolución, formato de entrada, bitrate y audio. Lee las variables
+# globales establecidas por tui_camera_resolution, tui_mic_channels y
+# tui_bitrate (o equivalentes).
+# ---------------------------------------------------------------------------
+print_summary_capture() {
+    echo -e "  Cámara     : ${C_BOLD}$CAM_NAME${C_RESET} ($CAM_DEV)"
+    echo -e "  Resolución : ${C_BOLD}${WIDTH}x${HEIGHT}${C_RESET}"
+    echo -e "  Formato    : ${INPUT_FORMAT_LABEL}"
+    echo -e "  Bitrate    : ${C_BOLD}$((BITRATE / 1000)) kbps${C_RESET}"
+    if [[ "${NO_AUDIO:-false}" == true ]]; then
+        echo -e "  Audio      : ${C_DIM}deshabilitado${C_RESET}"
+    else
+        local _ch_label="mono"; [[ "${MIC_CH:-1}" -eq 2 ]] && _ch_label="stereo"
+        echo -e "  Audio      : ${C_BOLD}$MIC_NAME${C_RESET} ($MIC_DEV — ${MIC_RATE}Hz ${_ch_label})"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# print_summary_overlays
+# Imprime las líneas de resumen de logo y banner cuando están activos.
+# Lee las variables globales OVERLAY_* establecidas por overlay_tui.
+# ---------------------------------------------------------------------------
+print_summary_overlays() {
+    if [[ -n "${OVERLAY_LOGO:-}" ]]; then
+        if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
+            echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — ${OVERLAY_LOGO_W}px — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
+        else
+            echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — tamaño original — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
+        fi
+    fi
+    if [[ -n "${OVERLAY_BANNER:-}" ]]; then
+        echo -e "  Banner     : ${C_BOLD}\"$OVERLAY_BANNER\"${C_RESET} — $OVERLAY_BANNER_POS"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# build_capture_args
+# Construye el tramo de ffmpeg común a todo pipeline de captura (flags
+# generales + entrada v4l2 + logo + audio + filtros de overlay). Cada TUI
+# agrega después sus propias opciones de codificación/salida.
+# Requiere haber llamado antes build_overlay_args y build_audio_ffmpeg_args.
+# Establece la variable global (array): _CAPTURE_ARGS
+# ---------------------------------------------------------------------------
+build_capture_args() {
+    _CAPTURE_ARGS=(
+        -hide_banner
+        -loglevel warning
+        -stats
+        -thread_queue_size 8192
+        -f v4l2
+        -input_format "$INPUT_FORMAT"
+        -video_size "${WIDTH}x${HEIGHT}"
+        -framerate "$FPS"
+        -i "$CAM_DEV"
+        "${_LOGO_INPUTS[@]}"
+        "${_AUDIO_FFMPEG_ARGS[@]}"
+        "${_FILTER_ARGS[@]}"
+        "${_AUDIO_MAP_ARGS[@]}"
+    )
+}

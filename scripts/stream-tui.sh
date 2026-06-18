@@ -189,19 +189,11 @@ fi
 # ---------------------------------------------------------------------------
 header "4 / 5  Opciones de video"
 
-_BR_OPTS=(
-    "4500 kbps  (alta calidad — requiere buena subida)"
-    "2500 kbps  (balance — recomendado)"
-    "1500 kbps  (bajo ancho de banda)"
-    "800  kbps  (mínimo)"
-)
-pick _IDX "Bitrate de video:" "${_BR_OPTS[@]}"
-case "$_IDX" in
-    0) BITRATE=4500000 ;;
-    1) BITRATE=2500000 ;;
-    2) BITRATE=1500000 ;;
-    3) BITRATE=800000  ;;
-esac
+tui_bitrate BITRATE \
+    "4500 kbps  (alta calidad — requiere buena subida)|4500000" \
+    "2500 kbps  (balance — recomendado)|2500000" \
+    "1500 kbps  (bajo ancho de banda)|1500000" \
+    "800  kbps  (mínimo)|800000"
 ok "Bitrate: $((BITRATE / 1000)) kbps"
 ok "Formato de entrada: $INPUT_FORMAT_LABEL"
 
@@ -229,16 +221,7 @@ if [[ "$MODE" == "stream" ]]; then
 else
     echo -e "  Modo       : ${C_BOLD}Grabación local (MP4)${C_RESET}"
 fi
-echo -e "  Cámara     : ${C_BOLD}$CAM_NAME${C_RESET} ($CAM_DEV)"
-echo -e "  Resolución : ${C_BOLD}${WIDTH}x${HEIGHT}${C_RESET}"
-echo -e "  Formato    : ${INPUT_FORMAT_LABEL}"
-echo -e "  Bitrate    : ${C_BOLD}$((BITRATE / 1000)) kbps${C_RESET}"
-if [[ "$NO_AUDIO" == true ]]; then
-    echo -e "  Audio      : ${C_DIM}deshabilitado${C_RESET}"
-else
-    CH_LABEL="mono"; [[ "$MIC_CH" -eq 2 ]] && CH_LABEL="stereo"
-    echo -e "  Audio      : ${C_BOLD}$MIC_NAME${C_RESET} ($MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL})"
-fi
+print_summary_capture
 
 if [[ "$MODE" == "stream" ]]; then
     echo -e "  Plataforma : ${C_BOLD}$PLATFORM${C_RESET}"
@@ -259,16 +242,7 @@ else
     fi
 fi
 
-if [[ -n "$OVERLAY_LOGO" ]]; then
-    if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
-        echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — ${OVERLAY_LOGO_W}px — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
-    else
-        echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — tamaño original — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
-    fi
-fi
-if [[ -n "$OVERLAY_BANNER" ]]; then
-    echo -e "  Banner     : ${C_BOLD}\"$OVERLAY_BANNER\"${C_RESET} — $OVERLAY_BANNER_POS"
-fi
+print_summary_overlays
 echo ""
 
 if [[ "$MODE" == "stream" ]]; then
@@ -293,6 +267,7 @@ fi
 echo ""
 build_overlay_args
 build_audio_ffmpeg_args
+build_capture_args
 
 # ── MODO GRABACIÓN ──────────────────────────────────────────────────────────
 if [[ "$MODE" == "record" ]]; then
@@ -304,19 +279,7 @@ if [[ "$MODE" == "record" ]]; then
     [[ "$REC_DURATION" -gt 0 ]] && _duration_args=(-t "$REC_DURATION")
 
     ffmpeg \
-        -hide_banner \
-        -loglevel warning \
-        -stats \
-        -thread_queue_size 8192 \
-        -f v4l2 \
-        -input_format "$INPUT_FORMAT" \
-        -video_size "${WIDTH}x${HEIGHT}" \
-        -framerate "$FPS" \
-        -i "$CAM_DEV" \
-        "${_LOGO_INPUTS[@]}" \
-        "${_AUDIO_FFMPEG_ARGS[@]}" \
-        "${_FILTER_ARGS[@]}" \
-        "${_AUDIO_MAP_ARGS[@]}" \
+        "${_CAPTURE_ARGS[@]}" \
         -vcodec libx264 \
         -preset ultrafast \
         -b:v "$BITRATE" \
@@ -363,19 +326,7 @@ else
 fi
 
 ffmpeg \
-    -hide_banner \
-    -loglevel warning \
-    -stats \
-    -thread_queue_size 8192 \
-    -f v4l2 \
-    -input_format "$INPUT_FORMAT" \
-    -video_size "${WIDTH}x${HEIGHT}" \
-    -framerate "$FPS" \
-    -i "$CAM_DEV" \
-    "${_LOGO_INPUTS[@]}" \
-    "${_AUDIO_FFMPEG_ARGS[@]}" \
-    "${_FILTER_ARGS[@]}" \
-    "${_AUDIO_MAP_ARGS[@]}" \
+    "${_CAPTURE_ARGS[@]}" \
     -vcodec libx264 \
     -preset ultrafast \
     -b:v "$BITRATE" \

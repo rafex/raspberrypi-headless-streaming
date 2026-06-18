@@ -69,17 +69,10 @@ header "3 / 5  Calidad de preview"
 
 info "Bitrate más bajo = menor CPU en la Pi, suficiente para verificar calidad visual."
 echo ""
-_BR_OPTS=(
-    "1500 kbps  (recomendado para preview local)"
-    "2500 kbps  (igual que el stream real)"
-    "800  kbps  (mínimo — Pi 3B con carga alta)"
-)
-pick _IDX "Bitrate de preview:" "${_BR_OPTS[@]}"
-case "$_IDX" in
-    0) BITRATE=1500000 ;;
-    1) BITRATE=2500000 ;;
-    2) BITRATE=800000  ;;
-esac
+tui_bitrate BITRATE \
+    "1500 kbps  (recomendado para preview local)|1500000" \
+    "2500 kbps  (igual que el stream real)|2500000" \
+    "800  kbps  (mínimo — Pi 3B con carga alta)|800000"
 ok "Bitrate: $((BITRATE / 1000)) kbps"
 ok "Formato de entrada: $INPUT_FORMAT_LABEL"
 
@@ -162,26 +155,8 @@ echo -e "${C_CYAN}${C_BOLD}╔════════════════�
 echo -e "${C_CYAN}${C_BOLD}║                  Resumen de preview                  ║${C_RESET}"
 echo -e "${C_CYAN}${C_BOLD}╚══════════════════════════════════════════════════════╝${C_RESET}"
 echo ""
-echo -e "  Cámara     : ${C_BOLD}$CAM_NAME${C_RESET} ($CAM_DEV)"
-echo -e "  Resolución : ${C_BOLD}${WIDTH}x${HEIGHT}${C_RESET}"
-echo -e "  Formato    : ${INPUT_FORMAT_LABEL}"
-echo -e "  Bitrate    : ${C_BOLD}$((BITRATE / 1000)) kbps${C_RESET}"
-if [[ "$NO_AUDIO" == true ]]; then
-    echo -e "  Audio      : ${C_DIM}deshabilitado${C_RESET}"
-else
-    CH_LABEL="mono"; [[ "$MIC_CH" -eq 2 ]] && CH_LABEL="stereo"
-    echo -e "  Audio      : ${C_BOLD}$MIC_NAME${C_RESET} ($MIC_DEV — ${MIC_RATE}Hz ${CH_LABEL})"
-fi
-if [[ -n "$OVERLAY_LOGO" ]]; then
-    if [[ "$OVERLAY_LOGO_W" -gt 0 ]]; then
-        echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — ${OVERLAY_LOGO_W}px — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
-    else
-        echo -e "  Logo       : ${C_BOLD}$(basename "$OVERLAY_LOGO")${C_RESET} — tamaño original — ${OVERLAY_LOGO_POS} (pad ${OVERLAY_LOGO_PAD}px)"
-    fi
-fi
-if [[ -n "$OVERLAY_BANNER" ]]; then
-    echo -e "  Banner     : ${C_BOLD}\"$OVERLAY_BANNER\"${C_RESET} — $OVERLAY_BANNER_POS"
-fi
+print_summary_capture
+print_summary_overlays
 if [[ "$PROTO" == "rtmp" ]]; then
     echo -e "  Transporte : ${C_BOLD}RTMP${C_RESET}  ${RTMP_URL}"
 else
@@ -229,6 +204,7 @@ echo ""
 
 build_overlay_args
 build_audio_ffmpeg_args
+build_capture_args
 
 case "$PROTO" in
     tcp)
@@ -253,19 +229,7 @@ esac
 echo ""
 
 ffmpeg \
-    -hide_banner \
-    -loglevel warning \
-    -stats \
-    -thread_queue_size 8192 \
-    -f v4l2 \
-    -input_format "$INPUT_FORMAT" \
-    -video_size "${WIDTH}x${HEIGHT}" \
-    -framerate "$FPS" \
-    -i "$CAM_DEV" \
-    "${_LOGO_INPUTS[@]}" \
-    "${_AUDIO_FFMPEG_ARGS[@]}" \
-    "${_FILTER_ARGS[@]}" \
-    "${_AUDIO_MAP_ARGS[@]}" \
+    "${_CAPTURE_ARGS[@]}" \
     -vcodec libx264 \
     -preset ultrafast \
     -tune zerolatency \
