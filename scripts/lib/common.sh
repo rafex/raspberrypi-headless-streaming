@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Funciones compartidas entre stream-tui.sh y preview.sh.
+# Funciones compartidas entre stream-tui.sh y preview-tui.sh.
 # No ejecutar directamente — cargar con:
 #   source "$(dirname "$0")/lib/common.sh"
 
