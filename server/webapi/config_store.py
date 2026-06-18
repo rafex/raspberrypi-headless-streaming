@@ -9,16 +9,20 @@ import re
 
 FIELDS = (
     "RTMP_URL", "STREAM_PLATFORM", "STREAM_KEY",
+    "STREAM_DUAL", "STREAM_KEY_META", "RTMP_URL_SECONDARY",
     "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
     "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
+    "STREAM_AUDIO_BOOST",
     "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
     "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD", "OVERLAY_LOGO_W",
+    "OVERLAY_BANNER", "OVERLAY_BANNER_POS",
 )
 
-VALID_PRESETS    = ("ultrafast", "superfast", "veryfast", "faster", "fast")
-VALID_TEXT_POS   = ("tl", "tr", "bl", "br", "center")
-VALID_LOGO_POS   = ("tl", "tr", "bl", "br")
-VALID_PLATFORMS  = ("youtube", "facebook", "custom")
+VALID_PRESETS     = ("ultrafast", "superfast", "veryfast", "faster", "fast")
+VALID_TEXT_POS    = ("tl", "tr", "bl", "br", "center")
+VALID_LOGO_POS    = ("tl", "tr", "bl", "br")
+VALID_BANNER_POS  = ("footer", "header")
+VALID_PLATFORMS   = ("youtube", "facebook", "custom", "dual")
 VALID_AUDIO_RATES = (44100, 48000)
 
 PLATFORM_BASE_URLS = {
@@ -77,8 +81,26 @@ def validate_config(data: dict) -> dict:
         errors.append(f"platform debe ser uno de: {', '.join(VALID_PLATFORMS)}")
         platform = "custom"
 
-    stream_key = str(data.get("stream_key", "")).strip()
-    if platform != "custom":
+    stream_key      = str(data.get("stream_key",      "")).strip()
+    stream_key_meta = str(data.get("stream_key_meta", "")).strip()
+
+    rtmp_url           = ""
+    rtmp_url_secondary = ""
+    stream_dual        = platform == "dual"
+
+    if platform == "dual":
+        # YouTube principal + Facebook secundario
+        if not stream_key:
+            errors.append("stream_key (YouTube) es requerido para dual stream")
+        elif not STREAM_KEY_RE.match(stream_key):
+            errors.append("stream_key solo puede contener letras, números, guiones y guiones bajos")
+        if not stream_key_meta:
+            errors.append("stream_key_meta (Facebook) es requerido para dual stream")
+        elif not STREAM_KEY_RE.match(stream_key_meta):
+            errors.append("stream_key_meta solo puede contener letras, números, guiones y guiones bajos")
+        rtmp_url           = PLATFORM_BASE_URLS["youtube"]  + stream_key
+        rtmp_url_secondary = PLATFORM_BASE_URLS["facebook"] + stream_key_meta
+    elif platform in ("youtube", "facebook"):
         if not stream_key:
             errors.append("stream_key es requerido para YouTube y Facebook")
         elif not STREAM_KEY_RE.match(stream_key):
@@ -135,6 +157,12 @@ def validate_config(data: dict) -> dict:
     else:
         no_audio = bool(no_audio_raw)
 
+    audio_boost_raw = data.get("stream_audio_boost", False)
+    if isinstance(audio_boost_raw, str):
+        audio_boost = audio_boost_raw.lower() in ("true", "1", "yes")
+    else:
+        audio_boost = bool(audio_boost_raw)
+
     video_device = str(data.get("video_device", "")).strip()
     if video_device and not re.match(r"^/dev/video\d+$", video_device):
         errors.append("video_device debe ser /dev/videoN")
@@ -182,30 +210,43 @@ def validate_config(data: dict) -> dict:
         errors.append("overlay_logo_w debe ser un entero")
         overlay_logo_w = 0
 
+    overlay_banner = str(data.get("overlay_banner", "")).strip().replace("\n", " ").replace("\r", "")[:200]
+
+    overlay_banner_pos = str(data.get("overlay_banner_pos", "footer")).strip()
+    if overlay_banner_pos not in VALID_BANNER_POS:
+        errors.append(f"overlay_banner_pos debe ser uno de: {', '.join(VALID_BANNER_POS)}")
+        overlay_banner_pos = "footer"
+
     if errors:
         raise ConfigValidationError("; ".join(errors))
 
     return {
-        "RTMP_URL":          rtmp_url,
-        "STREAM_PLATFORM":   platform,
-        "STREAM_KEY":        stream_key,
-        "STREAM_WIDTH":      str(width),
-        "STREAM_HEIGHT":     str(height),
-        "STREAM_FPS":        str(fps),
-        "STREAM_BITRATE":    str(bitrate),
-        "STREAM_PRESET":     preset,
-        "VIDEO_DEVICE":      video_device,
-        "AUDIO_DEVICE":      audio_device,
-        "AUDIO_CHANNELS":    str(audio_channels),
-        "AUDIO_RATE":        str(audio_rate),
-        "STREAM_NO_AUDIO":   "true" if no_audio else "false",
-        "OVERLAY_TEXT":      overlay_text,
-        "OVERLAY_TEXT_POS":  overlay_text_pos,
-        "OVERLAY_TIMESTAMP": "true" if overlay_timestamp else "false",
-        "OVERLAY_LOGO_FILE": overlay_logo_file,
-        "OVERLAY_LOGO_POS":  overlay_logo_pos,
-        "OVERLAY_LOGO_PAD":  str(overlay_logo_pad),
-        "OVERLAY_LOGO_W":    str(overlay_logo_w),
+        "RTMP_URL":           rtmp_url,
+        "STREAM_PLATFORM":    platform,
+        "STREAM_KEY":         stream_key,
+        "STREAM_DUAL":        "true" if stream_dual else "false",
+        "STREAM_KEY_META":    stream_key_meta,
+        "RTMP_URL_SECONDARY": rtmp_url_secondary,
+        "STREAM_WIDTH":       str(width),
+        "STREAM_HEIGHT":      str(height),
+        "STREAM_FPS":         str(fps),
+        "STREAM_BITRATE":     str(bitrate),
+        "STREAM_PRESET":      preset,
+        "VIDEO_DEVICE":       video_device,
+        "AUDIO_DEVICE":       audio_device,
+        "AUDIO_CHANNELS":     str(audio_channels),
+        "AUDIO_RATE":         str(audio_rate),
+        "STREAM_NO_AUDIO":    "true" if no_audio else "false",
+        "STREAM_AUDIO_BOOST": "true" if audio_boost else "false",
+        "OVERLAY_TEXT":       overlay_text,
+        "OVERLAY_TEXT_POS":   overlay_text_pos,
+        "OVERLAY_TIMESTAMP":  "true" if overlay_timestamp else "false",
+        "OVERLAY_LOGO_FILE":  overlay_logo_file,
+        "OVERLAY_LOGO_POS":   overlay_logo_pos,
+        "OVERLAY_LOGO_PAD":   str(overlay_logo_pad),
+        "OVERLAY_LOGO_W":     str(overlay_logo_w),
+        "OVERLAY_BANNER":     overlay_banner,
+        "OVERLAY_BANNER_POS": overlay_banner_pos,
     }
 
 

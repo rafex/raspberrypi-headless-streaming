@@ -78,6 +78,11 @@ TEXT_CONTENT="${OVERLAY_TEXT:-}"
 TEXT_POS="${OVERLAY_TEXT_POS:-bl}"
 USE_TIMESTAMP=false
 [[ "${OVERLAY_TIMESTAMP:-false}" == "true" ]] && USE_TIMESTAMP=true
+BANNER_TEXT="${OVERLAY_BANNER:-}"
+BANNER_POS="${OVERLAY_BANNER_POS:-footer}"
+DUAL_URL="${RTMP_URL_SECONDARY:-}"
+AUDIO_BOOST=false
+[[ "${STREAM_AUDIO_BOOST:-false}" == "true" ]] && AUDIO_BOOST=true
 VIDEO_DEV="${VIDEO_DEVICE:-}"
 
 usage() {
@@ -142,6 +147,10 @@ while [[ $# -gt 0 ]]; do
         --text-pos)   TEXT_POS="$2"; shift 2 ;;
         --timestamp)  USE_TIMESTAMP=true; shift ;;
         --no-audio)   NO_AUDIO=true; shift ;;
+        --banner)       BANNER_TEXT="$2"; shift 2 ;;
+        --banner-pos)   BANNER_POS="$2"; shift 2 ;;
+        --dual)         DUAL_URL="$2"; shift 2 ;;
+        --audio-boost)  AUDIO_BOOST=true; shift ;;
         --device)     VIDEO_DEV="$2"; shift 2 ;;
         --help)      usage ;;
         *) die "Opción desconocida: $1. Usa --help para ver las opciones." ;;
@@ -282,13 +291,18 @@ else
             AUDIO_DEV="hw:0"
         fi
     fi
-    AUDIO_ARGS=(-f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV" -acodec aac -b:a "${AUDIO_BITRATE}")
-    AUDIO_INFO="${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch"
+    AUDIO_ARGS=(-f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV")
+    if [[ "$AUDIO_BOOST" == true ]]; then
+        AUDIO_ARGS+=(-af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0")
+    fi
+    AUDIO_ARGS+=(-acodec aac -b:a "${AUDIO_BITRATE}")
+    BOOST_LABEL=""; [[ "$AUDIO_BOOST" == true ]] && BOOST_LABEL=" +boost×2"
+    AUDIO_INFO="${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch${BOOST_LABEL}"
 fi
 
 # --- Determinar si hay overlays activos ---
 HAS_OVERLAY=false
-[[ -n "$LOGO_FILE" || -n "$FRAME_FILE" || -n "$TEXT_CONTENT" || "$USE_TIMESTAMP" == true ]] && HAS_OVERLAY=true
+[[ -n "$LOGO_FILE" || -n "$FRAME_FILE" || -n "$TEXT_CONTENT" || "$USE_TIMESTAMP" == true || -n "$BANNER_TEXT" ]] && HAS_OVERLAY=true
 
 # --- Información antes de transmitir ---
 echo "=== Stream con overlays ==="
@@ -352,6 +366,23 @@ if [[ "$USE_TIMESTAMP" == true ]]; then
     FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%F %T}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
     CURRENT="[vts]"
 fi
+if [[ -n "$BANNER_TEXT" ]]; then
+    SAFE_BANNER=$(printf '%s' "$BANNER_TEXT" | sed "s/'/\\\\'/g; s/:/\\\\:/g")
+    if [[ "$BANNER_POS" == "header" ]]; then
+        BANNER_BAR_Y=0; BANNER_TEXT_Y=10
+    else
+        BANNER_BAR_Y="h-46"; BANNER_TEXT_Y="h-36"
+    fi
+    FILTER_PARTS+=("${CURRENT}drawbox=x=0:y=${BANNER_BAR_Y}:w=iw:h=46:color=black@0.72:t=fill,drawtext=text='${SAFE_BANNER}':fontcolor=white:fontsize=26:x=(w-text_w)/2:y=${BANNER_TEXT_Y}[vbanner]")
+    CURRENT="[vbanner]"
+fi
+
+# --- Salida: destino único o dual (tee muxer) ---
+if [[ -n "$DUAL_URL" ]]; then
+    OUTPUT_ARGS=(-f tee "[f=flv:onfail=ignore]${URL}|[f=flv:onfail=ignore]${DUAL_URL}")
+else
+    OUTPUT_ARGS=(-f flv "$URL")
+fi
 
 AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
 
@@ -364,7 +395,7 @@ if [[ "$CAPTURE_MODE" == "libcamera" ]]; then
             --timeout "$DURATION_MS" --output - \
         | ffmpeg -hide_banner -loglevel warning -re -i - \
             "${AUDIO_ARGS[@]}" \
-            -vcodec copy -f flv "$URL"
+            -vcodec copy "${OUTPUT_ARGS[@]}"
     else
         FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
         libcamera-vid \
@@ -376,7 +407,7 @@ if [[ "$CAPTURE_MODE" == "libcamera" ]]; then
             -filter_complex "$FILTER_COMPLEX" \
             -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
             -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-            -f flv "$URL"
+            "${OUTPUT_ARGS[@]}"
     fi
 else
     # --- USB camera: ffmpeg v4l2 directo ---
@@ -389,7 +420,7 @@ else
             "${AUDIO_ARGS[@]}" \
             "${DURATION_ARGS[@]}" \
             -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-            -f flv "$URL"
+            "${OUTPUT_ARGS[@]}"
     else
         FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
         ffmpeg -hide_banner -loglevel warning \
@@ -399,6 +430,6 @@ else
             -filter_complex "$FILTER_COMPLEX" \
             -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
             -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-            -f flv "$URL"
+            "${OUTPUT_ARGS[@]}"
     fi
 fi

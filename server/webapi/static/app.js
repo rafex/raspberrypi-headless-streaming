@@ -1,10 +1,6 @@
 (() => {
   "use strict";
 
-  // El token CSRF vive solo en memoria (no localStorage) para reducir el
-  // impacto de un XSS: se pierde al recargar la página, lo cual está bien,
-  // ya que la sesión sigue activa por cookie y basta con un GET /api/status
-  // exitoso + un nuevo login para refrescar el token si se necesita mutar.
   let csrfToken = null;
   let role = null;
   let eventSource = null;
@@ -16,18 +12,21 @@
     youtube:  "rtmp://a.rtmp.youtube.com/live2/",
     facebook: "rtmps://live-api-s.facebook.com:443/rtmp/",
   };
+  const PLATFORM_NAMES = {
+    youtube: "YouTube", facebook: "Facebook",
+    dual: "YouTube + Facebook", custom: "Custom",
+  };
+
+  // Micrófonos que usan 48 kHz por defecto (coincide con mic_default_rate en common.sh)
+  const MIC_48K_RE = /boya|focusrite|scarlett/i;
 
   async function api(path, { method = "GET", body } = {}) {
     const headers = { "Content-Type": "application/json" };
     if (csrfToken && method !== "GET") headers["X-CSRF-Token"] = csrfToken;
-
     const res = await fetch(path, {
-      method,
-      headers,
-      credentials: "same-origin",
+      method, headers, credentials: "same-origin",
       body: body ? JSON.stringify(body) : undefined,
     });
-
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
     return data;
@@ -45,19 +44,19 @@
     if (eventSource) { eventSource.close(); eventSource = null; }
   }
 
+  // ──────────────────────────────────────────────────
+  // Tarjeta de stream
+  // ──────────────────────────────────────────────────
   function renderServices(statusByService) {
     const plain   = statusByService["streaming"]         || { active: false, state: "desconocido" };
     const overlay = statusByService["streaming-overlay"] || { active: false, state: "desconocido" };
-
-    const isActive     = plain.active || overlay.active;
-    const withOverlay  = overlay.active;
+    const isActive      = plain.active || overlay.active;
+    const withOverlay   = overlay.active;
     const activeService = plain.active ? "streaming" : overlay.active ? "streaming-overlay" : null;
-    const state        = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
+    const state         = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
+    const showOverlay   = isActive ? withOverlay : overlayPref;
 
-    const showOverlay = isActive ? withOverlay : overlayPref;
-
-    const container = $("services");
-    container.innerHTML = `
+    $("services").innerHTML = `
       <div class="service-card">
         <div class="name">Stream</div>
         <span class="badge ${isActive ? "active" : "inactive"}">
@@ -74,25 +73,20 @@
           </div>
           <div class="service-actions">
             <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
-            <button id="btn-stream-stop" class="btn-stop" ${!isActive ? "disabled" : ""}>Detener</button>
+            <button id="btn-stream-stop"  class="btn-stop"  ${!isActive ? "disabled" : ""}>Detener</button>
           </div>` : ""}
-      </div>
-    `;
-
-    const overlayConfig = $("overlay-config");
-    if (overlayConfig) overlayConfig.hidden = !showOverlay;
+      </div>`;
 
     if (role === "operator") {
       document.getElementById("stream-overlay-toggle")?.addEventListener("change", (e) => {
         overlayPref = e.target.checked;
-        if (overlayConfig) overlayConfig.hidden = !overlayPref;
       });
-      document.getElementById("btn-stream-start")?.addEventListener("click", () => {
-        handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start");
-      });
-      document.getElementById("btn-stream-stop")?.addEventListener("click", () => {
-        handleStreamAction(activeService || "streaming", "stop");
-      });
+      document.getElementById("btn-stream-start")?.addEventListener("click", () =>
+        handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start")
+      );
+      document.getElementById("btn-stream-stop")?.addEventListener("click", () =>
+        handleStreamAction(activeService || "streaming", "stop")
+      );
     }
   }
 
@@ -100,34 +94,25 @@
     try {
       await api(`/api/stream/${service}/${action}`, { method: "POST" });
       await refreshStatus();
-    } catch (err) {
-      alert(err.message);
-    }
+    } catch (err) { alert(err.message); }
   }
 
   async function refreshStatus() {
     try {
-      const data = await api("/api/status");
-      renderServices(data);
-    } catch (err) {
-      showLogin();
-    }
+      renderServices(await api("/api/status"));
+    } catch { showLogin(); }
   }
 
   function startEventSource() {
     if (eventSource) eventSource.close();
     eventSource = new EventSource("/api/events");
-    eventSource.onmessage = (e) => {
-      try { renderServices(JSON.parse(e.data)); } catch {}
-    };
-    eventSource.onerror = () => {
-      eventSource.close();
-      eventSource = null;
-      showLogin();
-    };
+    eventSource.onmessage = (e) => { try { renderServices(JSON.parse(e.data)); } catch {} };
+    eventSource.onerror = () => { eventSource.close(); eventSource = null; showLogin(); };
   }
 
-  // --- Resolución ---
+  // ──────────────────────────────────────────────────
+  // Resolución
+  // ──────────────────────────────────────────────────
   const RESOLUTION_PRESETS = {
     "360p":  { width: 640,  height: 360,  fps: 30, bitrate: 800000 },
     "480p":  { width: 854,  height: 480,  fps: 30, bitrate: 1500000 },
@@ -136,38 +121,70 @@
   };
 
   function setResolution({ width, height, fps, bitrate }) {
-    $("cfg-width").value       = width;
-    $("cfg-height").value      = height;
-    $("cfg-fps").value         = fps;
-    $("cfg-bitrate").value     = bitrate;
-    $("cfg-width-vis").value   = width;
-    $("cfg-height-vis").value  = height;
-    $("cfg-fps-vis").value     = fps;
-    $("cfg-bitrate-vis").value = bitrate;
-    document.querySelectorAll(".preset-bar button").forEach((b) =>
+    $("cfg-width").value      = width;
+    $("cfg-height").value     = height;
+    $("cfg-fps").value        = fps;
+    $("cfg-width-vis").value  = width;
+    $("cfg-height-vis").value = height;
+    $("cfg-fps-vis").value    = fps;
+    if (bitrate) setBitrate(bitrate);
+
+    document.querySelectorAll(".res-btn").forEach((b) =>
       b.classList.toggle("active", b.dataset.preset && RESOLUTION_PRESETS[b.dataset.preset]?.width === width)
     );
+    updateSummaries();
   }
 
-  document.querySelectorAll(".preset-bar button[data-preset]").forEach((btn) => {
+  document.querySelectorAll(".res-btn[data-preset]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const p = RESOLUTION_PRESETS[btn.dataset.preset];
       if (p) setResolution(p);
     });
   });
 
-  ["cfg-width-vis", "cfg-height-vis", "cfg-fps-vis", "cfg-bitrate-vis"].forEach((id) => {
+  ["cfg-width-vis", "cfg-height-vis", "cfg-fps-vis"].forEach((id) => {
     $(id)?.addEventListener("input", () => {
       $(id.replace("-vis", "")).value = $(id).value;
-      document.querySelectorAll(".preset-bar button").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".res-btn").forEach((b) => b.classList.remove("active"));
+      updateSummaries();
     });
   });
 
-  // --- Platform picker ---
+  // ──────────────────────────────────────────────────
+  // Bitrate / calidad de video
+  // ──────────────────────────────────────────────────
+  function setBitrate(bitrate) {
+    $("cfg-bitrate").value     = bitrate;
+    $("cfg-bitrate-vis").value = bitrate;
+    document.querySelectorAll(".quality-card").forEach((b) =>
+      b.classList.toggle("active", Number(b.dataset.bitrate) === bitrate)
+    );
+  }
+
+  document.querySelectorAll(".quality-card[data-bitrate]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setBitrate(Number(btn.dataset.bitrate));
+      updateSummaries();
+    });
+  });
+
+  $("cfg-bitrate-vis")?.addEventListener("input", () => {
+    $("cfg-bitrate").value = $("cfg-bitrate-vis").value;
+    document.querySelectorAll(".quality-card").forEach((b) => b.classList.remove("active"));
+    updateSummaries();
+  });
+
+  // ──────────────────────────────────────────────────
+  // Platform picker
+  // ──────────────────────────────────────────────────
   function updatePlatformUI(platform) {
+    const isDual   = platform === "dual";
     const isCustom = platform === "custom";
-    $("cfg-stream-key-row").hidden = isCustom;
-    $("cfg-rtmp-url-row").hidden   = !isCustom;
+    $("cfg-stream-key-row").hidden      = isCustom;
+    $("cfg-stream-key-meta-row").hidden = !isDual;
+    $("cfg-rtmp-url-row").hidden        = !isCustom;
+    const label = $("cfg-stream-key-label");
+    if (label) label.childNodes[0].textContent = isDual ? "Stream Key YouTube " : "Stream Key ";
   }
 
   function detectPlatform(rtmpUrl) {
@@ -179,21 +196,175 @@
 
   $("cfg-platform").addEventListener("change", () => {
     updatePlatformUI($("cfg-platform").value);
+    updateSummaries();
   });
 
-  // --- Detección de dispositivos ---
+  // ──────────────────────────────────────────────────
+  // Audio — auto-hint de sample rate por nombre de mic
+  // ──────────────────────────────────────────────────
+  $("cfg-audio-device").addEventListener("change", () => {
+    const opt  = $("cfg-audio-device").options[$("cfg-audio-device").selectedIndex];
+    const name = opt?.text || "";
+    const hint = $("audio-rate-hint");
+    if (MIC_48K_RE.test(name)) {
+      $("cfg-audio-rate").value = "48000";
+      hint.textContent = "Sugerido 48 000 Hz para este micrófono";
+      hint.hidden = false;
+    } else {
+      hint.hidden = true;
+    }
+    updateSummaries();
+  });
+
+  // ──────────────────────────────────────────────────
+  // Logo width — chip row
+  // ──────────────────────────────────────────────────
+  document.querySelectorAll("#logo-w-chips .chip-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = Number(btn.dataset.logow);
+      $("cfg-overlay-logo-w").value = val;
+      document.querySelectorAll("#logo-w-chips .chip-btn").forEach((b) =>
+        b.classList.toggle("active", b === btn)
+      );
+      updateSummaries();
+    });
+  });
+
+  $("cfg-overlay-logo-w")?.addEventListener("input", () => {
+    document.querySelectorAll("#logo-w-chips .chip-btn").forEach((b) => {
+      b.classList.toggle("active", Number(b.dataset.logow) === Number($("cfg-overlay-logo-w").value));
+    });
+    updateSummaries();
+  });
+
+  // ──────────────────────────────────────────────────
+  // Logo padding — chip row
+  // ──────────────────────────────────────────────────
+  document.querySelectorAll("#logo-pad-chips .chip-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      $("cfg-overlay-logo-pad").value = Number(btn.dataset.logopad);
+      document.querySelectorAll("#logo-pad-chips .chip-btn").forEach((b) =>
+        b.classList.toggle("active", b === btn)
+      );
+    });
+  });
+
+  $("cfg-overlay-logo-pad")?.addEventListener("input", () => {
+    document.querySelectorAll("#logo-pad-chips .chip-btn").forEach((b) => {
+      b.classList.toggle("active", Number(b.dataset.logopad) === Number($("cfg-overlay-logo-pad").value));
+    });
+  });
+
+  // ──────────────────────────────────────────────────
+  // Logo position — 2×2 grid
+  // ──────────────────────────────────────────────────
+  function setLogoPos(pos) {
+    $("cfg-overlay-logo-pos").value = pos;
+    document.querySelectorAll(".pos-btn[data-logopos]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.logopos === pos)
+    );
+  }
+
+  document.querySelectorAll(".pos-btn[data-logopos]").forEach((btn) => {
+    btn.addEventListener("click", () => setLogoPos(btn.dataset.logopos));
+  });
+
+  // ──────────────────────────────────────────────────
+  // Text position — 3×3 grid
+  // ──────────────────────────────────────────────────
+  function setTextPos(pos) {
+    $("cfg-overlay-text-pos").value = pos;
+    document.querySelectorAll(".pos-btn[data-textpos]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.textpos === pos)
+    );
+  }
+
+  document.querySelectorAll(".pos-btn[data-textpos]").forEach((btn) => {
+    btn.addEventListener("click", () => setTextPos(btn.dataset.textpos));
+  });
+
+  // ──────────────────────────────────────────────────
+  // Banner position — footer / header buttons
+  // ──────────────────────────────────────────────────
+  function setBannerPos(pos) {
+    $("cfg-overlay-banner-pos").value = pos;
+    document.querySelectorAll(".banner-pos-btn").forEach((b) =>
+      b.classList.toggle("active", b.dataset.bannerpos === pos)
+    );
+  }
+
+  document.querySelectorAll(".banner-pos-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setBannerPos(btn.dataset.bannerpos));
+  });
+
+  // ──────────────────────────────────────────────────
+  // Accordion summaries
+  // ──────────────────────────────────────────────────
+  function updateSummaries() {
+    // Cámara
+    const h  = $("cfg-height").value || 720;
+    const vd = $("cfg-video-device");
+    const vdText = vd.selectedIndex > 0
+      ? (vd.options[vd.selectedIndex].text.split("(")[0].trim() || "Detectado")
+      : "Auto";
+    $("sum-camera").textContent = `${vdText} · ${h}p`;
+
+    // Audio
+    const ad      = $("cfg-audio-device");
+    const noAudio = ad.value === "__none__";
+    if (noAudio) {
+      $("sum-audio").textContent = "Sin audio (AAC silencio)";
+    } else {
+      const adText = ad.selectedIndex > 0
+        ? (ad.options[ad.selectedIndex].text.split("(")[0].trim() || "Detectado")
+        : "Auto";
+      const ch   = $("cfg-audio-stereo").checked ? "Stereo" : "Mono";
+      const rate = $("cfg-audio-rate").value || "44100";
+      const boost = $("cfg-audio-boost").checked ? " ×2" : "";
+      $("sum-audio").textContent = `${adText} · ${ch} · ${rate} Hz${boost}`;
+    }
+
+    // Destino
+    $("sum-dest").textContent = PLATFORM_NAMES[$("cfg-platform").value] || $("cfg-platform").value;
+
+    // Video
+    const bitrate = Number($("cfg-bitrate").value || 2500000);
+    const preset  = $("cfg-preset").value || "veryfast";
+    $("sum-video").textContent = `${Math.round(bitrate / 1000)} kbps · ${preset}`;
+
+    // Overlays
+    const parts = [
+      $("cfg-overlay-logo-file").value.trim() && "Logo",
+      $("cfg-overlay-banner").value.trim()    && "Banner",
+      $("cfg-overlay-text").value.trim()      && "Texto",
+      $("cfg-overlay-timestamp").checked      && "Hora",
+    ].filter(Boolean);
+    $("sum-overlay").textContent = parts.length ? parts.join(" · ") : "Ninguno";
+  }
+
+  ["cfg-audio-rate", "cfg-preset"].forEach((id) => {
+    $(id)?.addEventListener("change", updateSummaries);
+  });
+  ["cfg-audio-stereo", "cfg-audio-boost", "cfg-overlay-timestamp"].forEach((id) => {
+    $(id)?.addEventListener("change", updateSummaries);
+  });
+  ["cfg-overlay-logo-file", "cfg-overlay-banner", "cfg-overlay-text"].forEach((id) => {
+    $(id)?.addEventListener("input", updateSummaries);
+  });
+
+  // ──────────────────────────────────────────────────
+  // Detección de dispositivos
+  // ──────────────────────────────────────────────────
   function populateDeviceSelect(selectEl, items, currentValue) {
     const fixed = Array.from(selectEl.options).filter((o) => o.dataset.fixed === "1");
     selectEl.innerHTML = "";
     fixed.forEach((o) => selectEl.appendChild(o));
-
     items.forEach(({ dev, name }) => {
       const opt = document.createElement("option");
       opt.value = dev;
       opt.textContent = `${name}  (${dev})`;
       selectEl.appendChild(opt);
     });
-
     selectEl.value = currentValue || "";
     if (selectEl.value !== (currentValue || "")) selectEl.value = "";
   }
@@ -208,6 +379,7 @@
       statusEl.textContent =
         `${cameras.length} cámara(s) · ${mics.length} micrófono(s)` +
         (cameras.length === 0 ? " — no se detectaron cámaras" : "");
+      updateSummaries();
     } catch (err) {
       statusEl.textContent = `Error al escanear: ${err.message}`;
     }
@@ -215,56 +387,85 @@
 
   $("btn-scan-devices").addEventListener("click", () => loadDevices("", ""));
 
-  // --- Cargar configuración guardada ---
+  // ──────────────────────────────────────────────────
+  // Cargar configuración guardada
+  // ──────────────────────────────────────────────────
   async function loadConfig() {
     if (role !== "operator") return;
     try {
       const cfg = await api("/api/config");
 
-      // Resolución
       setResolution({
-        width:   cfg.STREAM_WIDTH   || 1280,
-        height:  cfg.STREAM_HEIGHT  || 720,
-        fps:     cfg.STREAM_FPS     || 30,
-        bitrate: cfg.STREAM_BITRATE || 2500000,
+        width:   Number(cfg.STREAM_WIDTH)   || 1280,
+        height:  Number(cfg.STREAM_HEIGHT)  || 720,
+        fps:     Number(cfg.STREAM_FPS)     || 30,
+        bitrate: Number(cfg.STREAM_BITRATE) || 2500000,
       });
       $("cfg-preset").value = cfg.STREAM_PRESET || "veryfast";
 
-      // Plataforma — usar STREAM_PLATFORM/STREAM_KEY guardados; si no, inferir de RTMP_URL
-      let platform  = cfg.STREAM_PLATFORM || "";
-      let streamKey = cfg.STREAM_KEY      || "";
+      // Plataforma
+      let platform     = cfg.STREAM_PLATFORM || "";
+      let streamKey    = cfg.STREAM_KEY      || "";
+      let streamKeyMeta = cfg.STREAM_KEY_META || "";
       if (!platform) {
         const det = detectPlatform(cfg.RTMP_URL || "");
         platform  = det.platform;
         streamKey = det.key;
       }
-      $("cfg-platform").value   = platform || "youtube";
-      $("cfg-stream-key").value = streamKey;
-      $("cfg-rtmp-url").value   = cfg.RTMP_URL || "";
+      if (cfg.STREAM_DUAL === "true") platform = "dual";
+      $("cfg-platform").value        = platform || "youtube";
+      $("cfg-stream-key").value      = streamKey;
+      $("cfg-stream-key-meta").value = streamKeyMeta;
+      $("cfg-rtmp-url").value        = cfg.RTMP_URL || "";
       updatePlatformUI($("cfg-platform").value);
 
       // Audio
       const noAudio = cfg.STREAM_NO_AUDIO === "true";
       $("cfg-audio-stereo").checked = (cfg.AUDIO_CHANNELS || "1") === "2";
       $("cfg-audio-rate").value     = cfg.AUDIO_RATE || "44100";
+      $("cfg-audio-boost").checked  = cfg.STREAM_AUDIO_BOOST === "true";
 
-      // Overlay
-      $("cfg-overlay-text").value       = cfg.OVERLAY_TEXT      || "";
-      $("cfg-overlay-text-pos").value   = cfg.OVERLAY_TEXT_POS  || "bl";
+      // Overlays — Logo
+      const logoFile = cfg.OVERLAY_LOGO_FILE || "";
+      $("cfg-overlay-logo-file").value = logoFile;
+
+      const logoW = Number(cfg.OVERLAY_LOGO_W || 0);
+      $("cfg-overlay-logo-w").value = logoW;
+      document.querySelectorAll("#logo-w-chips .chip-btn").forEach((b) =>
+        b.classList.toggle("active", Number(b.dataset.logow) === logoW)
+      );
+
+      const logoPad = Number(cfg.OVERLAY_LOGO_PAD || 20);
+      $("cfg-overlay-logo-pad").value = logoPad;
+      document.querySelectorAll("#logo-pad-chips .chip-btn").forEach((b) =>
+        b.classList.toggle("active", Number(b.dataset.logopad) === logoPad)
+      );
+
+      setLogoPos(cfg.OVERLAY_LOGO_POS || "br");
+
+      // Overlays — Banner
+      $("cfg-overlay-banner").value = cfg.OVERLAY_BANNER || "";
+      setBannerPos(cfg.OVERLAY_BANNER_POS || "footer");
+
+      // Overlays — Texto libre
+      $("cfg-overlay-text").value = cfg.OVERLAY_TEXT || "";
+      setTextPos(cfg.OVERLAY_TEXT_POS || "bl");
+
+      // Overlays — Timestamp
       $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
-      $("cfg-overlay-logo-file").value  = cfg.OVERLAY_LOGO_FILE || "";
-      $("cfg-overlay-logo-pos").value   = cfg.OVERLAY_LOGO_POS  || "br";
-      $("cfg-overlay-logo-pad").value   = cfg.OVERLAY_LOGO_PAD  || "20";
-      $("cfg-overlay-logo-w").value     = cfg.OVERLAY_LOGO_W    || "0";
 
       await loadDevices(cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_DEVICE || "");
       if (noAudio) $("cfg-audio-device").value = "__none__";
-    } catch (err) {
-      // ignorar, el formulario queda vacío
+
+      updateSummaries();
+    } catch {
+      // formulario queda vacío si falla
     }
   }
 
-  // --- Logo upload ---
+  // ──────────────────────────────────────────────────
+  // Logo upload
+  // ──────────────────────────────────────────────────
   $("logo-file-input").addEventListener("change", async () => {
     const file = $("logo-file-input").files[0];
     if (!file) return;
@@ -275,7 +476,6 @@
 
     const formData = new FormData();
     formData.append("file", file);
-
     try {
       const res = await fetch("/api/logo", {
         method: "POST",
@@ -287,7 +487,7 @@
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
       $("cfg-overlay-logo-file").value = data.path;
       msgEl.textContent = `Subido: ${data.filename}`;
-      msgEl.className = "section-label";
+      updateSummaries();
     } catch (err) {
       msgEl.textContent = err.message;
       msgEl.className = "error";
@@ -295,18 +495,19 @@
     $("logo-file-input").value = "";
   });
 
-  // --- Login / logout ---
+  // ──────────────────────────────────────────────────
+  // Login / logout
+  // ──────────────────────────────────────────────────
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     $("login-error").hidden = true;
-
     try {
       const result = await api("/api/login", {
         method: "POST",
         body: { username: $("username").value, password: $("password").value },
       });
       csrfToken = result.csrf_token;
-      role = result.role;
+      role      = result.role;
       $("session-info").textContent = `${result.user} (${role})`;
       showDashboard();
       await refreshStatus();
@@ -319,51 +520,64 @@
   });
 
   $("logout-btn").addEventListener("click", async () => {
-    try {
-      await api("/api/logout", { method: "POST" });
-    } catch (err) {
-      // si ya no había sesión, no importa
-    }
+    try { await api("/api/logout", { method: "POST" }); } catch {}
     csrfToken = null;
     role = null;
     showLogin();
   });
 
-  // --- Construir y guardar config ---
+  // ──────────────────────────────────────────────────
+  // Construir y guardar config
+  // ──────────────────────────────────────────────────
   function buildConfigBody() {
-    const audioVal  = $("cfg-audio-device").value;
-    const noAudio   = audioVal === "__none__";
-    const platform  = $("cfg-platform").value;
-    const streamKey = $("cfg-stream-key").value.trim();
-    const rtmpUrl   = platform === "custom"
-      ? $("cfg-rtmp-url").value.trim()
-      : (PLATFORM_BASE[platform] || "") + streamKey;
+    const audioVal      = $("cfg-audio-device").value;
+    const noAudio       = audioVal === "__none__";
+    const platform      = $("cfg-platform").value;
+    const streamKey     = $("cfg-stream-key").value.trim();
+    const streamKeyMeta = $("cfg-stream-key-meta").value.trim();
+
+    let rtmpUrl = "", rtmpUrlSecondary = "";
+    if (platform === "dual") {
+      rtmpUrl          = PLATFORM_BASE.youtube  + streamKey;
+      rtmpUrlSecondary = PLATFORM_BASE.facebook + streamKeyMeta;
+    } else if (platform === "custom") {
+      rtmpUrl = $("cfg-rtmp-url").value.trim();
+    } else {
+      rtmpUrl = (PLATFORM_BASE[platform] || "") + streamKey;
+    }
 
     return {
       platform,
-      stream_key:        streamKey,
-      rtmp_url:          rtmpUrl,
-      width:             Number($("cfg-width").value),
-      height:            Number($("cfg-height").value),
-      fps:               Number($("cfg-fps").value),
-      bitrate:           Number($("cfg-bitrate").value),
-      preset:            $("cfg-preset").value,
-      video_device:      $("cfg-video-device").value,
-      audio_device:      noAudio ? "" : audioVal,
-      audio_channels:    $("cfg-audio-stereo").checked ? 2 : 1,
-      audio_rate:        Number($("cfg-audio-rate").value),
-      stream_no_audio:   noAudio,
-      overlay_text:      $("cfg-overlay-text").value,
-      overlay_text_pos:  $("cfg-overlay-text-pos").value,
-      overlay_timestamp: $("cfg-overlay-timestamp").checked,
-      overlay_logo_file: $("cfg-overlay-logo-file").value,
-      overlay_logo_pos:  $("cfg-overlay-logo-pos").value,
-      overlay_logo_pad:  Number($("cfg-overlay-logo-pad").value) || 20,
-      overlay_logo_w:    Number($("cfg-overlay-logo-w").value)   || 0,
+      stream_key:          streamKey,
+      stream_key_meta:     streamKeyMeta,
+      rtmp_url:            rtmpUrl,
+      rtmp_url_secondary:  rtmpUrlSecondary,
+      width:               Number($("cfg-width").value),
+      height:              Number($("cfg-height").value),
+      fps:                 Number($("cfg-fps").value),
+      bitrate:             Number($("cfg-bitrate").value),
+      preset:              $("cfg-preset").value,
+      video_device:        $("cfg-video-device").value,
+      audio_device:        noAudio ? "" : audioVal,
+      audio_channels:      $("cfg-audio-stereo").checked ? 2 : 1,
+      audio_rate:          Number($("cfg-audio-rate").value),
+      stream_no_audio:     noAudio,
+      stream_audio_boost:  $("cfg-audio-boost").checked,
+      overlay_logo_file:   $("cfg-overlay-logo-file").value,
+      overlay_logo_pos:    $("cfg-overlay-logo-pos").value,
+      overlay_logo_pad:    Number($("cfg-overlay-logo-pad").value) || 20,
+      overlay_logo_w:      Number($("cfg-overlay-logo-w").value)   || 0,
+      overlay_banner:      $("cfg-overlay-banner").value,
+      overlay_banner_pos:  $("cfg-overlay-banner-pos").value,
+      overlay_text:        $("cfg-overlay-text").value,
+      overlay_text_pos:    $("cfg-overlay-text-pos").value,
+      overlay_timestamp:   $("cfg-overlay-timestamp").checked,
     };
   }
 
-  async function saveConfig(msgEl) {
+  $("config-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const msgEl = $("config-msg");
     msgEl.hidden = true;
     try {
       await api("/api/config", { method: "PUT", body: buildConfigBody() });
@@ -375,14 +589,5 @@
       msgEl.className = "error";
       msgEl.hidden = false;
     }
-  }
-
-  $("config-form").addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    saveConfig($("config-msg"));
-  });
-
-  $("save-overlay-btn").addEventListener("click", () => {
-    saveConfig($("overlay-msg"));
   });
 })();

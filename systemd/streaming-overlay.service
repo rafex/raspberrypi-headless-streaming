@@ -28,8 +28,7 @@ ExecStart=/bin/bash scripts/stream-overlay.sh \
     -h ${STREAM_HEIGHT} \
     -f ${STREAM_FPS} \
     -b ${STREAM_BITRATE} \
-    --preset ${STREAM_PRESET} \
-    --no-audio
+    --preset ${STREAM_PRESET}
 
 RestartSec=10
 Restart=on-failure
