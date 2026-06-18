@@ -5,6 +5,7 @@ los servicios systemd "streaming" y "streaming-overlay"
 nuevas, reutiliza exactamente estas claves.
 """
 
+import os
 import re
 
 FIELDS = (
@@ -185,8 +186,19 @@ def validate_config(data: dict) -> dict:
         overlay_timestamp = bool(overlay_timestamp_raw)
 
     overlay_logo_file = str(data.get("overlay_logo_file", "")).strip()
-    if overlay_logo_file and not LOGO_PATH_RE.match(overlay_logo_file):
-        errors.append("overlay_logo_file contiene caracteres no permitidos")
+    if overlay_logo_file:
+        if not LOGO_PATH_RE.match(overlay_logo_file):
+            errors.append("overlay_logo_file contiene caracteres no permitidos")
+        else:
+            # Normalizar para neutralizar traversal (../../etc/shadow → /etc/shadow)
+            # y verificar que el path quede dentro del directorio gestionado.
+            normalized = os.path.normpath(overlay_logo_file)
+            if not normalized.startswith("/var/lib/raspi-streaming/"):
+                errors.append(
+                    "overlay_logo_file debe estar dentro de /var/lib/raspi-streaming/"
+                )
+            else:
+                overlay_logo_file = normalized
 
     overlay_logo_pos = str(data.get("overlay_logo_pos", "br")).strip()
     if overlay_logo_pos not in VALID_LOGO_POS:

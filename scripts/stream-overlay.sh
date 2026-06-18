@@ -110,6 +110,18 @@ overlay_position() {
     esac
 }
 
+# --- Escapar texto para filtro drawtext de ffmpeg ---
+# Orden obligatorio: \ primero, luego ' y %, para no doble-escapar.
+#   \  →  \\   (carácter de escape de ffmpeg)
+#   '  →  \'   (cierra la comilla que rodea el valor)
+#   %  →  %%   (prefijo de expresiones dinámicas %{...})
+escape_drawtext() {
+    printf '%s' "$1" \
+        | sed 's/\\/\\\\/g' \
+        | sed "s/'/\\\\'/g" \
+        | sed 's/%/%%/g'
+}
+
 # --- Calcular posición de texto ---
 text_position() {
     local pos="$1"
@@ -295,7 +307,7 @@ if [[ -n "$LOGO_FILE" ]]; then
 fi
 if [[ -n "$TEXT_CONTENT" ]]; then
     TPOS=$(text_position "$TEXT_POS")
-    SAFE_TEXT=$(echo "$TEXT_CONTENT" | sed "s/'/\\\\'/g")
+    SAFE_TEXT=$(escape_drawtext "$TEXT_CONTENT")
     FILTER_PARTS+=("${CURRENT}drawtext=text='${SAFE_TEXT}':fontcolor=white:fontsize=24:${TPOS}:box=1:boxcolor=black@0.5:boxborderw=6[vtext]")
     CURRENT="[vtext]"
 fi
@@ -304,7 +316,7 @@ if [[ "$USE_TIMESTAMP" == true ]]; then
     CURRENT="[vts]"
 fi
 if [[ -n "$BANNER_TEXT" ]]; then
-    SAFE_BANNER=$(printf '%s' "$BANNER_TEXT" | sed "s/'/\\\\'/g; s/:/\\\\:/g")
+    SAFE_BANNER=$(escape_drawtext "$BANNER_TEXT")
     if [[ "$BANNER_POS" == "header" ]]; then
         BANNER_BAR_Y=0; BANNER_TEXT_Y=10
     else
