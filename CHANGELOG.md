@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.4.0] - 2026-06-19
 
 ### Added
 
+- **Toggle único "Aplicar overlay"** en el paso 5 (Overlays) del portal web
+  — controla tanto el botón Iniciar del Stream (`streaming` vs
+  `streaming-overlay`) como el de Iniciar preview, en un solo lugar en vez
+  de dos toggles independientes que podían desincronizarse
 - **Modo grabación local en `stream-tui.sh`**
   - Paso 0 nuevo: elegir entre "Transmitir en vivo" o "Grabar localmente"
   - En modo grabación, el Paso 3 pide directorio de salida, nombre de
@@ -41,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     config compartida)
   - `scripts/stream-overlay.sh` ahora soporta `--transport {rtmp,tcp,udp}`,
     100% retrocompatible con su uso actual en `streaming-overlay.service`
+  - `PREVIEW_OVERLAY` (toggle "Aplicar overlay") decide si el preview
+    aplica logo/banner/fecha-hora ya configurados o captura "limpio"
 
 ### Changed
 
@@ -48,9 +54,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   movida a `scripts/lib/common.sh` (`tui_bitrate`, `print_summary_capture`,
   `print_summary_overlays`, `build_capture_args`) para evitar que mejoras
   futuras queden duplicadas o se pierdan en uno de los dos scripts
+- **`stream_control.start()`/`stop()` idempotentes**: si el servicio ya
+  está en el estado pedido, devuelven el estado actual sin volver a
+  llamar `systemctl` ni disparar de nuevo la exclusión mutua de cámara.
+  En el frontend, los botones de iniciar/detener se deshabilitan en el
+  momento del click para evitar dobles envíos
 
 ### Fixed
 
+- **Seguridad: el preview del portal filtraba al destino RTMP real.**
+  `systemd/preview.service` confiaba en que un `Environment="RTMP_URL="`
+  posterior a `EnvironmentFile=-/etc/streaming.env` anulara ese valor;
+  en la práctica no fue así y el preview transmitía con la stream key
+  real de YouTube/Facebook en vez de a `rtmp://localhost:1935/preview`.
+  Se reemplaza por `PREVIEW_MODE=true`, que `stream-overlay.sh` usa para
+  forzar URL/key/destino-dual vacíos de forma incondicional — no depende
+  de ningún orden de mezcla de variables de systemd
+- **Audio ausente en el preview del portal (`ALSA buffer xrun`)**:
+  `stream-overlay.sh` no seteaba `-thread_queue_size` en sus inputs de
+  video ni de audio, a diferencia de `build_capture_args()` en
+  `lib/common.sh` (usado por los TUIs, donde el audio sí funcionaba).
+  Con overlays activos el encode por CPU podía atrasar la lectura del
+  audio lo suficiente para desbordar el buffer ALSA antes de que ffmpeg
+  lo consumiera
 - **`mediamtx-install.sh`**: el mapeo de arquitectura `aarch64` apuntaba a
   `linux_arm64v8`, que no coincide con el nombre real de los assets de
   mediamtx (`linux_arm64`) — el script abortaba en silencio sin instalar
@@ -296,7 +322,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/rafex/raspberrypi-headless-streaming/compare/v0.3.1...HEAD
+[0.4.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.4.0
 [0.3.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.1.0
