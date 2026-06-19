@@ -293,7 +293,7 @@ else
             AUDIO_DEV="hw:0"
         fi
     fi
-    AUDIO_ARGS=(-f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV")
+    AUDIO_ARGS=(-thread_queue_size 8192 -f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV")
     if [[ "$AUDIO_BOOST" == true ]]; then
         AUDIO_ARGS+=(-af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0")
     fi
@@ -434,7 +434,7 @@ else
 
     if [[ "$HAS_OVERLAY" == false ]]; then
         ffmpeg -hide_banner -loglevel warning \
-            -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+            -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
             "${AUDIO_ARGS[@]}" \
             "${DURATION_ARGS[@]}" \
             -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
@@ -442,7 +442,7 @@ else
     else
         FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
         ffmpeg -hide_banner -loglevel warning \
-            -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+            -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
             "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
             "${DURATION_ARGS[@]}" \
             -filter_complex "$FILTER_COMPLEX" \
