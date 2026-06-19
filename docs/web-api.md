@@ -268,12 +268,18 @@ Transportes disponibles:
 - **UDP (MPEG-TS)** — la Pi empuja al "IP del cliente" indicado; ese
   cliente debe tener VLC abierto en `vlc udp://@:<puerto>` antes de iniciar.
 
-Botón "Iniciar preview" guarda la configuración de transporte
-(`PUT /api/preview/config`) y arranca el servicio
+Toggle **"Con overlay"** (default ON): aplica el logo/banner/fecha-hora ya
+configurados en el paso de Overlays. Apagarlo prueba la cámara y el audio
+"limpios", sin tocar esa configuración guardada — útil para descartar si
+un problema es del overlay o de la captura en sí.
+
+Botón "Iniciar preview" guarda la configuración (transporte + overlay,
+`PUT /api/preview/config`) y arranca el servicio
 (`POST /api/stream/preview/start`) en un solo paso. Como `preview` comparte
 cámara con `streaming`/`streaming-overlay`, iniciar uno detiene
 automáticamente los otros (mismo mecanismo que ya evita que dos pipelines
-de ffmpeg compitan por la cámara).
+de ffmpeg compitan por la cámara). Iniciar/detener son idempotentes: si ya
+está en el estado pedido, no vuelve a tocar systemd.
 
 ---
 
@@ -341,6 +347,7 @@ Solo el destino del preview — cámara/audio/overlays se leen de
 | `PREVIEW_PORT` | puerto para `rtmp` (mediamtx, default 1935), `tcp` o `udp` |
 | `PREVIEW_CLIENT_IP` | IP destino, requerido solo para `udp` |
 | `PREVIEW_RTMP_NAME` | path del stream en mediamtx, solo para `rtmp` (default `preview`) |
+| `PREVIEW_OVERLAY` | `true` (default) aplica logo/banner/fecha-hora ya configurados; `false` los ignora |
 
 ---
 

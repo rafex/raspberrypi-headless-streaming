@@ -52,6 +52,8 @@
 #   PREVIEW_MODE   true fuerza URL/KEY/destino-dual vacíos sin importar lo
 #                  anterior (usado por systemd/preview.service para
 #                  garantizar que el preview nunca salga a la plataforma real)
+#   PREVIEW_OVERLAY  false (con PREVIEW_MODE=true) ignora logo/marco/texto/
+#                    timestamp/banner configurados — preview sin overlays
 #
 # Ejemplos:
 #   ./stream-overlay.sh -u rtmp://a.rtmp.youtube.com/live2/KEY --logo assets/logo.png
@@ -100,6 +102,7 @@ TRANSPORT="${PREVIEW_TRANSPORT:-rtmp}"
 PORT="${PREVIEW_PORT:-1935}"
 CLIENT_IP="${PREVIEW_CLIENT_IP:-}"
 RTMP_NAME="${PREVIEW_RTMP_NAME:-preview}"
+PREVIEW_OVERLAY="${PREVIEW_OVERLAY:-true}"
 
 # PREVIEW_MODE=true (solo systemd/preview.service la define) garantiza que
 # este proceso NUNCA pueda salir hacia la plataforma real, sin depender del
@@ -225,14 +228,19 @@ if [[ -z "$FRAME_FILE" && -f "${ASSETS_DIR}/frame.png" ]]; then
     FRAME_FILE="${ASSETS_DIR}/frame.png"
 fi
 
-# Verificar archivos de assets si se especificaron
-[[ -z "$LOGO_FILE"  || -f "$LOGO_FILE"  ]] || die "Logo no encontrado: $LOGO_FILE"
-[[ -z "$FRAME_FILE" || -f "$FRAME_FILE" ]] || die "Marco no encontrado: $FRAME_FILE"
-
 if [[ "$PREVIEW_MODE" == "true" ]]; then
     # Nunca usar el destino real, sin importar -u/-k/RTMP_URL/STREAM_KEY/dual.
     URL=""; KEY=""; DUAL_URL=""
+
+    if [[ "$PREVIEW_OVERLAY" != "true" ]]; then
+        # Toggle "con overlay" del preview apagado: ignorar todo lo configurado.
+        LOGO_FILE=""; FRAME_FILE=""; TEXT_CONTENT=""; USE_TIMESTAMP=false; BANNER_TEXT=""
+    fi
 fi
+
+# Verificar archivos de assets si se especificaron
+[[ -z "$LOGO_FILE"  || -f "$LOGO_FILE"  ]] || die "Logo no encontrado: $LOGO_FILE"
+[[ -z "$FRAME_FILE" || -f "$FRAME_FILE" ]] || die "Marco no encontrado: $FRAME_FILE"
 
 if [[ -n "$KEY" ]]; then
     URL="${URL%/}/${KEY}"

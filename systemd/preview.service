@@ -18,6 +18,7 @@ Environment="STREAM_PRESET=veryfast"
 Environment="PREVIEW_TRANSPORT=rtmp"
 Environment="PREVIEW_PORT=1935"
 Environment="PREVIEW_RTMP_NAME=preview"
+Environment="PREVIEW_OVERLAY=true"
 
 # Reutiliza cámara/audio/overlays de la configuración del stream en vivo
 # (streaming.env), pero NUNCA su destino. PREVIEW_MODE=true hace que

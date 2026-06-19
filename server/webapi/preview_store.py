@@ -10,7 +10,7 @@ local, nunca la plataforma real (ver systemd/preview.service).
 
 import re
 
-FIELDS = ("PREVIEW_TRANSPORT", "PREVIEW_PORT", "PREVIEW_CLIENT_IP", "PREVIEW_RTMP_NAME")
+FIELDS = ("PREVIEW_TRANSPORT", "PREVIEW_PORT", "PREVIEW_CLIENT_IP", "PREVIEW_RTMP_NAME", "PREVIEW_OVERLAY")
 
 VALID_TRANSPORTS = ("rtmp", "tcp", "udp")
 
@@ -43,6 +43,7 @@ def read_config(env_path: str) -> dict:
         "PREVIEW_PORT": "1935",
         "PREVIEW_CLIENT_IP": "",
         "PREVIEW_RTMP_NAME": "preview",
+        "PREVIEW_OVERLAY": "true",
     }
     return {field: values.get(field, defaults[field]) for field in FIELDS}
 
@@ -79,6 +80,12 @@ def validate_config(data: dict) -> dict:
         errors.append("rtmp_name solo puede contener letras, números, guiones y guiones bajos")
         rtmp_name = "preview"
 
+    overlay_raw = data.get("overlay", True)
+    if isinstance(overlay_raw, str):
+        overlay = overlay_raw.lower() in ("true", "1", "yes")
+    else:
+        overlay = bool(overlay_raw)
+
     if errors:
         raise ConfigValidationError("; ".join(errors))
 
@@ -87,6 +94,7 @@ def validate_config(data: dict) -> dict:
         "PREVIEW_PORT": str(port),
         "PREVIEW_CLIENT_IP": client_ip,
         "PREVIEW_RTMP_NAME": rtmp_name,
+        "PREVIEW_OVERLAY": "true" if overlay else "false",
     }
 
 

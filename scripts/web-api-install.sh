@@ -187,6 +187,7 @@ PREVIEW_TRANSPORT=rtmp
 PREVIEW_PORT=1935
 PREVIEW_CLIENT_IP=
 PREVIEW_RTMP_NAME=preview
+PREVIEW_OVERLAY=true
 EOF
     echo "Archivo de preview creado: ${PREVIEW_ENV}"
 fi

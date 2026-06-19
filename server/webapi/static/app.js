@@ -174,6 +174,16 @@
           IP del cliente (UDP)
           <input type="text" id="preview-client-ip" placeholder="192.168.1.50">
         </label>
+        <div class="toggle-row" style="margin-top:10px">
+          <div>
+            <span>Con overlay</span>
+            <div class="field-hint">Aplica el logo/banner/fecha-hora ya configurados arriba</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="preview-overlay-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
         <p class="field-hint" id="preview-vlc-hint"></p>
         <div class="service-actions">
           <button id="btn-preview-start" class="btn-start">Iniciar preview</button>
@@ -224,6 +234,7 @@
       $("preview-port").value      = cfg.PREVIEW_PORT      || "1935";
       $("preview-rtmp-name").value = cfg.PREVIEW_RTMP_NAME || "preview";
       $("preview-client-ip").value = cfg.PREVIEW_CLIENT_IP || "";
+      $("preview-overlay-toggle").checked = cfg.PREVIEW_OVERLAY !== "false";
       updatePreviewTransportUI();
     } catch {
       // formulario queda con los valores por default si falla
@@ -238,7 +249,7 @@
     badge.textContent = `${active ? "Activo" : "Detenido"} — ${st?.state || "desconocido"}`;
     $("btn-preview-start").disabled = active;
     $("btn-preview-stop").disabled  = !active;
-    ["preview-transport", "preview-port", "preview-rtmp-name", "preview-client-ip"].forEach((id) => {
+    ["preview-transport", "preview-port", "preview-rtmp-name", "preview-client-ip", "preview-overlay-toggle"].forEach((id) => {
       $(id).disabled = active;
     });
   }
@@ -254,6 +265,7 @@
           port:      Number($("preview-port").value) || (transport === "rtmp" ? 1935 : 1234),
           client_ip: $("preview-client-ip").value.trim(),
           rtmp_name: $("preview-rtmp-name").value.trim() || "preview",
+          overlay:   $("preview-overlay-toggle").checked,
         },
       });
       await api("/api/stream/preview/start", { method: "POST" });
