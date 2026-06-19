@@ -2,9 +2,10 @@
 
 API REST + frontend ligero, servidos por el mismo proceso (gunicorn + Flask)
 sobre HTTPS con certificado autofirmado, que permite encender/apagar la
-transmisión y configurarla sin entrar por SSH. Corre en la Pi 3B (o 4B),
-junto a los servicios `streaming` / `streaming-overlay` que maneja
-`stream-overlay.sh`.
+transmisión, probarla con una vista previa local y configurarla sin entrar
+por SSH. Corre en la Pi 3B (o 4B), junto a los tres servicios que controla:
+`streaming`, `streaming-overlay` y `preview` (los tres ejecutan
+`stream.sh`/`stream-overlay.sh`).
 
 ---
 
@@ -15,8 +16,9 @@ junto a los servicios `streaming` / `streaming-overlay` que maneja
 | `server/webapi/app.py` | API REST + sirve el frontend estático |
 | `server/webapi/secrets_store.py` | descifra usuarios con `sops`+`age` en memoria |
 | `server/webapi/auth.py` | login por sesión (cookie), CSRF, roles |
-| `server/webapi/stream_control.py` | `systemctl start/stop/is-active` de los dos servicios |
+| `server/webapi/stream_control.py` | `systemctl start/stop/is-active` de `streaming`/`streaming-overlay`/`preview` (idempotente) |
 | `server/webapi/config_store.py` | lee/escribe `/etc/streaming.env` |
+| `server/webapi/preview_store.py` | lee/escribe `/etc/preview.env` (destino del preview, nunca la plataforma real) |
 | `server/webapi/static/` | frontend (HTML/CSS/JS vanilla, sin build) |
 | `scripts/manage-users.sh` | alta/baja/listado de usuarios cifrados |
 | `scripts/web-api-install.sh` | instala venv (con `uv`), TLS, sudoers, systemd unit |
@@ -36,7 +38,11 @@ junto a los servicios `streaming` / `streaming-overlay` que maneja
   permisos 600), nunca se versiona.
 - El servicio corre como un usuario de sistema sin privilegios (`webapi`),
   con permiso `sudo` acotado únicamente a `systemctl start|stop|is-active` de
-  `streaming.service` y `streaming-overlay.service`.
+  `streaming.service`, `streaming-overlay.service` y `preview.service`.
+- El preview nunca puede salir hacia la plataforma real: `preview.service`
+  define `PREVIEW_MODE=true`, que `stream-overlay.sh` usa para forzar
+  URL/stream key vacíos de forma incondicional, sin importar lo que haya
+  guardado en `/etc/streaming.env`.
 - HTTPS con certificado autofirmado: el navegador del celular mostrará un
   aviso de seguridad la primera vez; hay que aceptarlo explícitamente.
 - CSRF token via cabecera `X-CSRF-Token`; `secrets.compare_digest` para
@@ -145,7 +151,9 @@ make deploy-web-api && make update-services
 ## Interfaz de usuario: acordeón de 5 pasos
 
 El frontend está organizado como un asistente de 5 secciones colapsables,
-con paridad de funcionalidad respecto al TUI `stream-tui.sh`:
+con paridad de funcionalidad respecto a los TUI `stream-tui.sh` (cámara,
+audio, destino, video, overlays) y `preview-tui.sh` (la tarjeta de Vista
+previa, ver más abajo):
 
 ### Paso 1 — Cámara
 
@@ -307,7 +315,9 @@ SOPS_AGE_KEY_FILE=/etc/raspi-streaming/age/key.txt scripts/manage-users.sh remov
 ```
 
 Tras modificar usuarios, copiar el `secrets.enc.yaml` actualizado al directorio
-de instalación y reiniciar:
+de instalación. No es necesario reiniciar el servicio: `POST /api/reload-users`
+(rol `operator`) relee `secrets.enc.yaml` y actualiza los usuarios en memoria
+sin cortar la transmisión en curso. Si se prefiere reiniciar igual:
 
 ```bash
 make restart-web-api
@@ -386,8 +396,6 @@ Solo el destino del preview — cámara/audio/overlays se leen de
 - El API controla `streaming`, `streaming-overlay` y `preview`; no expone
   `mediamtx` ni `motion-trigger` (el preview vía RTMP requiere que
   `mediamtx` ya esté corriendo aparte).
-- No hay endpoint de recarga en caliente de usuarios: tras `manage-users.sh`,
-  hacer `systemctl restart web-api`.
 - El certificado es autofirmado: cada cliente nuevo debe aceptar el aviso
   una vez. Para evitarlo, reemplazar por un certificado real (p.ej. Let's
   Encrypt vía DNS challenge) y apuntar `TLS_CERT`/`TLS_KEY` a esos archivos.

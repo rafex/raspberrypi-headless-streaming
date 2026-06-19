@@ -674,10 +674,14 @@ sudo scripts/scarlett-pi3b-fix.sh
 arecord -D hw:1,0 --dump-hw-params /dev/null 2>&1 | grep RATE
 ```
 
-**Audio con latencia o clicks (xrun):**
+**Audio con latencia, clicks o sin sonido (`ALSA buffer xrun` en los logs):**
+
+`stream-overlay.sh`, `stream-tui.sh` y `preview-tui.sh` ya pasan
+`-thread_queue_size 8192` en sus inputs de audio y video — no debería ser
+necesario tocar nada. Si igual aparece `xrun` (overlays pesados en Pi 3B,
+tarjeta de audio lenta), se puede subir el valor manualmente:
 ```bash
-# Aumentar el buffer de ALSA en ffmpeg
-ffmpeg ... -f alsa -i plughw:1,0 -thread_queue_size 1024 ...
+ffmpeg ... -thread_queue_size 16384 -f alsa -i plughw:1,0 ...
 ```
 
 **Scarlett no reconocida tras reinicio:**
