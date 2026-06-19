@@ -74,7 +74,12 @@ def status(service: str) -> dict:
 
 
 def start(service: str) -> dict:
+    """Idempotente: si ya está activo, no reinicia ni vuelve a disparar la
+    exclusión mutua de cámara — solo devuelve el estado actual."""
     unit = _unit(service)
+
+    if is_active(service):
+        return status(service)
 
     # Evitar que dos pipelines de ffmpeg/libcamera-vid compitan por la cámara.
     for other in SERVICES:
@@ -99,7 +104,12 @@ def start(service: str) -> dict:
 
 
 def stop(service: str) -> dict:
+    """Idempotente: si ya está detenido, no llama a systemctl de nuevo."""
     unit = _unit(service)
+
+    if not is_active(service):
+        return status(service)
+
     result = subprocess.run(
         ["sudo", "systemctl", "stop", unit],
         capture_output=True,

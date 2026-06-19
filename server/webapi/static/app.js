@@ -81,20 +81,28 @@
       document.getElementById("stream-overlay-toggle")?.addEventListener("change", (e) => {
         overlayPref = e.target.checked;
       });
-      document.getElementById("btn-stream-start")?.addEventListener("click", () =>
-        handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start")
+      document.getElementById("btn-stream-start")?.addEventListener("click", (e) =>
+        handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start", e.currentTarget)
       );
-      document.getElementById("btn-stream-stop")?.addEventListener("click", () =>
-        handleStreamAction(activeService || "streaming", "stop")
+      document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
+        handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
       );
     }
   }
 
-  async function handleStreamAction(service, action) {
+  // Deshabilita el botón clickeado de inmediato (antes de esperar la red) para
+  // que un doble-click no dispare dos requests concurrentes — start/stop ya
+  // son idempotentes en el backend, pero esto evita el parpadeo de la UI y
+  // gastar sudo de más mientras se espera la respuesta.
+  async function handleStreamAction(service, action, btn) {
+    if (btn) btn.disabled = true;
     try {
       await api(`/api/stream/${service}/${action}`, { method: "POST" });
+    } catch (err) {
+      alert(err.message);
+    } finally {
       await refreshStatus();
-    } catch (err) { alert(err.message); }
+    }
   }
 
   async function refreshStatus() {
@@ -184,8 +192,8 @@
     ["preview-port", "preview-rtmp-name", "preview-client-ip"].forEach((id) => {
       $(id).addEventListener("input", updatePreviewVlcHint);
     });
-    $("btn-preview-start").addEventListener("click", handlePreviewStart);
-    $("btn-preview-stop").addEventListener("click", () => handleStreamAction("preview", "stop"));
+    $("btn-preview-start").addEventListener("click", (e) => handlePreviewStart(e.currentTarget));
+    $("btn-preview-stop").addEventListener("click", (e) => handleStreamAction("preview", "stop", e.currentTarget));
   }
 
   function updatePreviewTransportUI() {
@@ -235,7 +243,8 @@
     });
   }
 
-  async function handlePreviewStart() {
+  async function handlePreviewStart(btn) {
+    if (btn) btn.disabled = true;
     try {
       const transport = $("preview-transport").value;
       await api("/api/preview/config", {
@@ -248,8 +257,11 @@
         },
       });
       await api("/api/stream/preview/start", { method: "POST" });
+    } catch (err) {
+      alert(err.message);
+    } finally {
       await refreshStatus();
-    } catch (err) { alert(err.message); }
+    }
   }
 
   // ──────────────────────────────────────────────────
