@@ -49,6 +49,9 @@
 # Variables de entorno:
 #   RTMP_URL       URL RTMP completa
 #   STREAM_KEY     Stream key
+#   PREVIEW_MODE   true fuerza URL/KEY/destino-dual vacíos sin importar lo
+#                  anterior (usado por systemd/preview.service para
+#                  garantizar que el preview nunca salga a la plataforma real)
 #
 # Ejemplos:
 #   ./stream-overlay.sh -u rtmp://a.rtmp.youtube.com/live2/KEY --logo assets/logo.png
@@ -97,6 +100,12 @@ TRANSPORT="${PREVIEW_TRANSPORT:-rtmp}"
 PORT="${PREVIEW_PORT:-1935}"
 CLIENT_IP="${PREVIEW_CLIENT_IP:-}"
 RTMP_NAME="${PREVIEW_RTMP_NAME:-preview}"
+
+# PREVIEW_MODE=true (solo systemd/preview.service la define) garantiza que
+# este proceso NUNCA pueda salir hacia la plataforma real, sin depender del
+# orden de mezcla de Environment=/EnvironmentFile= de systemd: se fuerza
+# acá, incondicionalmente, después de leer todo lo demás.
+PREVIEW_MODE="${PREVIEW_MODE:-false}"
 
 usage() {
     grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -219,6 +228,11 @@ fi
 # Verificar archivos de assets si se especificaron
 [[ -z "$LOGO_FILE"  || -f "$LOGO_FILE"  ]] || die "Logo no encontrado: $LOGO_FILE"
 [[ -z "$FRAME_FILE" || -f "$FRAME_FILE" ]] || die "Marco no encontrado: $FRAME_FILE"
+
+if [[ "$PREVIEW_MODE" == "true" ]]; then
+    # Nunca usar el destino real, sin importar -u/-k/RTMP_URL/STREAM_KEY/dual.
+    URL=""; KEY=""; DUAL_URL=""
+fi
 
 if [[ -n "$KEY" ]]; then
     URL="${URL%/}/${KEY}"

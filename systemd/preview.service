@@ -19,16 +19,15 @@ Environment="PREVIEW_TRANSPORT=rtmp"
 Environment="PREVIEW_PORT=1935"
 Environment="PREVIEW_RTMP_NAME=preview"
 
-# Reutiliza cámara/audio/overlays de la configuración del stream en vivo,
-# pero NUNCA su destino: RTMP_URL/RTMP_URL_SECONDARY/STREAM_KEY se anulan
-# después de cargar streaming.env para que el preview jamás pueda salir
-# hacia la plataforma real (YouTube/Facebook/custom).
+# Reutiliza cámara/audio/overlays de la configuración del stream en vivo
+# (streaming.env), pero NUNCA su destino. PREVIEW_MODE=true hace que
+# stream-overlay.sh fuerce URL/KEY/DUAL_URL vacíos incondicionalmente,
+# después de leer todo lo demás — no depende del orden de mezcla de
+# Environment=/EnvironmentFile= de systemd para esta garantía.
 EnvironmentFile=-/etc/streaming.env
 EnvironmentFile=-/etc/preview.env
 
-Environment="RTMP_URL="
-Environment="RTMP_URL_SECONDARY="
-Environment="STREAM_KEY="
+Environment="PREVIEW_MODE=true"
 
 WorkingDirectory=__REPO_DIR__
 
