@@ -56,7 +56,7 @@ MACHINE=$(uname -m)
 case "$MACHINE" in
     armv6l)  ARCH="linux_armv6" ;;
     armv7l)  ARCH="linux_armv7" ;;
-    aarch64) ARCH="linux_arm64v8" ;;
+    aarch64) ARCH="linux_arm64" ;;
     x86_64)  ARCH="linux_amd64" ;;
     *) die "Arquitectura no soportada: $MACHINE" ;;
 esac
@@ -75,12 +75,12 @@ if [[ "$VERSION" == "latest" ]]; then
         | grep "${ARCH}" \
         | grep -v ".tar.gz.sha256" \
         | head -1 \
-        | cut -d '"' -f 4)
+        | cut -d '"' -f 4) || true
 else
     DOWNLOAD_URL="https://github.com/bluenviron/mediamtx/releases/download/v${VERSION}/mediamtx_v${VERSION}_${ARCH}.tar.gz"
 fi
 
-[[ -n "$DOWNLOAD_URL" ]] || die "No se pudo obtener la URL de descarga. Verificar conexión a internet."
+[[ -n "$DOWNLOAD_URL" ]] || die "No se pudo obtener la URL de descarga (arquitectura ${ARCH}). Verificar conexión a internet o probar con -v <versión>."
 
 echo "Descargando desde: ${DOWNLOAD_URL}"
 
