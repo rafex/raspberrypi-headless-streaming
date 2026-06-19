@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Modo grabación local en `stream-tui.sh`**
+  - Paso 0 nuevo: elegir entre "Transmitir en vivo" o "Grabar localmente"
+  - En modo grabación, el Paso 3 pide directorio de salida, nombre de
+    archivo y duración (0 = indefinida), con estimación de espacio en disco
+  - Usa el mismo pipeline de ffmpeg (overlays incluidos) con
+    `-movflags +faststart` hacia un archivo `.mp4`
+
+- **`preview.sh` renombrado a `preview-tui.sh` + transporte RTMP**
+  - Nueva opción de transporte RTMP vía mediamtx
+    (`rtmp://localhost:1935/<nombre>`), además de TCP/UDP existentes
+  - Admite múltiples espectadores simultáneos en la LAN (a diferencia de
+    TCP/UDP, limitados a un cliente)
+
+- **Overlay de fecha y hora en los TUIs**
+  - Tercera opción en el paso de Overlays de `stream-tui.sh` y
+    `preview-tui.sh`: `drawtext` con `%{localtime}`, posición elegible
+    (tl/tr/bl/br)
+  - Combinable con logo y banner en cualquier mezcla — el filtro se
+    encadena dinámicamente según cuáles estén activos
+
+- **Vista previa local en el portal web** (`docs/web-api.md`)
+  - Tarjeta "Vista previa" con los mismos tres transportes que
+    `preview-tui.sh` (RTMP/TCP/UDP), reutilizando cámara/audio/overlays
+    ya configurados en el acordeón
+  - Nuevo servicio systemd `preview.service` + `/etc/preview.env`;
+    garantizado a nivel de unit file que nunca transmite a la
+    plataforma real (anula `RTMP_URL`/`STREAM_KEY` tras cargar la
+    config compartida)
+  - `scripts/stream-overlay.sh` ahora soporta `--transport {rtmp,tcp,udp}`,
+    100% retrocompatible con su uso actual en `streaming-overlay.service`
+
+### Changed
+
+- **Refactor: lógica compartida entre `stream-tui.sh` y `preview-tui.sh`**
+  movida a `scripts/lib/common.sh` (`tui_bitrate`, `print_summary_capture`,
+  `print_summary_overlays`, `build_capture_args`) para evitar que mejoras
+  futuras queden duplicadas o se pierdan en uno de los dos scripts
+
+### Fixed
+
+- **`mediamtx-install.sh`**: el mapeo de arquitectura `aarch64` apuntaba a
+  `linux_arm64v8`, que no coincide con el nombre real de los assets de
+  mediamtx (`linux_arm64`) — el script abortaba en silencio sin instalar
+  nada. Se corrige el mapeo y se agrega un mensaje de error explícito
+  para fallos similares (rate-limit de la API de GitHub, etc.)
+- **`build_overlay_args` (lib/common.sh)**: bug latente donde activar un
+  logo con `STREAM_NO_AUDIO=true` generaba un `-map` hacia un input de
+  audio inexistente, haciendo fallar ffmpeg al iniciar
+
+---
+
 ## [0.3.0] - 2026-06-17
 
 ### Added
@@ -241,6 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[Unreleased]: https://github.com/rafex/raspberrypi-headless-streaming/compare/v0.3.1...HEAD
 [0.3.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rafex/raspberrypi-headless-streaming/releases/tag/v0.1.0

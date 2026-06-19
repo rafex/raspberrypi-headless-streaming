@@ -23,7 +23,7 @@ Ver la guía completa de instalación: [docs/install.md](docs/install.md)
 | [docs/setup.md](docs/setup.md) | Configuración inicial y systemd |
 | [docs/audio.md](docs/audio.md) | Audio USB, BOYALINK CC, Focusrite Scarlett |
 | [docs/overlays.md](docs/overlays.md) | Logos, marcos, timestamps con ffmpeg |
-| [docs/stream-tui.md](docs/stream-tui.md) | TUI interactivo: wizard de 5 pasos para streaming desde terminal |
-| [docs/web-api.md](docs/web-api.md) | Control remoto desde el celular (API REST + dashboard HTTPS) |
+| [docs/stream-tui.md](docs/stream-tui.md) | TUI interactivo: streaming/grabación (stream-tui.sh) y preview RTMP/MPEG-TS (preview-tui.sh) |
+| [docs/web-api.md](docs/web-api.md) | Control remoto desde el celular (API REST + dashboard HTTPS, incluye vista previa) |
 | [docs/architecture.md](docs/architecture.md) | Diagramas del pipeline de video |
 | [docs/ai-integration.md](docs/ai-integration.md) | Análisis de video con DeepSeek / OpenRouter |
