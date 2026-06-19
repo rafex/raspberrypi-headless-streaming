@@ -266,8 +266,20 @@
               </summary>
               <div class="acrd-body">
 
+                <!-- ── Aplicar overlay (común a Stream e Iniciar preview) ── -->
+                <div class="toggle-row">
+                  <div>
+                    <span>Aplicar overlay</span>
+                    <div class="field-hint">Controla tanto "Iniciar" (Stream) como "Iniciar preview": apagado, ambos capturan sin logo/banner/fecha-hora — útil para descartar problemas de cámara/audio</div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="overlay-enabled-toggle" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
                 <!-- ── Logo ── -->
-                <p class="section-label">Logo PNG</p>
+                <p class="section-label" style="margin-top:20px">Logo PNG</p>
                 <div class="logo-path-row">
                   <input type="text" id="cfg-overlay-logo-file"
                     placeholder="/var/lib/raspi-streaming/assets/logos/logo.png" autocomplete="off">

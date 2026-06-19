@@ -4,7 +4,7 @@
   let csrfToken = null;
   let role = null;
   let eventSource = null;
-  let overlayPref = false;
+  let overlayPref = true;
 
   const $ = (id) => document.getElementById(id);
 
@@ -54,7 +54,6 @@
     const withOverlay   = overlay.active;
     const activeService = plain.active ? "streaming" : overlay.active ? "streaming-overlay" : null;
     const state         = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
-    const showOverlay   = isActive ? withOverlay : overlayPref;
 
     $("services").innerHTML = `
       <div class="service-card">
@@ -63,14 +62,6 @@
           ${isActive ? "Activo" + (withOverlay ? " — con overlay" : "") : "Detenido"} — ${state}
         </span>
         ${role === "operator" ? `
-          <div class="toggle-row overlay-toggle${isActive ? " is-disabled" : ""}">
-            <span>Con overlay</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="stream-overlay-toggle"
-                ${showOverlay ? "checked" : ""} ${isActive ? "disabled" : ""}>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
           <div class="service-actions">
             <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
             <button id="btn-stream-stop"  class="btn-stop"  ${!isActive ? "disabled" : ""}>Detener</button>
@@ -78,9 +69,13 @@
       </div>`;
 
     if (role === "operator") {
-      document.getElementById("stream-overlay-toggle")?.addEventListener("change", (e) => {
-        overlayPref = e.target.checked;
-      });
+      // Mientras el stream esté activo, el toggle de Overlays refleja la
+      // realidad (no se puede cambiar sin reiniciar) en vez del preference local.
+      const toggle = $("overlay-enabled-toggle");
+      if (toggle) {
+        if (isActive) toggle.checked = withOverlay;
+        overlayPref = toggle.checked;
+      }
       document.getElementById("btn-stream-start")?.addEventListener("click", (e) =>
         handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start", e.currentTarget)
       );
@@ -105,11 +100,16 @@
     }
   }
 
+  function anyServiceActive(data) {
+    return Boolean(data?.["streaming"]?.active || data?.["streaming-overlay"]?.active || data?.["preview"]?.active);
+  }
+
   async function refreshStatus() {
     try {
       const data = await api("/api/status");
       renderServices(data);
       updatePreviewStatus(data["preview"]);
+      lockOverlayToggle(anyServiceActive(data));
     } catch { showLogin(); }
   }
 
@@ -121,6 +121,7 @@
         const data = JSON.parse(e.data);
         renderServices(data);
         updatePreviewStatus(data["preview"]);
+        lockOverlayToggle(anyServiceActive(data));
       } catch {}
     };
     eventSource.onerror = () => {
@@ -174,16 +175,7 @@
           IP del cliente (UDP)
           <input type="text" id="preview-client-ip" placeholder="192.168.1.50">
         </label>
-        <div class="toggle-row" style="margin-top:10px">
-          <div>
-            <span>Con overlay</span>
-            <div class="field-hint">Aplica el logo/banner/fecha-hora ya configurados arriba</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="preview-overlay-toggle" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+        <p class="field-hint">El toggle "Aplicar overlay" del paso 5 (Overlays) también controla este preview.</p>
         <p class="field-hint" id="preview-vlc-hint"></p>
         <div class="service-actions">
           <button id="btn-preview-start" class="btn-start">Iniciar preview</button>
@@ -234,7 +226,6 @@
       $("preview-port").value      = cfg.PREVIEW_PORT      || "1935";
       $("preview-rtmp-name").value = cfg.PREVIEW_RTMP_NAME || "preview";
       $("preview-client-ip").value = cfg.PREVIEW_CLIENT_IP || "";
-      $("preview-overlay-toggle").checked = cfg.PREVIEW_OVERLAY !== "false";
       updatePreviewTransportUI();
     } catch {
       // formulario queda con los valores por default si falla
@@ -249,7 +240,7 @@
     badge.textContent = `${active ? "Activo" : "Detenido"} — ${st?.state || "desconocido"}`;
     $("btn-preview-start").disabled = active;
     $("btn-preview-stop").disabled  = !active;
-    ["preview-transport", "preview-port", "preview-rtmp-name", "preview-client-ip", "preview-overlay-toggle"].forEach((id) => {
+    ["preview-transport", "preview-port", "preview-rtmp-name", "preview-client-ip"].forEach((id) => {
       $(id).disabled = active;
     });
   }
@@ -265,7 +256,7 @@
           port:      Number($("preview-port").value) || (transport === "rtmp" ? 1935 : 1234),
           client_ip: $("preview-client-ip").value.trim(),
           rtmp_name: $("preview-rtmp-name").value.trim() || "preview",
-          overlay:   $("preview-overlay-toggle").checked,
+          overlay:   overlayPref,
         },
       });
       await api("/api/stream/preview/start", { method: "POST" });
@@ -517,6 +508,19 @@
   ["cfg-overlay-logo-file", "cfg-overlay-banner", "cfg-overlay-text"].forEach((id) => {
     $(id)?.addEventListener("input", updateSummaries);
   });
+
+  // Toggle único "Aplicar overlay": controla tanto el botón Iniciar (Stream)
+  // como Iniciar preview. Se deshabilita mientras cualquiera de los dos esté
+  // activo (ver lockOverlayToggle, llamado desde refreshStatus/SSE).
+  overlayPref = $("overlay-enabled-toggle")?.checked ?? true;
+  $("overlay-enabled-toggle")?.addEventListener("change", (e) => {
+    overlayPref = e.target.checked;
+  });
+
+  function lockOverlayToggle(anyActive) {
+    const toggle = $("overlay-enabled-toggle");
+    if (toggle) toggle.disabled = anyActive;
+  }
 
   // ──────────────────────────────────────────────────
   // Detección de dispositivos

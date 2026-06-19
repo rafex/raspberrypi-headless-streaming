@@ -231,6 +231,21 @@ Texto con caja de fondo en la posición elegida.
 Toggle que activa `drawtext` con `%{localtime\:%F %T}` en la esquina superior
 izquierda.
 
+#### Aplicar overlay (toggle único, arriba del paso)
+
+Un solo toggle "Aplicar overlay" controla **tanto** el botón Iniciar de la
+tarjeta Stream **como** el botón Iniciar preview de la tarjeta Vista previa:
+
+- ON (default) → `streaming-overlay.service` al iniciar el stream; el
+  preview aplica logo/banner/fecha-hora configurados arriba.
+- OFF → `streaming.service` (vcodec copy, sin overlays, menor CPU) al
+  iniciar el stream; el preview captura "limpio" sin tocar la
+  configuración guardada — útil para descartar si un problema viene del
+  overlay o de la captura/audio en sí.
+
+Se deshabilita mientras stream o preview estén activos (no tiene efecto
+sobre un proceso ya corriendo, solo se lee al iniciar).
+
 ---
 
 ## Iniciar / detener el stream
@@ -238,10 +253,12 @@ izquierda.
 En la tarjeta principal (sobre el acordeón) hay:
 
 - **Badge** de estado: "Activo — running" / "Detenido — detenido".
-- **Toggle "Con overlay"**: determina qué servicio se inicia:
-  - ON → `streaming-overlay.service` (re-encoding por CPU, aplica overlays)
-  - OFF → `streaming.service` (vcodec copy, sin overlays, menor CPU)
 - Botones **Iniciar** y **Detener**.
+
+El toggle que decide si se usa `streaming-overlay.service` o
+`streaming.service` vive en el paso 5 (Overlays) del acordeón — ver
+"Aplicar overlay" más abajo. Es el mismo toggle que usa la tarjeta de
+Vista previa.
 
 El estado se actualiza automáticamente vía Server-Sent Events (`/api/events`).
 
@@ -268,10 +285,8 @@ Transportes disponibles:
 - **UDP (MPEG-TS)** — la Pi empuja al "IP del cliente" indicado; ese
   cliente debe tener VLC abierto en `vlc udp://@:<puerto>` antes de iniciar.
 
-Toggle **"Con overlay"** (default ON): aplica el logo/banner/fecha-hora ya
-configurados en el paso de Overlays. Apagarlo prueba la cámara y el audio
-"limpios", sin tocar esa configuración guardada — útil para descartar si
-un problema es del overlay o de la captura en sí.
+El toggle "Aplicar overlay" del paso 5 (Overlays) también controla este
+preview — ver esa sección para el detalle.
 
 Botón "Iniciar preview" guarda la configuración (transporte + overlay,
 `PUT /api/preview/config`) y arranca el servicio
