@@ -179,6 +179,20 @@ fi
 chown "${SERVICE_USER}:${SERVICE_USER}" "$STREAMING_ENV"
 chmod 640 "$STREAMING_ENV"
 
+# --- 8a-bis. preview.env — destino local de la vista previa (nunca la plataforma real) ---
+PREVIEW_ENV="/etc/preview.env"
+if [[ ! -f "$PREVIEW_ENV" ]]; then
+    cat > "$PREVIEW_ENV" <<'EOF'
+PREVIEW_TRANSPORT=rtmp
+PREVIEW_PORT=1935
+PREVIEW_CLIENT_IP=
+PREVIEW_RTMP_NAME=preview
+EOF
+    echo "Archivo de preview creado: ${PREVIEW_ENV}"
+fi
+chown "${SERVICE_USER}:${SERVICE_USER}" "$PREVIEW_ENV"
+chmod 640 "$PREVIEW_ENV"
+
 # --- 8b. Directorio de logos subidos desde la web ---
 LOGO_DIR="/var/lib/raspi-streaming/assets/logos"
 mkdir -p "$LOGO_DIR"
@@ -196,6 +210,7 @@ TLS_CERT=${TLS_DIR}/cert.pem
 TLS_KEY=${TLS_DIR}/key.pem
 SECRETS_PATH=${INSTALL_DIR}/webapi/secrets.enc.yaml
 STREAMING_ENV_PATH=/etc/streaming.env
+PREVIEW_ENV_PATH=/etc/preview.env
 LOGO_UPLOAD_DIR=/var/lib/raspi-streaming/assets/logos
 SOPS_AGE_KEY_FILE=${AGE_KEY_FILE}
 EOF
@@ -205,7 +220,7 @@ else
     echo "Archivo de entorno existente conservado: ${ENV_DST}"
 fi
 
-# --- 9. sudoers: permitir solo systemctl start/stop de los dos servicios ---
+# --- 9. sudoers: permitir solo systemctl start/stop de estos servicios exactos ---
 SUDOERS_DST="/etc/sudoers.d/web-api"
 cat > "${SUDOERS_DST}.tmp" <<EOF
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start streaming.service
@@ -214,6 +229,9 @@ ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active streaming.servic
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start streaming-overlay.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop streaming-overlay.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active streaming-overlay.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start preview.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop preview.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active preview.service
 EOF
 visudo -c -f "${SUDOERS_DST}.tmp" || die "El sudoers generado no es válido, abortando."
 mv "${SUDOERS_DST}.tmp" "$SUDOERS_DST"

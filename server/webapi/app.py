@@ -26,7 +26,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
 
-from . import auth, config_store, device_detect, secrets_store, stream_control
+from . import auth, config_store, device_detect, preview_store, secrets_store, stream_control
 
 # Límite de conexiones SSE simultáneas — cada una ocupa un worker de gunicorn.
 _SSE_MAX = 5
@@ -64,6 +64,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     streaming_env_path = (test_config or {}).get(
         "STREAMING_ENV_PATH", os.environ.get("STREAMING_ENV_PATH", "/etc/streaming.env")
     )
+    preview_env_path = (test_config or {}).get(
+        "PREVIEW_ENV_PATH", os.environ.get("PREVIEW_ENV_PATH", "/etc/preview.env")
+    )
     logo_upload_dir = (test_config or {}).get(
         "LOGO_UPLOAD_DIR", os.environ.get("LOGO_UPLOAD_DIR", "/var/lib/raspi-streaming/assets/logos")
     )
@@ -75,6 +78,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         SESSION_COOKIE_SAMESITE="Strict",
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         STREAMING_ENV_PATH=streaming_env_path,
+        PREVIEW_ENV_PATH=preview_env_path,
         LOGO_UPLOAD_DIR=logo_upload_dir,
         RATELIMIT_ENABLED=True,
     )
@@ -205,6 +209,29 @@ def create_app(test_config: dict | None = None) -> Flask:
             validated.get("STREAM_PLATFORM", "?"),
             validated.get("STREAM_WIDTH", "?"),
             validated.get("STREAM_HEIGHT", "?"),
+        )
+        return jsonify(validated)
+
+    @app.get("/api/preview/config")
+    @auth.require_role("operator")
+    def get_preview_config():
+        return jsonify(preview_store.read_config(app.config["PREVIEW_ENV_PATH"]))
+
+    @app.put("/api/preview/config")
+    @auth.require_role("operator")
+    def put_preview_config():
+        data = request.get_json(silent=True) or {}
+        try:
+            validated = preview_store.validate_config(data)
+        except preview_store.ConfigValidationError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        preview_store.write_config(app.config["PREVIEW_ENV_PATH"], validated)
+        _audit.info(
+            "preview_config_saved user=%s ip=%s transport=%s port=%s",
+            _user(), _client_ip(),
+            validated.get("PREVIEW_TRANSPORT", "?"),
+            validated.get("PREVIEW_PORT", "?"),
         )
         return jsonify(validated)
 

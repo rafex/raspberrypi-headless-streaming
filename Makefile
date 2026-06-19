@@ -12,7 +12,8 @@
         web-api install-web-api enable-web-api disable-web-api \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
-        streaming start-streaming stop-streaming status-streaming logs-streaming
+        streaming start-streaming stop-streaming status-streaming logs-streaming \
+        start-preview stop-preview status-preview logs-preview
 
 WEBAPI_USER  ?= admin
 WEBAPI_ROLE  ?= operator
@@ -47,6 +48,12 @@ help:
 	@echo "  make stop-streaming    - detiene el stream"
 	@echo "  make status-streaming  - muestra el estado del stream"
 	@echo "  make logs-streaming    - sigue los logs en tiempo real"
+	@echo ""
+	@echo "Vista previa local (RTMP/MPEG-TS, nunca a la plataforma real):"
+	@echo "  make start-preview     - inicia el preview"
+	@echo "  make stop-preview      - detiene el preview"
+	@echo "  make status-preview    - muestra el estado del preview"
+	@echo "  make logs-preview      - sigue los logs en tiempo real"
 	@echo ""
 	@echo "Actualización rápida (sin reinstalar):"
 	@echo "  make deploy-web-api  - copia código Python+estáticos al destino y reinicia"
@@ -107,6 +114,18 @@ status-streaming:
 logs-streaming:
 	journalctl -u streaming.service -f
 
+start-preview:
+	sudo systemctl start preview.service
+
+stop-preview:
+	sudo systemctl stop preview.service
+
+status-preview:
+	systemctl status preview.service --no-pager -l
+
+logs-preview:
+	journalctl -u preview.service -f
+
 # Copia código Python y estáticos al directorio de instalación y reinicia el servicio.
 # Usar después de hacer "git pull" cuando solo cambian archivos de server/webapi/.
 deploy-web-api:
@@ -130,6 +149,10 @@ update-services:
 	    -e "s|__REPO_DIR__|$(REPO_DIR)|g" \
 	    systemd/streaming-overlay.service \
 	    | sudo tee $(SYSTEMD_DIR)/streaming-overlay.service > /dev/null
+	sed -e "s|__STREAM_USER__|$(STREAM_USER)|g" \
+	    -e "s|__REPO_DIR__|$(REPO_DIR)|g" \
+	    systemd/preview.service \
+	    | sudo tee $(SYSTEMD_DIR)/preview.service > /dev/null
 	sudo systemctl daemon-reload
 	sudo systemctl restart web-api.service
 	@echo "Servicios actualizados: user=$(STREAM_USER), repo=$(REPO_DIR)"

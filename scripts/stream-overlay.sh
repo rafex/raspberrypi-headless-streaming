@@ -7,8 +7,16 @@
 #   ./stream-overlay.sh [opciones] -u RTMP_URL
 #
 # Opciones de destino:
-#   -u URL         URL RTMP destino (requerido, o variable RTMP_URL)
-#   -k KEY         Stream key (se concatena a la URL)
+#   -u URL           URL RTMP destino (o variable RTMP_URL). Si se omite y el
+#                    transporte es rtmp, se usa rtmp://localhost:1935/<rtmp-name>
+#                    (requiere mediamtx — ver scripts/mediamtx-install.sh).
+#   -k KEY           Stream key (se concatena a la URL)
+#   --transport T    rtmp (default) | tcp | udp — o variable PREVIEW_TRANSPORT
+#   --port N         Puerto para tcp/udp, o RTMP local (default 1935) —
+#                    o variable PREVIEW_PORT
+#   --client-ip IP   IP destino para transporte udp — o variable PREVIEW_CLIENT_IP
+#   --rtmp-name N    Path del stream RTMP local cuando no se pasa -u (default
+#                    "preview") — o variable PREVIEW_RTMP_NAME
 #
 # Opciones de video:
 #   -w WIDTH       Ancho (default: 1920)
@@ -84,6 +92,11 @@ DUAL_URL="${RTMP_URL_SECONDARY:-}"
 AUDIO_BOOST=false
 [[ "${STREAM_AUDIO_BOOST:-false}" == "true" ]] && AUDIO_BOOST=true
 VIDEO_DEV="${VIDEO_DEVICE:-}"
+
+TRANSPORT="${PREVIEW_TRANSPORT:-rtmp}"
+PORT="${PREVIEW_PORT:-1935}"
+CLIENT_IP="${PREVIEW_CLIENT_IP:-}"
+RTMP_NAME="${PREVIEW_RTMP_NAME:-preview}"
 
 usage() {
     grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -164,6 +177,10 @@ while [[ $# -gt 0 ]]; do
         --dual)         DUAL_URL="$2"; shift 2 ;;
         --audio-boost)  AUDIO_BOOST=true; shift ;;
         --device)     VIDEO_DEV="$2"; shift 2 ;;
+        --transport)  TRANSPORT="$2"; shift 2 ;;
+        --port)       PORT="$2"; shift 2 ;;
+        --client-ip)  CLIENT_IP="$2"; shift 2 ;;
+        --rtmp-name)  RTMP_NAME="$2"; shift 2 ;;
         --help)      usage ;;
         *) die "Opción desconocida: $1. Usa --help para ver las opciones." ;;
     esac
@@ -206,7 +223,21 @@ fi
 if [[ -n "$KEY" ]]; then
     URL="${URL%/}/${KEY}"
 fi
-[[ -n "$URL" ]] || die "URL RTMP requerida. Usar -u URL o variable de entorno RTMP_URL."
+
+case "$TRANSPORT" in
+    rtmp)
+        # Si no se indicó destino, transmitir a un mediamtx local (preview LAN).
+        [[ -z "$URL" ]] && URL="rtmp://localhost:1935/${RTMP_NAME}"
+        ;;
+    tcp)
+        [[ "$PORT" =~ ^[0-9]+$ ]] || die "Puerto inválido: $PORT"
+        ;;
+    udp)
+        [[ "$PORT" =~ ^[0-9]+$ ]] || die "Puerto inválido: $PORT"
+        [[ -n "$CLIENT_IP" ]] || die "Transporte udp requiere --client-ip o la variable PREVIEW_CLIENT_IP"
+        ;;
+    *) die "Transporte desconocido: $TRANSPORT. Usar: rtmp, tcp, udp" ;;
+esac
 
 DURATION_MS=$(( DURATION * 1000 ))
 
@@ -271,8 +302,18 @@ if [[ "$DURATION" -eq 0 ]]; then
 else
     echo "  Duración    : ${DURATION}s"
 fi
-echo "  Destino     : ${URL}"
+case "$TRANSPORT" in
+    rtmp) echo "  Destino     : ${URL}" ;;
+    tcp)  echo "  Destino     : tcp://0.0.0.0:${PORT} (esperando conexión VLC)" ;;
+    udp)  echo "  Destino     : udp://${CLIENT_IP}:${PORT}" ;;
+esac
 echo "==========================="
+echo ""
+case "$TRANSPORT" in
+    rtmp) echo "Ver con VLC: vlc ${URL}" ;;
+    tcp)  echo "Ver con VLC (después de iniciar): vlc tcp://<ip-de-esta-pi>:${PORT}" ;;
+    udp)  echo "Ver con VLC en el cliente: vlc udp://@:${PORT}" ;;
+esac
 echo ""
 
 # --- Advertencia de CPU para Pi 3B ---
@@ -326,12 +367,18 @@ if [[ -n "$BANNER_TEXT" ]]; then
     CURRENT="[vbanner]"
 fi
 
-# --- Salida: destino único o dual (tee muxer) ---
-if [[ -n "$DUAL_URL" ]]; then
-    OUTPUT_ARGS=(-f tee "[f=flv:onfail=ignore]${URL}|[f=flv:onfail=ignore]${DUAL_URL}")
-else
-    OUTPUT_ARGS=(-f flv "$URL")
-fi
+# --- Salida según transporte: rtmp (único o dual), tcp o udp (mpegts) ---
+case "$TRANSPORT" in
+    rtmp)
+        if [[ -n "$DUAL_URL" ]]; then
+            OUTPUT_ARGS=(-f tee "[f=flv:onfail=ignore]${URL}|[f=flv:onfail=ignore]${DUAL_URL}")
+        else
+            OUTPUT_ARGS=(-f flv "$URL")
+        fi
+        ;;
+    tcp) OUTPUT_ARGS=(-f mpegts "tcp://0.0.0.0:${PORT}?listen=1") ;;
+    udp) OUTPUT_ARGS=(-f mpegts "udp://${CLIENT_IP}:${PORT}") ;;
+esac
 
 AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
 

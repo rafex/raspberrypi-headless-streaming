@@ -83,10 +83,16 @@ sed -e "s|__STREAM_USER__|${STREAM_USER}|g" \
     "${REPO_DIR}/systemd/streaming-overlay.service" \
     > "${SYSTEMD_DIR}/streaming-overlay.service"
 
+sed -e "s|__STREAM_USER__|${STREAM_USER}|g" \
+    -e "s|__REPO_DIR__|${REPO_DIR}|g" \
+    "${REPO_DIR}/systemd/preview.service" \
+    > "${SYSTEMD_DIR}/preview.service"
+
 systemctl daemon-reload
 echo "Servicios instalados:"
 echo "  ${SYSTEMD_DIR}/streaming.service"
 echo "  ${SYSTEMD_DIR}/streaming-overlay.service"
+echo "  ${SYSTEMD_DIR}/preview.service"
 
 echo ""
 echo "=== Instalación completada ==="

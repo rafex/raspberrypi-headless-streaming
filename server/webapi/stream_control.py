@@ -3,7 +3,7 @@ Control de los servicios systemd de streaming desde web-api.
 
 El proceso corre como el usuario de sistema sin privilegios "webapi"
 (ver scripts/web-api-install.sh), que tiene permiso sudo sin password
-SOLO para systemctl start|stop|is-active sobre estas dos unidades exactas
+SOLO para systemctl start|stop|is-active sobre estas unidades exactas
 (/etc/sudoers.d/web-api). No se acepta el nombre de servicio como texto
 libre en ningún punto de la API: siempre se valida contra SERVICES.
 
@@ -15,7 +15,10 @@ import re
 import subprocess
 import time
 
-SERVICES = ("streaming", "streaming-overlay")
+# "preview" comparte cámara con streaming/streaming-overlay (ver start()),
+# pero transmite siempre a un destino local — nunca a la plataforma real
+# (ver systemd/preview.service).
+SERVICES = ("streaming", "streaming-overlay", "preview")
 
 # Patrón para detectar líneas de error/advertencia relevantes en el journal.
 _ERROR_RE = re.compile(

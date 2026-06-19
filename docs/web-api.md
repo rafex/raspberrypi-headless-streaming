@@ -247,6 +247,36 @@ El estado se actualiza automáticamente vía Server-Sent Events (`/api/events`).
 
 ---
 
+## Vista previa local (antes de salir en vivo)
+
+Tarjeta "Vista previa", debajo de la tarjeta de stream. Reutiliza la cámara,
+el audio y los overlays ya configurados en el acordeón, pero **nunca**
+transmite a la plataforma real — el backend anula `RTMP_URL` /
+`RTMP_URL_SECONDARY` / `STREAM_KEY` para el proceso de preview
+(`systemd/preview.service`), sin importar lo que haya guardado en el
+paso "Destino".
+
+Transportes disponibles:
+
+- **RTMP (mediamtx)** — publica a `rtmp://localhost:1935/<nombre>`.
+  Requiere mediamtx instalado y corriendo en la Pi
+  (`scripts/mediamtx-install.sh`, `make start-preview` no lo instala).
+  Cualquier equipo de la LAN puede verlo a la vez con
+  `vlc rtmp://<ip-pi>:1935/<nombre>`.
+- **TCP (MPEG-TS)** — la Pi escucha en el puerto indicado; el cliente
+  conecta con `vlc tcp://<ip-pi>:<puerto>` después de iniciar.
+- **UDP (MPEG-TS)** — la Pi empuja al "IP del cliente" indicado; ese
+  cliente debe tener VLC abierto en `vlc udp://@:<puerto>` antes de iniciar.
+
+Botón "Iniciar preview" guarda la configuración de transporte
+(`PUT /api/preview/config`) y arranca el servicio
+(`POST /api/stream/preview/start`) en un solo paso. Como `preview` comparte
+cámara con `streaming`/`streaming-overlay`, iniciar uno detiene
+automáticamente los otros (mismo mecanismo que ya evita que dos pipelines
+de ffmpeg compitan por la cámara).
+
+---
+
 ## Actualizar usuarios o rotar contraseñas
 
 ```bash
@@ -299,6 +329,21 @@ Se reescribe completamente en cada `PUT /api/config`.
 
 ---
 
+## Variables de `/etc/preview.env`
+
+Solo el destino del preview — cámara/audio/overlays se leen de
+`/etc/streaming.env` (compartido). Se reescribe completamente en cada
+`PUT /api/preview/config`.
+
+| Variable | Descripción |
+|---|---|
+| `PREVIEW_TRANSPORT` | `rtmp` / `tcp` / `udp` |
+| `PREVIEW_PORT` | puerto para `rtmp` (mediamtx, default 1935), `tcp` o `udp` |
+| `PREVIEW_CLIENT_IP` | IP destino, requerido solo para `udp` |
+| `PREVIEW_RTMP_NAME` | path del stream en mediamtx, solo para `rtmp` (default `preview`) |
+
+---
+
 ## Variables de `/etc/web-api.env`
 
 | Variable | Descripción |
@@ -308,6 +353,7 @@ Se reescribe completamente en cada `PUT /api/config`.
 | `TLS_CERT` / `TLS_KEY` | certificado autofirmado generado en la instalación |
 | `SECRETS_PATH` | ruta al `secrets.enc.yaml` instalado |
 | `STREAMING_ENV_PATH` | ruta a `/etc/streaming.env` |
+| `PREVIEW_ENV_PATH` | ruta a `/etc/preview.env` |
 | `LOGO_UPLOAD_DIR` | directorio para logos subidos (default `/var/lib/raspi-streaming/assets/logos`) |
 | `SOPS_AGE_KEY_FILE` | ruta a la age key privada |
 
@@ -315,8 +361,9 @@ Se reescribe completamente en cada `PUT /api/config`.
 
 ## Limitaciones conocidas
 
-- El API solo controla `streaming` y `streaming-overlay`; no expone
-  `mediamtx` ni `motion-trigger`.
+- El API controla `streaming`, `streaming-overlay` y `preview`; no expone
+  `mediamtx` ni `motion-trigger` (el preview vía RTMP requiere que
+  `mediamtx` ya esté corriendo aparte).
 - No hay endpoint de recarga en caliente de usuarios: tras `manage-users.sh`,
   hacer `systemctl restart web-api`.
 - El certificado es autofirmado: cada cliente nuevo debe aceptar el aviso

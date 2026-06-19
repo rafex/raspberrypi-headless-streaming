@@ -99,14 +99,22 @@
 
   async function refreshStatus() {
     try {
-      renderServices(await api("/api/status"));
+      const data = await api("/api/status");
+      renderServices(data);
+      updatePreviewStatus(data["preview"]);
     } catch { showLogin(); }
   }
 
   function startEventSource() {
     if (eventSource) eventSource.close();
     eventSource = new EventSource("/api/events");
-    eventSource.onmessage = (e) => { try { renderServices(JSON.parse(e.data)); } catch {} };
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        renderServices(data);
+        updatePreviewStatus(data["preview"]);
+      } catch {}
+    };
     eventSource.onerror = () => {
       eventSource.close(); eventSource = null;
       // Verificar si la sesión sigue activa o si es un error transitorio (429, red, etc.)
@@ -116,6 +124,132 @@
         setTimeout(startEventSource, 30_000);
       }).catch(() => setTimeout(startEventSource, 30_000));
     };
+  }
+
+  // ──────────────────────────────────────────────────
+  // Vista previa local (RTMP vía mediamtx, o MPEG-TS por TCP/UDP)
+  // Reutiliza cámara/audio/overlays ya configurados — nunca toca el
+  // destino real (YouTube/Facebook/custom), eso lo garantiza el backend.
+  // ──────────────────────────────────────────────────
+  let previewShellBuilt = false;
+
+  function buildPreviewShell() {
+    if (role !== "operator") {
+      $("preview-card").innerHTML = "";
+      previewShellBuilt = false;
+      return;
+    }
+    if (previewShellBuilt) return;
+
+    $("preview-card").innerHTML = `
+      <div class="service-card">
+        <div class="name">Vista previa</div>
+        <span class="badge inactive" id="preview-badge">Detenido</span>
+        <p class="field-hint">Prueba cámara/audio/overlays antes de salir en vivo. Nunca transmite a la plataforma real.</p>
+        <div class="grid2" style="margin-top:10px">
+          <label>Transporte
+            <select id="preview-transport">
+              <option value="rtmp">RTMP (mediamtx)</option>
+              <option value="tcp">TCP (MPEG-TS)</option>
+              <option value="udp">UDP (MPEG-TS)</option>
+            </select>
+          </label>
+          <label>Puerto
+            <input type="number" id="preview-port" min="1" max="65535" value="1935">
+          </label>
+        </div>
+        <label id="preview-rtmpname-row">
+          Nombre del stream (RTMP)
+          <input type="text" id="preview-rtmp-name" value="preview">
+        </label>
+        <label id="preview-clientip-row" hidden>
+          IP del cliente (UDP)
+          <input type="text" id="preview-client-ip" placeholder="192.168.1.50">
+        </label>
+        <p class="field-hint" id="preview-vlc-hint"></p>
+        <div class="service-actions">
+          <button id="btn-preview-start" class="btn-start">Iniciar preview</button>
+          <button id="btn-preview-stop"  class="btn-stop" disabled>Detener</button>
+        </div>
+      </div>`;
+    previewShellBuilt = true;
+
+    $("preview-transport").addEventListener("change", () => {
+      const t = $("preview-transport").value;
+      const curPort = Number($("preview-port").value);
+      if (t === "rtmp" && curPort === 1234) $("preview-port").value = 1935;
+      if (t !== "rtmp" && curPort === 1935) $("preview-port").value = 1234;
+      updatePreviewTransportUI();
+    });
+    ["preview-port", "preview-rtmp-name", "preview-client-ip"].forEach((id) => {
+      $(id).addEventListener("input", updatePreviewVlcHint);
+    });
+    $("btn-preview-start").addEventListener("click", handlePreviewStart);
+    $("btn-preview-stop").addEventListener("click", () => handleStreamAction("preview", "stop"));
+  }
+
+  function updatePreviewTransportUI() {
+    const t = $("preview-transport").value;
+    $("preview-rtmpname-row").hidden = t !== "rtmp";
+    $("preview-clientip-row").hidden = t !== "udp";
+    updatePreviewVlcHint();
+  }
+
+  function updatePreviewVlcHint() {
+    const t    = $("preview-transport")?.value;
+    if (!t) return;
+    const port = $("preview-port").value || (t === "rtmp" ? 1935 : 1234);
+    const name = $("preview-rtmp-name").value.trim() || "preview";
+    const host = window.location.hostname;
+    let hint = "";
+    if (t === "rtmp")      hint = `Ver con VLC: vlc rtmp://${host}:1935/${name}`;
+    else if (t === "tcp")  hint = `Ver con VLC (después de iniciar): vlc tcp://${host}:${port}`;
+    else                   hint = `Ver con VLC en el cliente: vlc udp://@:${port}`;
+    $("preview-vlc-hint").textContent = hint;
+  }
+
+  async function loadPreviewConfig() {
+    if (role !== "operator") return;
+    try {
+      const cfg = await api("/api/preview/config");
+      $("preview-transport").value = cfg.PREVIEW_TRANSPORT || "rtmp";
+      $("preview-port").value      = cfg.PREVIEW_PORT      || "1935";
+      $("preview-rtmp-name").value = cfg.PREVIEW_RTMP_NAME || "preview";
+      $("preview-client-ip").value = cfg.PREVIEW_CLIENT_IP || "";
+      updatePreviewTransportUI();
+    } catch {
+      // formulario queda con los valores por default si falla
+    }
+  }
+
+  function updatePreviewStatus(st) {
+    if (role !== "operator" || !previewShellBuilt) return;
+    const active = st?.active || false;
+    const badge  = $("preview-badge");
+    badge.className   = `badge ${active ? "active" : "inactive"}`;
+    badge.textContent = `${active ? "Activo" : "Detenido"} — ${st?.state || "desconocido"}`;
+    $("btn-preview-start").disabled = active;
+    $("btn-preview-stop").disabled  = !active;
+    ["preview-transport", "preview-port", "preview-rtmp-name", "preview-client-ip"].forEach((id) => {
+      $(id).disabled = active;
+    });
+  }
+
+  async function handlePreviewStart() {
+    try {
+      const transport = $("preview-transport").value;
+      await api("/api/preview/config", {
+        method: "PUT",
+        body: {
+          transport,
+          port:      Number($("preview-port").value) || (transport === "rtmp" ? 1935 : 1234),
+          client_ip: $("preview-client-ip").value.trim(),
+          rtmp_name: $("preview-rtmp-name").value.trim() || "preview",
+        },
+      });
+      await api("/api/stream/preview/start", { method: "POST" });
+      await refreshStatus();
+    } catch (err) { alert(err.message); }
   }
 
   // ──────────────────────────────────────────────────
@@ -518,8 +652,10 @@
       role      = result.role;
       $("session-info").textContent = `${result.user} (${role})`;
       showDashboard();
+      buildPreviewShell();
       await refreshStatus();
       await loadConfig();
+      await loadPreviewConfig();
       startEventSource();
     } catch (err) {
       $("login-error").textContent = err.message;
