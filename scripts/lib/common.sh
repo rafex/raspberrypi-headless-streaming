@@ -196,11 +196,12 @@ find_font() {
 
 # ---------------------------------------------------------------------------
 # overlay_tui
-# Paso interactivo completo de overlays: logo + banner.
+# Paso interactivo completo de overlays: logo + banner + fecha/hora.
 # Lee HEIGHT (global) para recomendaciones de tamaño de logo.
 # Establece las variables globales:
 #   OVERLAY_LOGO  OVERLAY_LOGO_POS  OVERLAY_LOGO_PAD  OVERLAY_LOGO_W
 #   OVERLAY_BANNER  OVERLAY_BANNER_POS
+#   OVERLAY_TIMESTAMP  OVERLAY_TIMESTAMP_POS
 # ---------------------------------------------------------------------------
 overlay_tui() {
     OVERLAY_LOGO=""
@@ -209,6 +210,8 @@ overlay_tui() {
     OVERLAY_LOGO_W=120
     OVERLAY_BANNER=""
     OVERLAY_BANNER_POS="footer"
+    OVERLAY_TIMESTAMP=false
+    OVERLAY_TIMESTAMP_POS="tl"
 
     echo ""
     if confirm "¿Agregar logo PNG en una esquina?"; then
@@ -301,19 +304,42 @@ overlay_tui() {
     else
         ok "Sin banner"
     fi
+
+    echo ""
+    if confirm "¿Agregar fecha y hora actual?"; then
+        OVERLAY_TIMESTAMP=true
+        local _TP_OPTS=(
+            "tl — superior izquierda (default)"
+            "tr — superior derecha"
+            "bl — inferior izquierda"
+            "br — inferior derecha"
+        )
+        pick _IDX "Posición de fecha/hora:" "${_TP_OPTS[@]}"
+        case "$_IDX" in
+            0) OVERLAY_TIMESTAMP_POS="tl" ;;
+            1) OVERLAY_TIMESTAMP_POS="tr" ;;
+            2) OVERLAY_TIMESTAMP_POS="bl" ;;
+            3) OVERLAY_TIMESTAMP_POS="br" ;;
+        esac
+        ok "Fecha/hora: activada — $OVERLAY_TIMESTAMP_POS"
+    else
+        ok "Sin fecha/hora"
+    fi
 }
 
 # ---------------------------------------------------------------------------
 # build_overlay_args
-# Construye los argumentos ffmpeg para logo + banner a partir de las variables
-# OVERLAY_* establecidas por overlay_tui (o manualmente).
+# Construye los argumentos ffmpeg para logo + banner + fecha/hora a partir de
+# las variables OVERLAY_* establecidas por overlay_tui (o manualmente).
+# Encadena los overlays activos (cualquier combinación) sobre un único
+# filter_complex: banner → fecha/hora → logo.
 #
 # Establece las variables globales (arrays y strings):
 #   _LOGO_INPUTS    array  — (-i logo.png) o vacío
 #   _AUDIO_IDX      int    — 1 sin logo, 2 con logo (índice de input de audio)
 #   _HAS_OVERLAY    bool   — true si hay al menos un overlay activo
 #   _FILTER_ARGS    array  — args de filtro completos para ffmpeg
-#   _AUDIO_MAP_ARGS array  — (-map N:a) cuando se usa filter_complex, o vacío
+#   _AUDIO_MAP_ARGS array  — (-map N:a) cuando hace falta mapear audio, o vacío
 #   _BANNER_FILE    str    — ruta a /tmp/stream_banner_PID.txt o ""
 # ---------------------------------------------------------------------------
 build_overlay_args() {
@@ -324,12 +350,15 @@ build_overlay_args() {
     _AUDIO_MAP_ARGS=()
     _BANNER_FILE=""
 
-    [[ -n "${OVERLAY_LOGO:-}" || -n "${OVERLAY_BANNER:-}" ]] && _HAS_OVERLAY=true
+    [[ -n "${OVERLAY_LOGO:-}" || -n "${OVERLAY_BANNER:-}" || "${OVERLAY_TIMESTAMP:-false}" == true ]] \
+        && _HAS_OVERLAY=true
 
     if [[ -n "${OVERLAY_LOGO:-}" ]]; then
         _LOGO_INPUTS=(-i "$OVERLAY_LOGO")
         _AUDIO_IDX=2
     fi
+
+    find_font  # establece _FONT global
 
     # Coordenadas del logo según posición elegida
     local _pad="${OVERLAY_LOGO_PAD:-20}"
@@ -361,31 +390,46 @@ build_overlay_args() {
         printf '%s' "$OVERLAY_BANNER" > "$_BANNER_FILE"
     fi
 
-    find_font  # establece _FONT global
+    # Posición de la fecha/hora (drawtext: w/h = frame, text_w/text_h = texto)
+    local _ts_pos=""
+    case "${OVERLAY_TIMESTAMP_POS:-tl}" in
+        tl) _ts_pos="x=10:y=10" ;;
+        tr) _ts_pos="x=w-text_w-10:y=10" ;;
+        bl) _ts_pos="x=10:y=h-text_h-10" ;;
+        br) _ts_pos="x=w-text_w-10:y=h-text_h-10" ;;
+    esac
 
-    local _drawbox="drawbox=x=0:y=${_bar_y}:w=iw:h=${_bar_h}:color=black@0.72:t=fill"
-    local _drawtext="${_FONT}textfile=${_BANNER_FILE}:fontcolor=white:fontsize=${_font_size}:x=(w-text_w)/2:y=${_text_y}"
-    local _overlay_pos="x=${_logo_x}:y=${_logo_y}"
-    local _vf_filter="" _video_map=()
+    # Encadena cada overlay activo sobre la salida del anterior, siempre vía
+    # filter_complex para soportar cualquier combinación de logo/banner/fecha.
+    local _chain="" _label="0:v" _next=""
 
-    if [[ -n "${OVERLAY_BANNER:-}" && -n "${OVERLAY_LOGO:-}" ]]; then
-        _vf_filter="[0:v]${_drawbox},drawtext=${_drawtext}[_txt];[_txt][1:v]overlay=${_overlay_pos}[outv]"
-        _video_map=(-map "[outv]")
-    elif [[ -n "${OVERLAY_BANNER:-}" ]]; then
-        _vf_filter="${_drawbox},drawtext=${_drawtext}"
-        _video_map=()
-    elif [[ -n "${OVERLAY_LOGO:-}" ]]; then
-        _vf_filter="[0:v][1:v]overlay=${_overlay_pos}[outv]"
-        _video_map=(-map "[outv]")
+    if [[ -n "${OVERLAY_BANNER:-}" ]]; then
+        _next="vbanner"
+        _chain+="[${_label}]drawbox=x=0:y=${_bar_y}:w=iw:h=${_bar_h}:color=black@0.72:t=fill,drawtext=${_FONT}textfile=${_BANNER_FILE}:fontcolor=white:fontsize=${_font_size}:x=(w-text_w)/2:y=${_text_y}[${_next}];"
+        _label="$_next"
+    fi
+
+    if [[ "${OVERLAY_TIMESTAMP:-false}" == true ]]; then
+        _next="vts"
+        _chain+="[${_label}]drawtext=${_FONT}text='%{localtime\\:%F %T}':fontcolor=white:fontsize=20:${_ts_pos}:box=1:boxcolor=black@0.5:boxborderw=5[${_next}];"
+        _label="$_next"
     fi
 
     if [[ -n "${OVERLAY_LOGO:-}" ]]; then
-        _FILTER_ARGS=(-filter_complex "$_vf_filter" "${_video_map[@]}")
-    elif [[ -n "${OVERLAY_BANNER:-}" ]]; then
-        _FILTER_ARGS=(-vf "$_vf_filter")
+        _next="outv"
+        _chain+="[${_label}][1:v]overlay=x=${_logo_x}:y=${_logo_y}[${_next}];"
+        _label="$_next"
     fi
 
-    [[ "${#_video_map[@]}" -gt 0 ]] && _AUDIO_MAP_ARGS=(-map "${_AUDIO_IDX}:a")
+    _chain="${_chain%;}"
+
+    if [[ -n "$_chain" ]]; then
+        _FILTER_ARGS=(-filter_complex "$_chain" -map "[${_label}]")
+        # Solo mapear audio si realmente hay un input de audio (NO_AUDIO=true
+        # implica -an, sin stream de audio que mapear).
+        [[ "${NO_AUDIO:-false}" == false ]] && _AUDIO_MAP_ARGS=(-map "${_AUDIO_IDX}:a")
+    fi
+
     return 0
 }
 
@@ -587,6 +631,9 @@ print_summary_overlays() {
     fi
     if [[ -n "${OVERLAY_BANNER:-}" ]]; then
         echo -e "  Banner     : ${C_BOLD}\"$OVERLAY_BANNER\"${C_RESET} — $OVERLAY_BANNER_POS"
+    fi
+    if [[ "${OVERLAY_TIMESTAMP:-false}" == true ]]; then
+        echo -e "  Fecha/hora : ${C_BOLD}activada${C_RESET} — ${OVERLAY_TIMESTAMP_POS:-tl}"
     fi
 }
 
