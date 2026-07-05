@@ -13,14 +13,17 @@ dhcp_start = "10.41.0.20"
 dhcp_end = "10.41.0.80"
 portal_port = 8088
 
+[secrets]
+env_file = "/etc/raspi-streaming/wifi-secrets.env"
+
 [[networks]]
 ssid = "Casa"
-password = "cambiar-esto"
+password_env = "WIFI_CASA_PASSWORD"
 priority = 10
 hidden = false
 
 [[networks]]
-ssid = "Backup"
-password = "cambiar-esto"
+ssid = "WifiAbierto"
+password = ""
 priority = 20
 hidden = false

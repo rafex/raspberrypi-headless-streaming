@@ -8,6 +8,7 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SYSTEMD_DIR="/etc/systemd/system"
 CONFIG_DIR="/etc/raspi-streaming"
 CONFIG_FILE="${CONFIG_DIR}/wifi-networks.toml"
+SECRETS_FILE="${CONFIG_DIR}/wifi-secrets.env"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -19,7 +20,7 @@ echo "  Config : ${CONFIG_FILE}"
 echo ""
 
 apt-get update -qq
-apt-get install -y -qq python3 wpasupplicant wireless-tools iw iproute2 isc-dhcp-client hostapd dnsmasq rfkill
+apt-get install -y -qq python3 python3-tomli wpasupplicant wireless-tools iw iproute2 isc-dhcp-client hostapd dnsmasq rfkill
 
 # El bootstrap lanza hostapd/dnsmasq manualmente con configs temporales en
 # /run. Los servicios distro deben quedar apagados para no ocupar puertos ni
@@ -33,6 +34,19 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "Config creada: ${CONFIG_FILE}"
 else
     echo "Config existente conservada: ${CONFIG_FILE}"
+fi
+
+if [[ ! -f "$SECRETS_FILE" ]]; then
+    cat > "$SECRETS_FILE" <<'EOF'
+# Secretos WiFi locales. Referenciar desde wifi-networks.toml con password_env.
+# Ejemplo:
+# WIFI_CASA_PASSWORD="clave-super-secreta"
+EOF
+    chmod 600 "$SECRETS_FILE"
+    echo "Secrets creado: ${SECRETS_FILE}"
+else
+    chmod 600 "$SECRETS_FILE"
+    echo "Secrets existente conservado: ${SECRETS_FILE}"
 fi
 
 sed "s|__REPO_DIR__|${REPO_DIR}|g" \

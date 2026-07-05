@@ -216,6 +216,7 @@ if [[ "$OPT_WIFI_BOOTSTRAP" == true ]]; then
     header "WiFi bootstrap + hotspot/AP"
 
     apt_install "python3" "python3 — wifi-bootstrap.py"
+    apt_install "python3-tomli" "python3-tomli — fallback TOML para Python < 3.11"
     apt_install "wpasupplicant" "wpASupplicant — cliente WiFi"
     apt_install "wireless-tools" "wireless-tools — diagnostico WiFi"
     apt_install "iw" "iw — diagnostico WiFi moderno"

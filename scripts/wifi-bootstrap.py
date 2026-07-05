@@ -14,10 +14,8 @@ import argparse
 import html
 import os
 import signal
-import socket
 import subprocess
 import sys
-import tempfile
 import textwrap
 import threading
 import time
@@ -28,11 +26,15 @@ from pathlib import Path
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
-    print("ERROR: requiere Python 3.11+ para leer TOML (tomllib).", file=sys.stderr)
-    sys.exit(1)
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        print("ERROR: requiere Python 3.11+ o el paquete python3-tomli para leer TOML.", file=sys.stderr)
+        sys.exit(1)
 
 
 DEFAULT_CONFIG = Path("/etc/raspi-streaming/wifi-networks.toml")
+DEFAULT_ENV = Path("/etc/raspi-streaming/wifi-secrets.env")
 STATE_DIR = Path("/run/raspi-wifi-bootstrap")
 DEFAULT_COUNTRY = "MX"
 
@@ -68,6 +70,44 @@ def toml_quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def dotenv_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$") + '"'
+
+
+def load_env(path: Path) -> dict[str, str]:
+    values = {}
+    if not path.exists():
+        return values
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1].replace('\\"', '"').replace("\\$", "$").replace("\\\\", "\\")
+        values[key.strip()] = value
+    return values
+
+
+def write_env_value(path: Path, key: str, value: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    values = load_env(path)
+    values[key] = value
+    lines = ["# Secretos WiFi locales. No versionar.", ""]
+    for env_key in sorted(values):
+        lines.append(f"{env_key}={dotenv_quote(values[env_key])}")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
+
+
+def env_var_for_ssid(ssid: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() else "_" for ch in ssid.upper()).strip("_")
+    return f"WIFI_{cleaned or 'NETWORK'}_PASSWORD"
+
+
 def write_config(path: Path, cfg: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     hotspot = cfg.get("hotspot", {})
@@ -86,12 +126,17 @@ def write_config(path: Path, cfg: dict) -> None:
         f"dhcp_end = {toml_quote(str(hotspot.get('dhcp_end', '10.41.0.80')))}",
         f"portal_port = {int(hotspot.get('portal_port', 8088))}",
         "",
+        "[secrets]",
+        f"env_file = {toml_quote(str(cfg.get('secrets', {}).get('env_file', DEFAULT_ENV)))}",
+        "",
     ]
     for net in networks:
+        password = str(net.get("password", ""))
+        password_env = str(net.get("password_env", ""))
         lines.extend([
             "[[networks]]",
             f"ssid = {toml_quote(str(net.get('ssid', '')))}",
-            f"password = {toml_quote(str(net.get('password', '')))}",
+            f"password_env = {toml_quote(password_env)}" if password_env else f"password = {toml_quote(password)}",
             f"priority = {int(net.get('priority', 100))}",
             f"hidden = {'true' if bool(net.get('hidden', False)) else 'false'}",
             "",
@@ -116,7 +161,13 @@ def cfg_hotspot(cfg: dict) -> dict:
     return hotspot
 
 
-def cfg_networks(cfg: dict) -> list[dict]:
+def cfg_secrets(cfg: dict) -> dict:
+    secrets = dict(cfg.get("secrets", {}))
+    secrets.setdefault("env_file", str(DEFAULT_ENV))
+    return secrets
+
+
+def cfg_networks(cfg: dict, env_values: dict[str, str] | None = None) -> list[dict]:
     networks = cfg.get("networks", [])
     if not isinstance(networks, list):
         return []
@@ -125,9 +176,20 @@ def cfg_networks(cfg: dict) -> list[dict]:
         ssid = str(raw.get("ssid", "")).strip()
         if not ssid:
             continue
+        password_env = str(raw.get("password_env", "")).strip()
+        password = str(raw.get("password", ""))
+        password_missing = False
+        if password_env:
+            if env_values and password_env in env_values:
+                password = env_values[password_env]
+            else:
+                password = ""
+                password_missing = True
         cleaned.append({
             "ssid": ssid,
-            "password": str(raw.get("password", "")),
+            "password": password,
+            "password_env": password_env,
+            "password_missing": password_missing,
             "priority": int(raw.get("priority", 100)),
             "hidden": bool(raw.get("hidden", False)),
         })
@@ -222,8 +284,12 @@ def try_all_networks(cfg_path: Path, cfg: dict) -> bool:
     hotspot = cfg_hotspot(cfg)
     iface = hotspot["interface"]
     country = hotspot["country"]
+    env_values = load_env(Path(cfg_secrets(cfg)["env_file"]))
     stop_network_managers(iface)
-    for net in cfg_networks(cfg):
+    for net in cfg_networks(cfg, env_values):
+        if net.get("password_missing"):
+            log(f"Omitiendo WiFi {net['ssid']!r}: falta secreto {net['password_env']}")
+            continue
         log(f"Probando WiFi: {net['ssid']!r}")
         if connect_network(iface, country, net):
             return True
@@ -293,9 +359,9 @@ def build_portal_server(cfg_path: Path, cfg: dict, host: str, port: int, retry_e
 
         def do_GET(self) -> None:  # noqa: N802
             current = load_config(cfg_path)
-            networks = cfg_networks(current)
+            networks = cfg_networks(current, load_env(Path(cfg_secrets(current)["env_file"])))
             rows = "".join(
-                f"<li><strong>{html.escape(n['ssid'])}</strong> prioridad {n['priority']} {'hidden' if n['hidden'] else ''}</li>"
+                f"<li><strong>{html.escape(n['ssid'])}</strong> prioridad {n['priority']} {'abierta' if not n['password'] and not n['password_env'] else 'con clave'} {'hidden' if n['hidden'] else ''}</li>"
                 for n in networks
             ) or "<li>No hay redes configuradas.</li>"
             self._send(200, f"""<!doctype html>
@@ -311,6 +377,7 @@ button{{background:#2563eb;border:0;font-weight:700}}label{{color:#cbd5e1}}.mute
 <form method="post" action="/save">
 <label>SSID<input name="ssid" required autocomplete="off"></label>
 <label>Password<input name="password" type="password" autocomplete="off"></label>
+<p class="muted">Dejar vacío para red abierta. Si tiene clave, se guarda en wifi-secrets.env.</p>
 <label>Prioridad<input name="priority" type="number" value="10"></label>
 <label><input name="hidden" type="checkbox" value="1" style="width:auto"> Red oculta</label>
 <button>Guardar y reintentar</button>
@@ -324,15 +391,24 @@ button{{background:#2563eb;border:0;font-weight:700}}label{{color:#cbd5e1}}.mute
             form = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8"))
             if self.path == "/save":
                 current = load_config(cfg_path)
-                networks = cfg_networks(current)
+                secrets_file = Path(cfg_secrets(current)["env_file"])
+                networks = cfg_networks(current, load_env(secrets_file))
+                ssid = form.get("ssid", [""])[0].strip()
+                password = form.get("password", [""])[0]
+                password_env = ""
+                if password:
+                    password_env = env_var_for_ssid(ssid)
+                    write_env_value(secrets_file, password_env, password)
                 networks.append({
-                    "ssid": form.get("ssid", [""])[0].strip(),
-                    "password": form.get("password", [""])[0],
+                    "ssid": ssid,
+                    "password": "",
+                    "password_env": password_env,
                     "priority": int(form.get("priority", ["10"])[0] or "10"),
                     "hidden": form.get("hidden", [""])[0] == "1",
                 })
                 current["networks"] = networks
                 current["hotspot"] = cfg_hotspot(current)
+                current["secrets"] = cfg_secrets(current)
                 write_config(cfg_path, current)
                 retry_event.set()
                 self._send(200, "<html><body><p>Guardado. Reintentando conexion WiFi...</p></body></html>")

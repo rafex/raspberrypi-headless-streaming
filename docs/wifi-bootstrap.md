@@ -16,6 +16,12 @@ Archivo:
 /etc/raspi-streaming/wifi-networks.toml
 ```
 
+Secretos opcionales:
+
+```bash
+/etc/raspi-streaming/wifi-secrets.env
+```
+
 Ejemplo:
 
 ```toml
@@ -30,21 +36,48 @@ dhcp_start = "10.41.0.20"
 dhcp_end = "10.41.0.80"
 portal_port = 8088
 
+[secrets]
+env_file = "/etc/raspi-streaming/wifi-secrets.env"
+
 [[networks]]
 ssid = "Casa"
-password = "clave"
+password_env = "WIFI_CASA_PASSWORD"
 priority = 10
 hidden = false
 
 [[networks]]
-ssid = "Backup"
-password = "clave"
+ssid = "WifiAbierto"
+password = ""
 priority = 20
 hidden = false
 ```
 
 Las redes se prueban por `priority` ascendente. Si todas fallan, la Raspi crea
 el AP definido en `[hotspot]`.
+
+Para redes sin contraseña, usar:
+
+```toml
+password = ""
+```
+
+Para evitar contraseñas en claro dentro del TOML, usar `password_env` y guardar
+la clave en el `.env` local:
+
+```toml
+[[networks]]
+ssid = "Casa"
+password_env = "WIFI_CASA_PASSWORD"
+priority = 10
+```
+
+```bash
+sudo install -m 600 /dev/null /etc/raspi-streaming/wifi-secrets.env
+sudo sh -c 'printf "%s\n" "WIFI_CASA_PASSWORD=\"clave-super-secreta\"" >> /etc/raspi-streaming/wifi-secrets.env'
+```
+
+El portal de emergencia también guarda contraseñas nuevas en
+`wifi-secrets.env`; el TOML queda con `password_env`.
 
 ## Portal de emergencia
 
