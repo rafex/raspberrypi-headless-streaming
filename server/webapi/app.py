@@ -257,6 +257,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             _audit.warning("stream_stop_failed user=%s ip=%s service=%s error=%s", _user(), _client_ip(), service, exc)
             return jsonify({"error": str(exc)}), 400
 
+    @app.post("/api/stream/stop-all")
+    @auth.require_role("operator")
+    def stream_stop_all():
+        try:
+            result = stream_control.stop_all()
+            _audit.info("stream_stop_all user=%s ip=%s", _user(), _client_ip())
+            return jsonify(result)
+        except stream_control.StreamControlError as exc:
+            _audit.warning("stream_stop_all_failed user=%s ip=%s error=%s", _user(), _client_ip(), exc)
+            return jsonify({"error": str(exc)}), 400
+
     @app.post("/api/logo")
     @auth.require_role("operator")
     def upload_logo():

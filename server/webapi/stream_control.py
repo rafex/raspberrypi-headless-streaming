@@ -3,7 +3,7 @@ Control de los servicios systemd de streaming desde web-api.
 
 El proceso corre como el usuario de sistema sin privilegios "webapi"
 (ver scripts/web-api-install.sh), que tiene permiso sudo sin password
-SOLO para systemctl start|stop|is-active sobre estas unidades exactas
+SOLO para systemctl start|stop|is-active|kill|reset-failed sobre estas unidades exactas
 (/etc/sudoers.d/web-api). No se acepta el nombre de servicio como texto
 libre en ningún punto de la API: siempre se valida contra SERVICES.
 
@@ -119,3 +119,50 @@ def stop(service: str) -> dict:
         raise StreamControlError(f"No se pudo detener {unit}: {result.stderr.strip()}")
 
     return status(service)
+
+
+def force_stop(service: str) -> dict:
+    """Detiene una unidad y mata cualquier proceso restante de su cgroup.
+
+    Se mantiene acotado a SERVICES: no acepta unidades libres ni ejecuta pkill.
+    """
+    unit = _unit(service)
+
+    stop_result = subprocess.run(
+        ["sudo", "systemctl", "stop", unit],
+        capture_output=True,
+        text=True,
+    )
+    if stop_result.returncode != 0:
+        raise StreamControlError(f"No se pudo detener {unit}: {stop_result.stderr.strip()}")
+
+    kill_result = subprocess.run(
+        ["sudo", "systemctl", "kill", "--kill-who=all", "--signal=KILL", unit],
+        capture_output=True,
+        text=True,
+    )
+    if kill_result.returncode != 0:
+        raise StreamControlError(f"No se pudo limpiar procesos de {unit}: {kill_result.stderr.strip()}")
+
+    subprocess.run(
+        ["sudo", "systemctl", "reset-failed", unit],
+        capture_output=True,
+        text=True,
+    )
+
+    return status(service)
+
+
+def stop_all() -> dict:
+    """Parada de emergencia para dejar cámara/ffmpeg libres antes de reiniciar."""
+    result = {}
+    errors = []
+    for service in SERVICES:
+        try:
+            result[service] = force_stop(service)
+        except StreamControlError as exc:
+            errors.append(str(exc))
+            result[service] = status(service)
+    if errors:
+        raise StreamControlError("; ".join(errors))
+    return result

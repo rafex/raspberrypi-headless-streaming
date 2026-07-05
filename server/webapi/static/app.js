@@ -65,6 +65,7 @@
           <div class="service-actions">
             <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
             <button id="btn-stream-stop"  class="btn-stop"  ${!isActive ? "disabled" : ""}>Detener</button>
+            <button id="btn-stream-stop-all" class="btn-stop-all">Stop all</button>
           </div>` : ""}
       </div>`;
 
@@ -82,6 +83,9 @@
       document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
         handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
       );
+      document.getElementById("btn-stream-stop-all")?.addEventListener("click", (e) =>
+        handleStopAll(e.currentTarget)
+      );
     }
   }
 
@@ -93,6 +97,17 @@
     if (btn) btn.disabled = true;
     try {
       await api(`/api/stream/${service}/${action}`, { method: "POST" });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      await refreshStatus();
+    }
+  }
+
+  async function handleStopAll(btn) {
+    if (btn) btn.disabled = true;
+    try {
+      await api("/api/stream/stop-all", { method: "POST" });
     } catch (err) {
       alert(err.message);
     } finally {

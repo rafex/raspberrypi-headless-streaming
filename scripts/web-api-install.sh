@@ -221,18 +221,24 @@ else
     echo "Archivo de entorno existente conservado: ${ENV_DST}"
 fi
 
-# --- 9. sudoers: permitir solo systemctl start/stop de estos servicios exactos ---
+# --- 9. sudoers: permitir solo systemctl sobre estos servicios exactos ---
 SUDOERS_DST="/etc/sudoers.d/web-api"
 cat > "${SUDOERS_DST}.tmp" <<EOF
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start streaming.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop streaming.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active streaming.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} kill --kill-who=all --signal=KILL streaming.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} reset-failed streaming.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start streaming-overlay.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop streaming-overlay.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active streaming-overlay.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} kill --kill-who=all --signal=KILL streaming-overlay.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} reset-failed streaming-overlay.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} start preview.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} stop preview.service
 ${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} is-active preview.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} kill --kill-who=all --signal=KILL preview.service
+${SERVICE_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} reset-failed preview.service
 EOF
 visudo -c -f "${SUDOERS_DST}.tmp" || die "El sudoers generado no es válido, abortando."
 mv "${SUDOERS_DST}.tmp" "$SUDOERS_DST"

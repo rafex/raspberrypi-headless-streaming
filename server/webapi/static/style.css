@@ -198,12 +198,13 @@ button:disabled {
 
 .service-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 
 .service-actions button {
-  flex: 1;
+  flex: 1 1 96px;
 }
 
 .btn-start {
@@ -212,6 +213,10 @@ button:disabled {
 
 .btn-stop {
   background: var(--bad);
+}
+
+.btn-stop-all {
+  background: #7f1d1d;
 }
 
 h3 {
