@@ -359,17 +359,38 @@
   // ──────────────────────────────────────────────────
   // Audio — auto-hint de sample rate por nombre de mic
   // ──────────────────────────────────────────────────
+  function updateAudioDeviceDetails() {
+    const opt = $("cfg-audio-device").options[$("cfg-audio-device").selectedIndex];
+    const detail = $("audio-device-detail");
+    if (!detail || !opt) return;
+    if ($("cfg-audio-device").value === "__none__") {
+      detail.textContent = "Se enviará silencio AAC para mantener compatibilidad con la plataforma.";
+      detail.hidden = false;
+      return;
+    }
+    const description = opt.dataset.description || "";
+    const numeric = opt.dataset.numericDev ? ` · alternativo ${opt.dataset.numericDev}` : "";
+    detail.textContent = description ? `${description}${numeric}` : "";
+    detail.hidden = !description;
+  }
+
   $("cfg-audio-device").addEventListener("change", () => {
     const opt  = $("cfg-audio-device").options[$("cfg-audio-device").selectedIndex];
     const name = opt?.text || "";
     const hint = $("audio-rate-hint");
-    if (MIC_48K_RE.test(name)) {
+    const preferredRate = opt?.dataset?.preferredRate;
+    if (preferredRate) {
+      $("cfg-audio-rate").value = preferredRate;
+      hint.textContent = `Sugerido ${Number(preferredRate).toLocaleString("es-MX")} Hz para este micrófono`;
+      hint.hidden = false;
+    } else if (MIC_48K_RE.test(name)) {
       $("cfg-audio-rate").value = "48000";
       hint.textContent = "Sugerido 48 000 Hz para este micrófono";
       hint.hidden = false;
     } else {
       hint.hidden = true;
     }
+    updateAudioDeviceDetails();
     updateSummaries();
   });
 
@@ -525,18 +546,29 @@
   // ──────────────────────────────────────────────────
   // Detección de dispositivos
   // ──────────────────────────────────────────────────
+  function audioOptionLabel(item) {
+    if (!item.description) return `${item.name}  (${item.dev})`;
+    return `${item.description}: ${item.name}  (${item.dev})`;
+  }
+
   function populateDeviceSelect(selectEl, items, currentValue) {
     const fixed = Array.from(selectEl.options).filter((o) => o.dataset.fixed === "1");
     selectEl.innerHTML = "";
     fixed.forEach((o) => selectEl.appendChild(o));
-    items.forEach(({ dev, name }) => {
+    items.forEach((item) => {
       const opt = document.createElement("option");
-      opt.value = dev;
-      opt.textContent = `${name}  (${dev})`;
+      opt.value = item.dev;
+      opt.textContent = selectEl.id === "cfg-audio-device" ? audioOptionLabel(item) : `${item.name}  (${item.dev})`;
+      if (item.description) opt.dataset.description = item.description;
+      if (item.preferred_rate) opt.dataset.preferredRate = String(item.preferred_rate);
+      if (item.numeric_dev) opt.dataset.numericDev = item.numeric_dev;
       selectEl.appendChild(opt);
     });
     selectEl.value = currentValue || "";
-    if (selectEl.value !== (currentValue || "")) selectEl.value = "";
+    if (selectEl.value !== (currentValue || "")) {
+      const byNumeric = Array.from(selectEl.options).find((opt) => opt.dataset.numericDev === currentValue);
+      selectEl.value = byNumeric ? byNumeric.value : "";
+    }
   }
 
   async function loadDevices(currentVideo, currentAudio) {
@@ -549,6 +581,7 @@
       statusEl.textContent =
         `${cameras.length} cámara(s) · ${mics.length} micrófono(s)` +
         (cameras.length === 0 ? " — no se detectaron cámaras" : "");
+      updateAudioDeviceDetails();
       updateSummaries();
     } catch (err) {
       statusEl.textContent = `Error al escanear: ${err.message}`;
@@ -626,6 +659,7 @@
 
       await loadDevices(cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_DEVICE || "");
       if (noAudio) $("cfg-audio-device").value = "__none__";
+      updateAudioDeviceDetails();
 
       updateSummaries();
     } catch {
@@ -735,16 +769,48 @@
       audio_rate:          Number($("cfg-audio-rate").value),
       stream_no_audio:     noAudio,
       stream_audio_boost:  $("cfg-audio-boost").checked,
-      overlay_logo_file:   $("cfg-overlay-logo-file").value,
+      overlay_logo_file:   $("cfg-overlay-logo-file").value.trim(),
       overlay_logo_pos:    $("cfg-overlay-logo-pos").value,
       overlay_logo_pad:    Number($("cfg-overlay-logo-pad").value) || 20,
       overlay_logo_w:      Number($("cfg-overlay-logo-w").value)   || 0,
-      overlay_banner:      $("cfg-overlay-banner").value,
+      overlay_banner:      $("cfg-overlay-banner").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200),
       overlay_banner_pos:  $("cfg-overlay-banner-pos").value,
-      overlay_text:        $("cfg-overlay-text").value,
+      overlay_text:        $("cfg-overlay-text").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200),
       overlay_text_pos:    $("cfg-overlay-text-pos").value,
       overlay_timestamp:   $("cfg-overlay-timestamp").checked,
     };
+  }
+
+  function verifyPersistedConfig(intended, persisted) {
+    const checks = [
+      ["STREAM_WIDTH", String(intended.width)],
+      ["STREAM_HEIGHT", String(intended.height)],
+      ["STREAM_FPS", String(intended.fps)],
+      ["STREAM_BITRATE", String(intended.bitrate)],
+      ["STREAM_PRESET", intended.preset],
+      ["VIDEO_DEVICE", intended.video_device],
+      ["AUDIO_CHANNELS", String(intended.audio_channels)],
+      ["AUDIO_RATE", String(intended.audio_rate)],
+      ["STREAM_NO_AUDIO", intended.stream_no_audio ? "true" : "false"],
+      ["STREAM_AUDIO_BOOST", intended.stream_audio_boost ? "true" : "false"],
+      ["OVERLAY_LOGO_FILE", intended.overlay_logo_file],
+      ["OVERLAY_LOGO_POS", intended.overlay_logo_pos],
+      ["OVERLAY_LOGO_PAD", String(intended.overlay_logo_pad)],
+      ["OVERLAY_LOGO_W", String(intended.overlay_logo_w)],
+      ["OVERLAY_BANNER", intended.overlay_banner],
+      ["OVERLAY_BANNER_POS", intended.overlay_banner_pos],
+      ["OVERLAY_TEXT", intended.overlay_text],
+      ["OVERLAY_TEXT_POS", intended.overlay_text_pos],
+      ["OVERLAY_TIMESTAMP", intended.overlay_timestamp ? "true" : "false"],
+    ];
+    const expectedAudio = intended.stream_no_audio ? "" : intended.audio_device;
+    checks.push(["AUDIO_DEVICE", expectedAudio]);
+
+    for (const [key, expected] of checks) {
+      if ((persisted[key] || "") !== (expected || "")) {
+        throw new Error(`La configuración se guardó, pero ${key} quedó como "${persisted[key] || ""}" en vez de "${expected || ""}".`);
+      }
+    }
   }
 
   $("config-form").addEventListener("submit", async (ev) => {
@@ -752,8 +818,12 @@
     const msgEl = $("config-msg");
     msgEl.hidden = true;
     try {
-      await api("/api/config", { method: "PUT", body: buildConfigBody() });
-      msgEl.textContent = "Guardado.";
+      const intended = buildConfigBody();
+      await api("/api/config", { method: "PUT", body: intended });
+      const persisted = await api("/api/config");
+      verifyPersistedConfig(intended, persisted);
+      await loadConfig();
+      msgEl.textContent = "Guardado y verificado.";
       msgEl.className = "";
       msgEl.hidden = false;
     } catch (err) {

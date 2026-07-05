@@ -10,6 +10,7 @@
 
 .PHONY: help setup deps-web-api age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
+        wifi-bootstrap install-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming start-streaming stop-streaming status-streaming logs-streaming \
@@ -30,6 +31,7 @@ help:
 	@echo "  make age-key         - genera la age key y actualiza .sops.yaml"
 	@echo "  make add-user        - crea/actualiza un usuario (WEBAPI_USER=admin WEBAPI_ROLE=operator por default)"
 	@echo "  make web-api         - instala y habilita el servicio en boot (requiere sudo)"
+	@echo "  make wifi-bootstrap  - instala bootstrap WiFi/AP de arranque (requiere sudo)"
 	@echo "  make setup           - corre los cuatro anteriores en secuencia"
 	@echo ""
 	@echo "Atajos día a día:"
@@ -41,6 +43,7 @@ help:
 	@echo "  make restart-web-api - reinicia el servicio"
 	@echo "  make status-web-api  - muestra el estado del servicio"
 	@echo "  make logs-web-api    - sigue los logs en tiempo real (journalctl)"
+	@echo "  make status-wifi-bootstrap - estado del bootstrap WiFi/AP"
 	@echo ""
 	@echo "Streaming:"
 	@echo "  make streaming         - crea usuario 'streamer' e instala servicios systemd"
@@ -64,6 +67,23 @@ setup: deps-web-api age-key add-user web-api
 
 deps-web-api:
 	sudo ./scripts/install-deps.sh --web-api
+
+wifi-bootstrap: install-wifi-bootstrap
+
+install-wifi-bootstrap:
+	sudo ./scripts/wifi-bootstrap-install.sh
+
+start-wifi-bootstrap:
+	sudo systemctl start raspi-wifi-bootstrap.service
+
+stop-wifi-bootstrap:
+	sudo systemctl stop raspi-wifi-bootstrap.service
+
+status-wifi-bootstrap:
+	systemctl status raspi-wifi-bootstrap.service --no-pager -l
+
+logs-wifi-bootstrap:
+	journalctl -u raspi-wifi-bootstrap.service -f
 
 age-key:
 	./scripts/web-api-setup-age.sh
@@ -139,6 +159,8 @@ deploy-web-api:
 # Actualiza los unit files de systemd desde el repositorio y recarga el daemon.
 # Usar después de hacer "git pull" cuando cambian archivos de systemd/.
 update-services:
+	sed "s|__REPO_DIR__|$(REPO_DIR)|g" systemd/raspi-wifi-bootstrap.service \
+	    | sudo tee $(SYSTEMD_DIR)/raspi-wifi-bootstrap.service > /dev/null
 	sed "s|__VENV_DIR__|$(VENV_DIR)|g" systemd/web-api.service \
 	    | sudo tee $(SYSTEMD_DIR)/web-api.service > /dev/null
 	sed -e "s|__STREAM_USER__|$(STREAM_USER)|g" \
@@ -155,4 +177,5 @@ update-services:
 	    | sudo tee $(SYSTEMD_DIR)/preview.service > /dev/null
 	sudo systemctl daemon-reload
 	sudo systemctl restart web-api.service
+	sudo systemctl disable streaming.service streaming-overlay.service preview.service || true
 	@echo "Servicios actualizados: user=$(STREAM_USER), repo=$(REPO_DIR)"

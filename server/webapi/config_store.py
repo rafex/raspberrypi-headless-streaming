@@ -99,14 +99,14 @@ def validate_config(data: dict) -> dict:
             errors.append("stream_key_meta (Facebook) es requerido para dual stream")
         elif not STREAM_KEY_RE.match(stream_key_meta):
             errors.append("stream_key_meta solo puede contener letras, números, guiones y guiones bajos")
-        rtmp_url           = PLATFORM_BASE_URLS["youtube"]  + stream_key
+        rtmp_url           = PLATFORM_BASE_URLS["youtube"].rstrip("/")
         rtmp_url_secondary = PLATFORM_BASE_URLS["facebook"] + stream_key_meta
     elif platform in ("youtube", "facebook"):
         if not stream_key:
             errors.append("stream_key es requerido para YouTube y Facebook")
         elif not STREAM_KEY_RE.match(stream_key):
             errors.append("stream_key solo puede contener letras, números, guiones y guiones bajos")
-        rtmp_url = PLATFORM_BASE_URLS.get(platform, "") + stream_key
+        rtmp_url = PLATFORM_BASE_URLS.get(platform, "").rstrip("/")
     else:
         rtmp_url = str(data.get("rtmp_url", "")).strip()
         if not RTMP_URL_RE.match(rtmp_url):
@@ -169,8 +169,8 @@ def validate_config(data: dict) -> dict:
         errors.append("video_device debe ser /dev/videoN")
 
     audio_device = str(data.get("audio_device", "")).strip()
-    if audio_device and not re.match(r"^(plughw|hw):\d+,\d+$", audio_device):
-        errors.append("audio_device debe ser plughw:N,M o hw:N,M")
+    if audio_device and not re.match(r"^(plughw|hw):(\d+,\d+|CARD=[A-Za-z0-9_=-]+,DEV=\d+)$", audio_device):
+        errors.append("audio_device debe ser plughw:N,M, hw:N,M o plughw:CARD=NOMBRE,DEV=N")
 
     # --- Overlay ---
     overlay_text = str(data.get("overlay_text", "")).strip().replace("\n", " ").replace("\r", "")[:200]

@@ -1,0 +1,26 @@
+# Redes WiFi candidatas para scripts/wifi-bootstrap.py.
+# Se prueban por prioridad ascendente. Si ninguna conecta, la Raspi entra en
+# modo hotspot/AP y sirve un portal minimo para agregar una red nueva.
+
+[hotspot]
+interface = "wlan0"
+ssid = "RaspiStreaming-Setup"
+password = "raspistream"
+country = "MX"
+channel = 6
+address = "10.41.0.1/24"
+dhcp_start = "10.41.0.20"
+dhcp_end = "10.41.0.80"
+portal_port = 8088
+
+[[networks]]
+ssid = "Casa"
+password = "cambiar-esto"
+priority = 10
+hidden = false
+
+[[networks]]
+ssid = "Backup"
+password = "cambiar-esto"
+priority = 20
+hidden = false

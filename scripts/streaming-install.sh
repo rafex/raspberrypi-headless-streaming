@@ -94,9 +94,15 @@ echo "  ${SYSTEMD_DIR}/streaming.service"
 echo "  ${SYSTEMD_DIR}/streaming-overlay.service"
 echo "  ${SYSTEMD_DIR}/preview.service"
 
+# Estos servicios nunca deben arrancar automaticamente en boot. Solo deben
+# iniciarse por accion explicita desde el portal web, TUI o control.sh.
+systemctl disable streaming.service streaming-overlay.service preview.service 2>/dev/null || true
+systemctl stop streaming.service streaming-overlay.service preview.service 2>/dev/null || true
+systemctl reset-failed streaming.service streaming-overlay.service preview.service 2>/dev/null || true
+
 echo ""
 echo "=== Instalación completada ==="
 echo ""
 echo "Próximos pasos:"
 echo "  1. Configurar URL RTMP desde la web: https://<ip-pi>:8443"
-echo "  2. make start-streaming    (o desde la web)"
+echo "  2. Iniciar stream solo desde la web, TUI o make start-streaming"

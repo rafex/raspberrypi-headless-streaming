@@ -8,6 +8,7 @@
 #   --usb-camera    Instalar soporte para cámara USB (v4l2) — default si no se elige cámara
 #   --csi-camera    Instalar soporte para módulo CSI oficial (libcamera)
 #   --all-cameras   Instalar soporte para ambos tipos de cámara
+#   --wifi-bootstrap Instalar dependencias para WiFi bootstrap + hotspot/AP
 #   --ai-server     Instalar dependencias del servidor IA (Python, Flask, openai)
 #   --web-api       Instalar dependencias de web-api (age, sops, uv, openssl)
 #   --full          Instalar todo (ambas cámaras + servidor IA + web-api)
@@ -31,6 +32,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 OPT_USB_CAMERA=true
 OPT_CSI_CAMERA=false
+OPT_WIFI_BOOTSTRAP=false
 OPT_AI_SERVER=false
 OPT_WEB_API=false
 DRY_RUN=false
@@ -40,9 +42,10 @@ while [[ $# -gt 0 ]]; do
         --usb-camera)   OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=false; shift ;;
         --csi-camera)   OPT_CSI_CAMERA=true;  OPT_USB_CAMERA=false; shift ;;
         --all-cameras)  OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true;  shift ;;
+        --wifi-bootstrap) OPT_WIFI_BOOTSTRAP=true; shift ;;
         --ai-server)    OPT_AI_SERVER=true;   shift ;;
         --web-api)      OPT_WEB_API=true;     shift ;;
-        --full)         OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true; OPT_AI_SERVER=true; OPT_WEB_API=true; shift ;;
+        --full)         OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true; OPT_WIFI_BOOTSTRAP=true; OPT_AI_SERVER=true; OPT_WEB_API=true; shift ;;
         --dry-run)      DRY_RUN=true;         shift ;;
         --help)
             grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -202,7 +205,25 @@ fi
 # va a llamar apt_flush por su cuenta: CSI lo hace internamente (porque la
 # verificación de cámara necesita libcamera instalado), ai-server también
 # (pip necesita python3-venv), y web-api también (antes de sops/uv).
-if [[ "$OPT_CSI_CAMERA" == false && "$OPT_AI_SERVER" == false && "$OPT_WEB_API" == false ]]; then
+if [[ "$OPT_CSI_CAMERA" == false && "$OPT_WIFI_BOOTSTRAP" == false && "$OPT_AI_SERVER" == false && "$OPT_WEB_API" == false ]]; then
+    apt_flush
+fi
+
+# ---------------------------------------------------------------------------
+# WiFi bootstrap + hotspot/AP
+# ---------------------------------------------------------------------------
+if [[ "$OPT_WIFI_BOOTSTRAP" == true ]]; then
+    header "WiFi bootstrap + hotspot/AP"
+
+    apt_install "python3" "python3 — wifi-bootstrap.py"
+    apt_install "wpasupplicant" "wpASupplicant — cliente WiFi"
+    apt_install "wireless-tools" "wireless-tools — diagnostico WiFi"
+    apt_install "iw" "iw — diagnostico WiFi moderno"
+    apt_install "iproute2" "iproute2 — ip addr/link/route"
+    apt_install "isc-dhcp-client" "dhclient — obtener IP por DHCP"
+    apt_install "hostapd" "hostapd — modo hotspot/AP"
+    apt_install "dnsmasq" "dnsmasq — DHCP/DNS para hotspot"
+    apt_install "rfkill" "rfkill — desbloquear WiFi"
     apt_flush
 fi
 
@@ -347,6 +368,16 @@ if [[ "$OPT_WEB_API" == true ]]; then
             FAILED+=("uv")
         fi
     fi
+fi
+
+if [[ "$OPT_WIFI_BOOTSTRAP" == true ]]; then
+    echo ""
+    check_cmd "python3" "python3" "python3"
+    check_cmd "wpa_supplicant" "wpasupplicant" "wpa_supplicant"
+    check_cmd "wpa_passphrase" "wpasupplicant" "wpa_passphrase"
+    check_cmd "hostapd" "hostapd" "hostapd"
+    check_cmd "dnsmasq" "dnsmasq" "dnsmasq"
+    check_cmd "dhclient" "isc-dhcp-client" "dhclient"
 fi
 
 # ---------------------------------------------------------------------------

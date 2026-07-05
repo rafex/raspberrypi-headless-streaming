@@ -1,0 +1,20 @@
+[Unit]
+Description=Raspberry Pi WiFi bootstrap + fallback hotspot
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+DefaultDependencies=no
+After=local-fs.target
+Before=network-online.target web-api.service streaming.service streaming-overlay.service preview.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/env python3 __REPO_DIR__/scripts/wifi-bootstrap.py --config /etc/raspi-streaming/wifi-networks.toml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wifi-bootstrap
+
+[Install]
+WantedBy=multi-user.target
