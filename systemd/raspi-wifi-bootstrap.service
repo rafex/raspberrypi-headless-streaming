@@ -3,8 +3,9 @@ Description=Raspberry Pi WiFi bootstrap + fallback hotspot
 Documentation=https://github.com/rafex/raspberrypi-headless-streaming
 DefaultDependencies=no
 After=local-fs.target
-Before=network-online.target web-api.service streaming.service streaming-overlay.service preview.service
+Before=networking.service ifup@wlan0.service dietpi-wifi-monitor.service network-online.target web-api.service streaming.service streaming-overlay.service preview.service
 Wants=network.target
+Conflicts=dietpi-wifi-monitor.service
 
 [Service]
 Type=simple

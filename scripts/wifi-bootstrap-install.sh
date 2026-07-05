@@ -26,6 +26,8 @@ apt-get install -y -qq python3 python3-tomli wpasupplicant wireless-tools iw ipr
 # /run. Los servicios distro deben quedar apagados para no ocupar puertos ni
 # interferir con el fallback AP al arrancar.
 systemctl disable --now hostapd.service dnsmasq.service 2>/dev/null || true
+systemctl disable --now dietpi-wifi-monitor.service 2>/dev/null || true
+systemctl stop ifup@wlan0.service 2>/dev/null || true
 
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_FILE" ]]; then

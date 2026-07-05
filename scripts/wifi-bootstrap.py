@@ -218,6 +218,16 @@ def stop_processes() -> None:
         run(["pkill", "-f", pattern], check=False)
 
 
+def stop_iface_clients(iface: str) -> None:
+    # DietPi/ifupdown puede reactivar su propio wpa_supplicant+dhclient sobre
+    # wlan0. Si no se detienen, el AP queda mezclado con una conexion STA.
+    for pattern in (
+        f"wpa_supplicant.*-i ?{iface}",
+        f"dhclient.*{iface}",
+    ):
+        run(["pkill", "-f", pattern], check=False)
+
+
 def cleanup_wpa_control(iface: str) -> None:
     ctrl = Path("/run/wpa_supplicant") / iface
     if ctrl.exists():
@@ -235,8 +245,15 @@ def remove_address(iface: str, address: str) -> None:
 
 def stop_network_managers(iface: str) -> None:
     # Best-effort: no fallar si el sistema no usa alguno de estos servicios.
-    for service in ("NetworkManager.service", "wpa_supplicant.service"):
+    for service in (
+        "dietpi-wifi-monitor.service",
+        "NetworkManager.service",
+        "wpa_supplicant.service",
+        f"ifup@{iface}.service",
+    ):
         run(["systemctl", "stop", service], check=False)
+    stop_iface_clients(iface)
+    cleanup_wpa_control(iface)
     run(["rfkill", "unblock", "wifi"], check=False)
     run(["ip", "link", "set", iface, "up"], check=False)
 
@@ -284,6 +301,7 @@ def connect_network(iface: str, country: str, net: dict) -> bool:
         f"hidden={net['hidden']} auth={net_auth_label(net)}"
     )
     stop_processes()
+    stop_iface_clients(iface)
     cleanup_wpa_control(iface)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     conf = STATE_DIR / "wpa_supplicant.conf"
@@ -376,6 +394,7 @@ def start_ap(cfg_path: Path, cfg: dict, retry_event: threading.Event) -> None:
 
     log("Entrando en modo hotspot/AP de configuracion.")
     stop_processes()
+    stop_iface_clients(iface)
     cleanup_wpa_control(iface)
     stop_network_managers(iface)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
