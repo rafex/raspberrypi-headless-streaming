@@ -217,6 +217,16 @@ def stop_processes() -> None:
         run(["pkill", "-f", pattern], check=False)
 
 
+def cleanup_wpa_control(iface: str) -> None:
+    ctrl = Path("/run/wpa_supplicant") / iface
+    if ctrl.exists():
+        log(f"Eliminando control interface WPA obsoleto: {ctrl}")
+        try:
+            ctrl.unlink()
+        except OSError as exc:
+            log(f"No se pudo eliminar {ctrl}: {exc}")
+
+
 def stop_network_managers(iface: str) -> None:
     # Best-effort: no fallar si el sistema no usa alguno de estos servicios.
     for service in ("NetworkManager.service", "wpa_supplicant.service"):
@@ -268,6 +278,7 @@ def connect_network(iface: str, country: str, net: dict) -> bool:
         f"hidden={net['hidden']} auth={net_auth_label(net)}"
     )
     stop_processes()
+    cleanup_wpa_control(iface)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     conf = STATE_DIR / "wpa_supplicant.conf"
     conf.write_text(
@@ -357,6 +368,7 @@ def start_ap(cfg_path: Path, cfg: dict, retry_event: threading.Event) -> None:
 
     log("Entrando en modo hotspot/AP de configuracion.")
     stop_processes()
+    cleanup_wpa_control(iface)
     stop_network_managers(iface)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -387,7 +399,7 @@ def start_ap(cfg_path: Path, cfg: dict, retry_event: threading.Event) -> None:
     run(["ip", "addr", "flush", "dev", iface], check=False)
     run(["ip", "addr", "add", address, "dev", iface], check=False)
     run(["ip", "link", "set", iface, "up"], check=False)
-    run(["dnsmasq", "--conf-file", str(dnsmasq_conf), "--pid-file", str(STATE_DIR / "dnsmasq.pid")], check=False)
+    run(["dnsmasq", f"--conf-file={dnsmasq_conf}", f"--pid-file={STATE_DIR / 'dnsmasq.pid'}"], check=False)
     run(["hostapd", "-B", "-P", str(STATE_DIR / "hostapd.pid"), str(hostapd_conf)], check=False)
 
     log(f"Hotspot activo: SSID={hotspot['ssid']} portal=http://{ap_ip}:{portal_port}")
