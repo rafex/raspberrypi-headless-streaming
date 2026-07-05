@@ -24,6 +24,8 @@ VENV_DIR     := $(INSTALL_DIR)/venv
 SYSTEMD_DIR  := /etc/systemd/system
 STREAM_USER  := streamer
 REPO_DIR     := $(shell pwd)
+MONITOR_INTERVAL ?= 2
+MONITOR_LOGS ?= 28
 
 help:
 	@echo "Setup inicial (en orden, ver docs/web-api.md):"
@@ -149,10 +151,10 @@ logs-streaming:
 	journalctl -u streaming.service -f
 
 monitor-streaming:
-	./scripts/stream-status-live.sh
+	./scripts/stream-status-live.sh --interval $(MONITOR_INTERVAL) --logs $(MONITOR_LOGS)
 
 status-streaming-live:
-	./scripts/stream-status-live.sh --once
+	./scripts/stream-status-live.sh --once --logs $(MONITOR_LOGS)
 
 start-preview:
 	sudo systemctl start preview.service
