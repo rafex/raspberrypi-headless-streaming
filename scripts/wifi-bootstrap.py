@@ -228,6 +228,11 @@ def cleanup_wpa_control(iface: str) -> None:
             log(f"No se pudo eliminar {ctrl}: {exc}")
 
 
+def remove_address(iface: str, address: str) -> None:
+    if address:
+        run(["ip", "addr", "del", address, "dev", iface], check=False)
+
+
 def stop_network_managers(iface: str) -> None:
     # Best-effort: no fallar si el sistema no usa alguno de estos servicios.
     for service in ("NetworkManager.service", "wpa_supplicant.service"):
@@ -339,6 +344,7 @@ def try_all_networks(cfg_path: Path, cfg: dict) -> bool:
     hotspot = cfg_hotspot(cfg)
     iface = hotspot["interface"]
     country = hotspot["country"]
+    ap_address = str(hotspot.get("address", ""))
     secrets_file = Path(cfg_secrets(cfg)["env_file"])
     env_values = load_env(secrets_file)
     networks = cfg_networks(cfg, env_values)
@@ -349,6 +355,7 @@ def try_all_networks(cfg_path: Path, cfg: dict) -> bool:
     else:
         log("No hay redes WiFi configuradas.")
     stop_network_managers(iface)
+    remove_address(iface, ap_address)
     for net in networks:
         if net.get("password_missing"):
             log(f"Omitiendo WiFi {net['ssid']!r}: falta secreto {net['password_env']}")
