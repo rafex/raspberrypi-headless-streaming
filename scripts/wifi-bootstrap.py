@@ -55,6 +55,22 @@ def run(cmd: list[str], *, check: bool = False, input_text: str | None = None) -
     )
 
 
+def log_output(label: str, output: str, max_lines: int = 8) -> None:
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        return
+    for line in lines[-max_lines:]:
+        log(f"{label}: {line}")
+
+
+def net_auth_label(net: dict) -> str:
+    if net.get("password_env"):
+        return f"clave desde env:{net['password_env']}"
+    if net.get("password"):
+        return "clave en TOML"
+    return "red abierta"
+
+
 def command_exists(cmd: str) -> bool:
     return subprocess.call(["sh", "-c", f"command -v {cmd} >/dev/null 2>&1"]) == 0
 
@@ -246,6 +262,11 @@ def wpa_psk_block(ssid: str, password: str, hidden: bool) -> str:
 
 
 def connect_network(iface: str, country: str, net: dict) -> bool:
+    started = time.monotonic()
+    log(
+        f"Intentando SSID={net['ssid']!r} iface={iface} prioridad={net['priority']} "
+        f"hidden={net['hidden']} auth={net_auth_label(net)}"
+    )
     stop_processes()
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     conf = STATE_DIR / "wpa_supplicant.conf"
@@ -258,25 +279,47 @@ def connect_network(iface: str, country: str, net: dict) -> bool:
 
     run(["ip", "addr", "flush", "dev", iface], check=False)
     run(["ip", "link", "set", iface, "up"], check=False)
-    run(["wpa_supplicant", "-B", "-P", str(STATE_DIR / "wpa_supplicant.pid"), "-i", iface, "-c", str(conf)], check=False)
+    wpa_start = run(["wpa_supplicant", "-B", "-P", str(STATE_DIR / "wpa_supplicant.pid"), "-i", iface, "-c", str(conf)], check=False)
+    if wpa_start.returncode != 0:
+        log_output("wpa_supplicant", wpa_start.stdout)
+        log(f"Fallo iniciando wpa_supplicant para SSID={net['ssid']!r}")
+        return False
 
     deadline = time.time() + 18
+    last_state = ""
     while time.time() < deadline:
         status = run(["wpa_cli", "-i", iface, "status"], check=False).stdout
+        state = ""
+        for line in status.splitlines():
+            if line.startswith("wpa_state="):
+                state = line.partition("=")[2]
+                break
+        if state and state != last_state:
+            log(f"SSID={net['ssid']!r} wpa_state={state}")
+            last_state = state
         if "wpa_state=COMPLETED" in status:
             break
         time.sleep(1)
     else:
-        log(f"No se pudo asociar a {net['ssid']!r}")
+        log(f"No se pudo asociar a SSID={net['ssid']!r} tras 18s")
+        log_output("wpa_cli status", status)
         return False
 
-    run(["dhclient", "-v", iface], check=False)
+    log(f"SSID={net['ssid']!r} asociado; solicitando DHCP")
+    dhcp = run(["dhclient", "-v", iface], check=False)
+    if dhcp.returncode != 0:
+        log_output("dhclient", dhcp.stdout)
     for _ in range(10):
         if connected(iface):
-            log(f"Conectado a {net['ssid']!r}")
+            ip_addr = run(["ip", "-4", "-o", "addr", "show", "dev", iface], check=False).stdout.strip()
+            route = run(["ip", "route", "show", "default"], check=False).stdout.strip()
+            log(f"Conectado a SSID={net['ssid']!r} en {time.monotonic() - started:.1f}s")
+            log_output("ip", ip_addr, max_lines=2)
+            log_output("route", route, max_lines=2)
             return True
         time.sleep(1)
-    log(f"Asociado a {net['ssid']!r}, pero sin ruta IPv4")
+    log(f"Asociado a SSID={net['ssid']!r}, pero sin ruta IPv4 tras DHCP")
+    log_output("dhclient", dhcp.stdout)
     return False
 
 
@@ -284,15 +327,24 @@ def try_all_networks(cfg_path: Path, cfg: dict) -> bool:
     hotspot = cfg_hotspot(cfg)
     iface = hotspot["interface"]
     country = hotspot["country"]
-    env_values = load_env(Path(cfg_secrets(cfg)["env_file"]))
+    secrets_file = Path(cfg_secrets(cfg)["env_file"])
+    env_values = load_env(secrets_file)
+    networks = cfg_networks(cfg, env_values)
+    log(f"Cargando redes desde {cfg_path}; secretos desde {secrets_file}")
+    if networks:
+        order = ", ".join(f"{net['ssid']}({net['priority']})" for net in networks)
+        log(f"Orden de redes WiFi: {order}")
+    else:
+        log("No hay redes WiFi configuradas.")
     stop_network_managers(iface)
-    for net in cfg_networks(cfg, env_values):
+    for net in networks:
         if net.get("password_missing"):
             log(f"Omitiendo WiFi {net['ssid']!r}: falta secreto {net['password_env']}")
             continue
-        log(f"Probando WiFi: {net['ssid']!r}")
         if connect_network(iface, country, net):
             return True
+        log(f"SSID={net['ssid']!r} falló; probando siguiente red si existe.")
+    log("Todas las redes configuradas fallaron.")
     return False
 
 
@@ -303,6 +355,7 @@ def start_ap(cfg_path: Path, cfg: dict, retry_event: threading.Event) -> None:
     ap_ip = address.split("/")[0]
     portal_port = int(hotspot["portal_port"])
 
+    log("Entrando en modo hotspot/AP de configuracion.")
     stop_processes()
     stop_network_managers(iface)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
