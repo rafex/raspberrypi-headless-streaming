@@ -13,7 +13,7 @@
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
-        streaming start-streaming stop-streaming status-streaming logs-streaming \
+        streaming start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
         start-preview stop-preview status-preview logs-preview
 
 WEBAPI_USER  ?= admin
@@ -52,6 +52,7 @@ help:
 	@echo "  make stop-streaming    - detiene el stream"
 	@echo "  make status-streaming  - muestra el estado del stream"
 	@echo "  make logs-streaming    - sigue los logs en tiempo real"
+	@echo "  make monitor-streaming - panel vivo: servicios, ffmpeg, red y logs"
 	@echo ""
 	@echo "Vista previa local (RTMP/MPEG-TS, nunca a la plataforma real):"
 	@echo "  make start-preview     - inicia el preview"
@@ -146,6 +147,12 @@ status-streaming:
 
 logs-streaming:
 	journalctl -u streaming.service -f
+
+monitor-streaming:
+	./scripts/stream-status-live.sh
+
+status-streaming-live:
+	./scripts/stream-status-live.sh --once
 
 start-preview:
 	sudo systemctl start preview.service
