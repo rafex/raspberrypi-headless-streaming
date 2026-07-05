@@ -10,7 +10,7 @@
 
 .PHONY: help setup deps-web-api age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
-        wifi-bootstrap install-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
+        wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming start-streaming stop-streaming status-streaming logs-streaming \
@@ -32,6 +32,7 @@ help:
 	@echo "  make add-user        - crea/actualiza un usuario (WEBAPI_USER=admin WEBAPI_ROLE=operator por default)"
 	@echo "  make web-api         - instala y habilita el servicio en boot (requiere sudo)"
 	@echo "  make wifi-bootstrap  - instala bootstrap WiFi/AP de arranque (requiere sudo)"
+	@echo "  make repair-wifi-bootstrap - desactiva DietPi WiFi y deja solo nuestro bootstrap"
 	@echo "  make setup           - corre los cuatro anteriores en secuencia"
 	@echo ""
 	@echo "Atajos día a día:"
@@ -72,6 +73,18 @@ wifi-bootstrap: install-wifi-bootstrap
 
 install-wifi-bootstrap:
 	sudo ./scripts/wifi-bootstrap-install.sh
+
+repair-wifi-bootstrap: enforce-wifi-bootstrap
+
+enforce-wifi-bootstrap:
+	sudo systemctl disable --now dietpi-wifi-monitor.service 2>/dev/null || true
+	sudo systemctl disable --now hostapd.service dnsmasq.service 2>/dev/null || true
+	sudo systemctl stop ifup@wlan0.service wpa_supplicant.service NetworkManager.service 2>/dev/null || true
+	sudo sh -c 'ps -eo pid,args | awk '"'"'/[w]pa_supplicant/ && /-i ?wlan0/ && /\/etc\/wpa_supplicant/ {print $$1}'"'"' | xargs -r kill' || true
+	sudo sh -c 'ps -eo pid,args | awk '"'"'/[d]hclient/ && /wlan0/ {print $$1}'"'"' | xargs -r kill' || true
+	sudo systemctl enable raspi-wifi-bootstrap.service
+	sudo systemctl restart raspi-wifi-bootstrap.service
+	@echo "WiFi bootstrap reparado. Ver logs con: make logs-wifi-bootstrap"
 
 start-wifi-bootstrap:
 	sudo systemctl start raspi-wifi-bootstrap.service
