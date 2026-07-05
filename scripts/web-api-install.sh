@@ -104,7 +104,11 @@ rm -f "${INSTALL_DIR}/webapi/requirements.txt"
 
 # --- 5. Virtualenv (uv) ---
 echo "Creando entorno virtual con uv..."
-uv venv "$VENV_DIR" --python python3
+if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
+    uv venv "$VENV_DIR" --python python3
+else
+    echo "Virtualenv existente conservado: ${VENV_DIR}"
+fi
 uv pip install --python "${VENV_DIR}/bin/python" -r "${WEBAPI_SRC}/requirements.txt"
 echo "Dependencias instaladas."
 
