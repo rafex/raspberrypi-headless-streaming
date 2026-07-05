@@ -37,6 +37,7 @@ DEFAULT_CONFIG = Path("/etc/raspi-streaming/wifi-networks.toml")
 DEFAULT_ENV = Path("/etc/raspi-streaming/wifi-secrets.env")
 STATE_DIR = Path("/run/raspi-wifi-bootstrap")
 DEFAULT_COUNTRY = "MX"
+STOP_EVENT = threading.Event()
 
 
 def log(msg: str) -> None:
@@ -405,7 +406,7 @@ def start_ap(cfg_path: Path, cfg: dict, retry_event: threading.Event) -> None:
     log(f"Hotspot activo: SSID={hotspot['ssid']} portal=http://{ap_ip}:{portal_port}")
     server = build_portal_server(cfg_path, cfg, ap_ip, portal_port, retry_event)
     try:
-        while not retry_event.is_set():
+        while not retry_event.is_set() and not STOP_EVENT.is_set():
             server.handle_request()
     finally:
         server.server_close()
@@ -505,25 +506,22 @@ def main() -> int:
         print("ERROR: faltan dependencias: " + ", ".join(missing), file=sys.stderr)
         return 1
 
-    stop = False
-
     def _stop(_signum, _frame):
-        nonlocal stop
-        stop = True
+        STOP_EVENT.set()
         stop_processes()
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
 
-    while not stop:
+    while not STOP_EVENT.is_set():
         cfg = load_config(args.config)
         hotspot = cfg_hotspot(cfg)
         iface = hotspot["interface"]
 
         if try_all_networks(args.config, cfg):
-            while not stop and connected(iface):
+            while not STOP_EVENT.is_set() and connected(iface):
                 time.sleep(args.monitor_interval)
-            if not stop:
+            if not STOP_EVENT.is_set():
                 log("Conexion perdida; reintentando redes configuradas.")
             continue
 
