@@ -77,16 +77,16 @@ jobs:
             --server="$SERVER" \
             --insecure-skip-tls-verify=true
 
-          kubectl cluster-info
-          kubectl auth can-i get pods --all-namespaces
+          kubectl -n "$K3S_NAMESPACE" auth can-i create deployments
+          kubectl -n "$K3S_NAMESPACE" auth can-i create secrets
+          kubectl -n "$K3S_NAMESPACE" auth can-i create ingress
 
       - name: Install Helm
         uses: azure/setup-helm@v4.3.1
 
-      - name: Ensure namespace exists
+      - name: Verify namespace access
         run: |
-          kubectl get namespace "$K3S_NAMESPACE" >/dev/null 2>&1 \
-            || kubectl create namespace "$K3S_NAMESPACE"
+          kubectl -n "$K3S_NAMESPACE" get pods >/dev/null
 
       - name: Upsert API tokens in k3s
         env:
