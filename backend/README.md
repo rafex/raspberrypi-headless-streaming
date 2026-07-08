@@ -101,7 +101,6 @@ despliega por SSH en `my-k3s-2` con Helm.
 Secrets requeridos:
 
 ```text
-GH_TOKEN_PACKAGES
 K3S_SSH_USER
 K3S_SSH_PRIVATE_KEY
 STREAMING_API_RASPI_TOKEN
@@ -109,8 +108,22 @@ STREAMING_API_ADMIN_TOKEN
 STREAMING_API_CLIENT_CA_CRT_B64
 ```
 
+La publicacion a GHCR usa `GITHUB_TOKEN`, el token automatico de GitHub
+Actions, por lo que no requiere un secret extra para paquetes.
+
 `STREAMING_API_CLIENT_CA_CRT_B64` se genera con:
 
 ```bash
 base64 -i backend/certs/backend/ca.crt
+```
+
+Para crear los secrets cuando ya tengas valores:
+
+```bash
+cp backend/helpers/github-secrets.env.example backend/helpers/github-secrets.env.local
+nano backend/helpers/github-secrets.env.local
+set -a
+source backend/helpers/github-secrets.env.local
+set +a
+backend/helpers/set-github-secrets.sh
 ```
