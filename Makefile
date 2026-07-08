@@ -8,7 +8,7 @@
 #   make web-api
 # (o "make setup" para correr los cuatro en secuencia)
 
-.PHONY: help setup deps-web-api age-key add-user \
+.PHONY: help setup deps-web-api deps-ngrok age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-backend-agent stop-backend-agent logs-backend-agent start-ngrok stop-ngrok logs-ngrok \
@@ -37,6 +37,7 @@ RASPI_SSH ?= root@192.168.3.169
 help:
 	@echo "Setup inicial (en orden, ver docs/web-api.md):"
 	@echo "  make deps-web-api    - instala age, sops, uv, openssl (sudo)"
+	@echo "  make deps-ngrok      - instala ngrok v3 para publicar el portal (sudo)"
 	@echo "  make age-key         - genera la age key y actualiza .sops.yaml"
 	@echo "  make add-user        - crea/actualiza un usuario (WEBAPI_USER=admin WEBAPI_ROLE=operator por default)"
 	@echo "  make web-api         - instala y habilita el servicio en boot (requiere sudo)"
@@ -87,6 +88,9 @@ setup: deps-web-api age-key add-user web-api
 
 deps-web-api:
 	sudo ./scripts/install-deps.sh --web-api
+
+deps-ngrok:
+	sudo ./scripts/install-deps.sh --ngrok
 
 wifi-bootstrap: install-wifi-bootstrap
 

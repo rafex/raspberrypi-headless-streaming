@@ -11,6 +11,7 @@
 #   --wifi-bootstrap Instalar dependencias para WiFi bootstrap + hotspot/AP
 #   --ai-server     Instalar dependencias del servidor IA (Python, Flask, openai)
 #   --web-api       Instalar dependencias de web-api (age, sops, uv, openssl)
+#   --ngrok         Instalar ngrok v3 para publicar el portal web
 #   --full          Instalar todo (ambas cámaras + servidor IA + web-api)
 #   --dry-run       Mostrar qué se instalaría sin instalar nada
 #   --help          Mostrar esta ayuda
@@ -35,6 +36,7 @@ OPT_CSI_CAMERA=false
 OPT_WIFI_BOOTSTRAP=false
 OPT_AI_SERVER=false
 OPT_WEB_API=false
+OPT_NGROK=false
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -45,7 +47,8 @@ while [[ $# -gt 0 ]]; do
         --wifi-bootstrap) OPT_WIFI_BOOTSTRAP=true; shift ;;
         --ai-server)    OPT_AI_SERVER=true;   shift ;;
         --web-api)      OPT_WEB_API=true;     shift ;;
-        --full)         OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true; OPT_WIFI_BOOTSTRAP=true; OPT_AI_SERVER=true; OPT_WEB_API=true; shift ;;
+        --ngrok)        OPT_NGROK=true;       shift ;;
+        --full)         OPT_USB_CAMERA=true;  OPT_CSI_CAMERA=true; OPT_WIFI_BOOTSTRAP=true; OPT_AI_SERVER=true; OPT_WEB_API=true; OPT_NGROK=true; shift ;;
         --dry-run)      DRY_RUN=true;         shift ;;
         --help)
             grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -141,6 +144,42 @@ check_cmd() {
     else
         warn "$desc — no encontrado (instalar: sudo apt install $pkg)"
     fi
+}
+
+install_ngrok() {
+    if command -v ngrok >/dev/null 2>&1; then
+        ok "ngrok — tunnel publico del portal (ya instalado)"
+        SKIPPED+=("ngrok")
+        return 0
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        info "ngrok — tunnel publico del portal (se instalaría en /usr/local/bin/ngrok)"
+        return 0
+    fi
+
+    local arch url tmpdir
+    arch="$(dpkg --print-architecture)"
+    case "$arch" in
+        amd64) url="https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" ;;
+        arm64) url="https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm64.tgz" ;;
+        armhf|armel) url="https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm.tgz" ;;
+        *) warn "ngrok — arquitectura no soportada automaticamente: ${arch}"; FAILED+=("ngrok"); return 0 ;;
+    esac
+
+    tmpdir="$(mktemp -d)"
+    echo -n "  Instalando ngrok v3 para ${arch}... "
+    if curl -fsSL "$url" -o "${tmpdir}/ngrok.tgz" \
+        && tar -xzf "${tmpdir}/ngrok.tgz" -C "$tmpdir" ngrok \
+        && install -m 0755 "${tmpdir}/ngrok" /usr/local/bin/ngrok; then
+        echo "OK"
+        ok "ngrok — tunnel publico del portal"
+        INSTALLED+=("ngrok")
+    else
+        echo "FALLO"
+        warn "ngrok — fallo al instalar desde ${url}"
+        FAILED+=("ngrok")
+    fi
+    rm -rf "$tmpdir"
 }
 
 # ---------------------------------------------------------------------------
@@ -371,6 +410,13 @@ if [[ "$OPT_WEB_API" == true ]]; then
     fi
 fi
 
+if [[ "$OPT_NGROK" == true ]]; then
+    header "ngrok — tunnel publico del portal"
+    apt_install "ca-certificates" "ca-certificates — validacion TLS para descargas"
+    apt_flush
+    install_ngrok
+fi
+
 if [[ "$OPT_WIFI_BOOTSTRAP" == true ]]; then
     echo ""
     check_cmd "python3" "python3" "python3"
@@ -445,6 +491,11 @@ if [[ "$OPT_WEB_API" == true ]]; then
     else
         warn "uv — no encontrado. Ver https://docs.astral.sh/uv/getting-started/installation/"
     fi
+fi
+
+if [[ "$OPT_NGROK" == true ]]; then
+    echo ""
+    check_cmd "ngrok" "ngrok" "ngrok"
 fi
 
 # Ver si hay micrófono USB conectado

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     api_token_raspi: str = ""
     api_token_admin: str = ""
 
+    portal_proxy_domain: str = "rafex.io"
+    portal_proxy_allowed_host_suffixes: str = ".ngrok-free.app,.ngrok.app"
+    portal_proxy_timeout_seconds: float = 20.0
+
     require_mtls: bool = True
     mtls_verify_header: str = "x-ssl-client-verify"
     mtls_verify_success_value: str = "SUCCESS"

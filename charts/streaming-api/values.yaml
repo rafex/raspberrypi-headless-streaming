@@ -14,6 +14,9 @@ service:
 
 env:
   PUBLIC_BASE_URL: "https://streaming.rafex.io"
+  PORTAL_PROXY_DOMAIN: "rafex.io"
+  PORTAL_PROXY_ALLOWED_HOST_SUFFIXES: ".ngrok-free.app,.ngrok.app"
+  PORTAL_PROXY_TIMEOUT_SECONDS: "20"
   DATABASE_PATH: "/data/streaming-api.db"
   REQUIRE_MTLS: "true"
   MTLS_VERIFY_HEADER: "x-ssl-client-verify"
@@ -45,6 +48,10 @@ ingress:
     ingress.kubernetes.io/auth-tls-cert-header: "true"
   hosts:
     - host: streaming.rafex.io
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: raspi3b.rafex.io
       paths:
         - path: /
           pathType: Prefix

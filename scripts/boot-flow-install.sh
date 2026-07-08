@@ -14,6 +14,10 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 
 mkdir -p "$CONFIG_DIR"
 
+if ! command -v ngrok >/dev/null 2>&1; then
+    "${REPO_DIR}/scripts/install-deps.sh" --ngrok
+fi
+
 install_config_if_missing() {
     local src="$1"
     local dst="$2"
@@ -74,6 +78,6 @@ echo "  sudo nano ${CONFIG_DIR}/backend-control-agent.env"
 echo "  sudo systemctl enable --now backend-control-agent.service"
 echo ""
 echo "Para ngrok:"
-echo "  instalar ngrok y poner authtoken en ${CONFIG_DIR}/ngrok.yml"
+echo "  poner authtoken en ${CONFIG_DIR}/ngrok.yml"
 echo "  sudo nano ${CONFIG_DIR}/ngrok.env"
 echo "  sudo systemctl enable --now ngrok-web.service"

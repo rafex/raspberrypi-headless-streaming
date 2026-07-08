@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.responses import RedirectResponse
 
 from .auth import Principal, authenticate, require_admin
 from .models import AckPayload, DesiredStateIn, DesiredStateOut, HealthPayload
+from .portal_proxy import device_id_from_host, portal_host_for_device, proxy_portal_request
 from .settings import settings
 from .store import Store
 
 
 app = FastAPI(title=settings.app_name)
 store = Store(settings.database_path)
+
+
+@app.middleware("http")
+async def portal_proxy_middleware(request: Request, call_next):
+    host = request.headers.get("host", "")
+    device_id = device_id_from_host(host)
+    if device_id:
+        return await proxy_portal_request(request, store, device_id)
+    return await call_next(request)
 
 
 async def enforce_payload_limit(request: Request) -> None:
@@ -23,6 +34,12 @@ async def enforce_payload_limit(request: Request) -> None:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/portal/{device_id}")
+@app.get("/portal/{device_id}/")
+def redirect_to_portal(device_id: str) -> RedirectResponse:
+    return RedirectResponse(f"https://{portal_host_for_device(device_id)}/", status_code=302)
 
 
 @app.post("/v1/raspi/{device_id}/health", dependencies=[Depends(enforce_payload_limit)])
