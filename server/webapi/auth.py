@@ -42,6 +42,18 @@ def current_session() -> dict | None:
     return {"user": session["user"], "role": session["role"]}
 
 
+def bearer_role(headless_api_token: str) -> str | None:
+    if not headless_api_token:
+        return None
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not value:
+        return None
+    if secrets.compare_digest(value.strip(), headless_api_token):
+        return "operator"
+    return None
+
+
 def require_role(min_role: str):
     """Decorador: exige sesión activa con rol >= min_role (operator > viewer)."""
     required_rank = ROLE_RANK[min_role]
@@ -49,7 +61,7 @@ def require_role(min_role: str):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            role = session.get("role")
+            role = session.get("role") or bearer_role(request.environ.get("HEADLESS_API_TOKEN", ""))
             if role is None:
                 return jsonify({"error": "No autenticado"}), 401
             if ROLE_RANK.get(role, 0) < required_rank:
@@ -57,7 +69,7 @@ def require_role(min_role: str):
 
             # Cualquier request que mute estado (no GET) requiere el token CSRF
             # emitido en el login, enviado en el header X-CSRF-Token.
-            if request.method not in ("GET", "HEAD", "OPTIONS"):
+            if request.method not in ("GET", "HEAD", "OPTIONS") and "user" in session:
                 token = request.headers.get("X-CSRF-Token", "")
                 if not token or not secrets.compare_digest(token, session.get("csrf", "")):
                     return jsonify({"error": "CSRF token inválido o ausente"}), 403

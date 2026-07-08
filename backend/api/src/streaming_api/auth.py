@@ -81,3 +81,16 @@ def require_admin(principal: Principal) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="admin token required",
         )
+
+
+def authenticate_admin_token(
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+) -> Principal:
+    token = _extract_token(authorization, x_api_token)
+    if settings.api_token_admin and token == settings.api_token_admin:
+        return Principal(role="admin")
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="invalid or missing admin token",
+    )

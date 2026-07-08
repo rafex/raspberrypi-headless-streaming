@@ -135,3 +135,43 @@ async def proxy_portal_request(request: Request, store: Store, device_id: str) -
         headers=_response_headers(upstream_response, public_base, upstream_base),
         media_type=upstream_response.headers.get("content-type"),
     )
+
+
+async def proxy_headless_request(
+    request: Request,
+    store: Store,
+    device_id: str,
+    path: str,
+    token: str,
+) -> Response:
+    upstream_base = portal_url_for_device(store, device_id)
+    upstream = urlsplit(upstream_base)
+    clean_path = "/" + path.lstrip("/")
+    target_url = urlunsplit(
+        (
+            upstream.scheme,
+            upstream.netloc,
+            clean_path,
+            request.url.query,
+            "",
+        )
+    )
+
+    headers = _proxy_headers(request, upstream.netloc)
+    headers["Authorization"] = f"Bearer {token}"
+    body = await request.body()
+    timeout = httpx.Timeout(settings.portal_proxy_timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        upstream_response = await client.request(
+            request.method,
+            target_url,
+            content=body,
+            headers=headers,
+        )
+
+    return Response(
+        content=upstream_response.content,
+        status_code=upstream_response.status_code,
+        headers=_response_headers(upstream_response, "", upstream_base),
+        media_type=upstream_response.headers.get("content-type"),
+    )

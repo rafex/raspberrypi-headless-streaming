@@ -180,6 +180,15 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+#global-actions {
+  margin-bottom: 12px;
+}
+
+.global-stop {
+  min-height: 48px;
+  text-transform: uppercase;
+}
+
 .service-card .name {
   font-weight: 600;
   margin-bottom: 8px;

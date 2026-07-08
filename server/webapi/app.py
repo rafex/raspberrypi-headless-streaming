@@ -70,6 +70,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     logo_upload_dir = (test_config or {}).get(
         "LOGO_UPLOAD_DIR", os.environ.get("LOGO_UPLOAD_DIR", "/var/lib/raspi-streaming/assets/logos")
     )
+    headless_api_token = (test_config or {}).get(
+        "HEADLESS_API_TOKEN", os.environ.get("HEADLESS_API_TOKEN", "")
+    )
 
     app.config.update(
         SECRET_KEY=secret_key,
@@ -80,6 +83,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         STREAMING_ENV_PATH=streaming_env_path,
         PREVIEW_ENV_PATH=preview_env_path,
         LOGO_UPLOAD_DIR=logo_upload_dir,
+        HEADLESS_API_TOKEN=headless_api_token,
         RATELIMIT_ENABLED=True,
     )
 
@@ -103,6 +107,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             "frame-ancestors 'none'"
         )
         return response
+
+    @app.before_request
+    def headless_auth_context():
+        request.environ["HEADLESS_API_TOKEN"] = app.config.get("HEADLESS_API_TOKEN", "")
 
     if (test_config or {}).get("USERS") is not None:
         users = test_config["USERS"]

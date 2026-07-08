@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Raspi Streaming</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div>
+        <h1>Raspi Streaming</h1>
+        <p id="device-line">raspi3b</p>
+      </div>
+      <button id="refresh-btn" type="button">Actualizar</button>
+    </header>
+
+    <section id="auth-card" class="panel">
+      <h2>Acceso</h2>
+      <label>Admin token
+        <input id="admin-token" type="password" autocomplete="off" placeholder="adm_...">
+      </label>
+      <button id="save-token-btn" type="button">Entrar</button>
+      <p id="auth-error" class="error" hidden></p>
+    </section>
+
+    <section id="dashboard" hidden>
+      <section class="panel status-panel">
+        <div>
+          <p class="label">Estado</p>
+          <h2 id="connection-state">Sin datos</h2>
+        </div>
+        <span id="last-seen" class="badge">-</span>
+      </section>
+
+      <section class="panel">
+        <h2>Conectividad</h2>
+        <dl class="kv">
+          <dt>WiFi</dt><dd id="wifi-ssid">-</dd>
+          <dt>IP</dt><dd id="ip-address">-</dd>
+          <dt>Ruta</dt><dd id="default-route">-</dd>
+          <dt>ngrok</dt><dd><a id="ngrok-url" href="#" target="_blank" rel="noreferrer">-</a></dd>
+          <dt>Portal directo</dt><dd><a href="https://raspi3b.rafex.io/" target="_blank" rel="noreferrer">raspi3b.rafex.io</a></dd>
+        </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Servicios</h2>
+        <div id="services" class="services"></div>
+        <div class="actions">
+          <button id="stop-all-btn" class="danger" type="button">Stop all</button>
+          <button id="start-stream-btn" class="success" type="button">Iniciar stream</button>
+          <button id="start-overlay-btn" class="success" type="button">Iniciar con overlay</button>
+          <button id="start-preview-btn" type="button">Iniciar preview</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Configuración actual</h2>
+        <pre id="config-view">{}</pre>
+      </section>
+
+      <p id="message" class="message" hidden></p>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

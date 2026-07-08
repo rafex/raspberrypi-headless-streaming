@@ -191,6 +191,7 @@ STREAMING_ENV_PATH=/etc/streaming.env
 PREVIEW_ENV_PATH=/etc/preview.env
 LOGO_UPLOAD_DIR=/var/lib/raspi-streaming/assets/logos
 SOPS_AGE_KEY_FILE=${AGE_KEY_FILE}
+HEADLESS_API_TOKEN=
 EOF
     chmod 600 "$ENV_DST"
     echo "Archivo de entorno creado: ${ENV_DST}"

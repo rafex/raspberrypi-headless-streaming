@@ -1,17 +1,26 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from pathlib import Path
 
-from .auth import Principal, authenticate, require_admin
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
+
+from .auth import Principal, authenticate, authenticate_admin_token, require_admin
 from .models import AckPayload, DesiredStateIn, DesiredStateOut, HealthPayload
-from .portal_proxy import device_id_from_host, portal_host_for_device, proxy_portal_request
+from .portal_proxy import (
+    device_id_from_host,
+    portal_host_for_device,
+    proxy_headless_request,
+    proxy_portal_request,
+)
 from .settings import settings
 from .store import Store
 
 
 app = FastAPI(title=settings.app_name)
 store = Store(settings.database_path)
+STATIC_DIR = Path(__file__).with_name("static")
 
 
 @app.middleware("http")
@@ -39,12 +48,45 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/")
+def frontend() -> RedirectResponse:
+    return RedirectResponse("/static/index.html", status_code=302)
+
+
 @app.get("/portal/{device_id}")
 @app.get("/portal/{device_id}/")
 @app.head("/portal/{device_id}")
 @app.head("/portal/{device_id}/")
 def redirect_to_portal(device_id: str) -> RedirectResponse:
     return RedirectResponse(f"https://{portal_host_for_device(device_id)}/", status_code=302)
+
+
+@app.get("/ui/api/raspi/{device_id}/state")
+def ui_get_device_state(
+    device_id: str,
+    _: Principal = Depends(authenticate_admin_token),
+) -> dict:
+    return store.get_device(device_id)
+
+
+@app.api_route(
+    "/ui/api/raspi/{device_id}/headless/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+async def ui_headless_proxy(
+    device_id: str,
+    path: str,
+    request: Request,
+    _: Principal = Depends(authenticate_admin_token),
+) -> Response:
+    try:
+        return await proxy_headless_request(request, store, device_id, path, settings.api_token_raspi)
+    except HTTPException as exc:
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
 @app.post("/v1/raspi/{device_id}/health", dependencies=[Depends(enforce_payload_limit)])

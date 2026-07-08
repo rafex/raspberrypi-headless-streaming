@@ -55,6 +55,17 @@
     const activeService = plain.active ? "streaming" : overlay.active ? "streaming-overlay" : null;
     const state         = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
 
+    if (role === "operator") {
+      $("global-actions").innerHTML = `
+        <button id="btn-global-stop-all" class="btn-stop-all global-stop">Stop all</button>
+      `;
+      document.getElementById("btn-global-stop-all")?.addEventListener("click", (e) =>
+        handleStopAll(e.currentTarget)
+      );
+    } else {
+      $("global-actions").innerHTML = "";
+    }
+
     $("services").innerHTML = `
       <div class="service-card">
         <div class="name">Stream</div>
@@ -65,7 +76,6 @@
           <div class="service-actions">
             <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
             <button id="btn-stream-stop"  class="btn-stop"  ${!isActive ? "disabled" : ""}>Detener</button>
-            <button id="btn-stream-stop-all" class="btn-stop-all">Stop all</button>
           </div>` : ""}
       </div>`;
 
@@ -82,9 +92,6 @@
       );
       document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
         handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
-      );
-      document.getElementById("btn-stream-stop-all")?.addEventListener("click", (e) =>
-        handleStopAll(e.currentTarget)
       );
     }
   }
