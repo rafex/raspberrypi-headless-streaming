@@ -41,6 +41,8 @@ def healthz() -> dict[str, str]:
 
 @app.get("/portal/{device_id}")
 @app.get("/portal/{device_id}/")
+@app.head("/portal/{device_id}")
+@app.head("/portal/{device_id}/")
 def redirect_to_portal(device_id: str) -> RedirectResponse:
     return RedirectResponse(f"https://{portal_host_for_device(device_id)}/", status_code=302)
 
