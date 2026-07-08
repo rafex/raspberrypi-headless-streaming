@@ -31,6 +31,7 @@ install_config_if_missing() {
 install_config_if_missing "${REPO_DIR}/systemd/boot-flow.env.example" "${CONFIG_DIR}/boot-flow.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/health-reporter.env.example" "${CONFIG_DIR}/health-reporter.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/ngrok.env.example" "${CONFIG_DIR}/ngrok.env" 600
+install_config_if_missing "${REPO_DIR}/systemd/ngrok.yml.example" "${CONFIG_DIR}/ngrok.yml" 600
 
 sed "s|__REPO_DIR__|${REPO_DIR}|g" \
     "${REPO_DIR}/systemd/boot-stream-orchestrator.service" \
@@ -63,6 +64,6 @@ echo "  sudo nano ${CONFIG_DIR}/health-reporter.env"
 echo "  sudo systemctl enable --now health-reporter.service"
 echo ""
 echo "Para ngrok:"
-echo "  instalar/configurar ngrok y ajustar NGROK_BIN si no esta en PATH"
+echo "  instalar ngrok y poner authtoken en ${CONFIG_DIR}/ngrok.yml"
 echo "  sudo nano ${CONFIG_DIR}/ngrok.env"
 echo "  sudo systemctl enable --now ngrok-web.service"

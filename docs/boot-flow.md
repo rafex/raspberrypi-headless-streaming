@@ -22,6 +22,7 @@ Crea, si no existen:
 /etc/raspi-streaming/boot-flow.env
 /etc/raspi-streaming/health-reporter.env
 /etc/raspi-streaming/ngrok.env
+/etc/raspi-streaming/ngrok.yml
 ```
 
 ## Auto-stream diferido
@@ -71,9 +72,20 @@ El portal puede seguir cambiando la configuración como antes.
 
 ## ngrok
 
-Instala y autentica `ngrok` fuera del repo. Luego:
+Instala `ngrok` fuera del repo. El authtoken se guarda en el YAML local de
+ngrok, no en `ngrok.env`:
+
+```yaml
+# /etc/raspi-streaming/ngrok.yml
+version: 3
+agent:
+  authtoken: <your-authtoken>
+```
+
+Luego ajusta los parametros no secretos del tunel:
 
 ```bash
+sudo nano /etc/raspi-streaming/ngrok.yml
 sudo nano /etc/raspi-streaming/ngrok.env
 sudo systemctl enable --now ngrok-web.service
 ```
@@ -82,6 +94,7 @@ Config ejemplo:
 
 ```env
 NGROK_BIN=ngrok
+NGROK_CONFIG=/etc/raspi-streaming/ngrok.yml
 NGROK_DOMAIN=
 NGROK_LOCAL_URL=https://127.0.0.1:8443
 NGROK_EXTRA_ARGS=

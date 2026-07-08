@@ -1,0 +1,6 @@
+# Copiar a /etc/raspi-streaming/ngrok.yml y reemplazar el authtoken.
+# No subir este archivo con un token real.
+
+version: 3
+agent:
+  authtoken: <your-authtoken>

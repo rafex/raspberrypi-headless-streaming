@@ -9,7 +9,8 @@ Type=simple
 User=root
 EnvironmentFile=-/etc/raspi-streaming/ngrok.env
 Environment="NGROK_BIN=ngrok"
-ExecStart=/bin/sh -c 'command -v "$NGROK_BIN" >/dev/null 2>&1 || { echo "ngrok no encontrado: $NGROK_BIN"; exit 127; }; if [ -n "$NGROK_DOMAIN" ]; then exec "$NGROK_BIN" http --domain "$NGROK_DOMAIN" "$NGROK_LOCAL_URL" $NGROK_EXTRA_ARGS; else exec "$NGROK_BIN" http "$NGROK_LOCAL_URL" $NGROK_EXTRA_ARGS; fi'
+Environment="NGROK_CONFIG=/etc/raspi-streaming/ngrok.yml"
+ExecStart=/bin/sh -c 'command -v "$NGROK_BIN" >/dev/null 2>&1 || { echo "ngrok no encontrado: $NGROK_BIN"; exit 127; }; [ -f "$NGROK_CONFIG" ] || { echo "ngrok config no encontrado: $NGROK_CONFIG"; exit 1; }; if [ -n "$NGROK_DOMAIN" ]; then exec "$NGROK_BIN" --config "$NGROK_CONFIG" http --domain "$NGROK_DOMAIN" "$NGROK_LOCAL_URL" $NGROK_EXTRA_ARGS; else exec "$NGROK_BIN" --config "$NGROK_CONFIG" http "$NGROK_LOCAL_URL" $NGROK_EXTRA_ARGS; fi'
 Restart=always
 RestartSec=15
 StandardOutput=journal
