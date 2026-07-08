@@ -133,3 +133,5 @@ jobs:
             --set image.tag="$IMAGE_TAG" \
             --set env.PUBLIC_BASE_URL="https://streaming.rafex.io" \
             --wait --timeout 5m
+          kubectl -n "$K3S_NAMESPACE" rollout restart deployment/"$RELEASE_NAME"
+          kubectl -n "$K3S_NAMESPACE" rollout status deployment/"$RELEASE_NAME" --timeout=5m

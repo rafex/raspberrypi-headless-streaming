@@ -82,6 +82,8 @@ def _proxy_headers(request: Request, upstream_host: str) -> dict[str, str]:
         lname = name.lower()
         if lname in HOP_BY_HOP_HEADERS or lname == "host" or lname == "content-length":
             continue
+        if lname == "authorization":
+            continue
         if lname.startswith("x-forwarded-") or lname in {"forwarded", "x-scheme"}:
             continue
         headers[name] = value
