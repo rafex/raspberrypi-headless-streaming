@@ -33,6 +33,9 @@ def portal_host_for_device(device_id: str) -> str:
 
 def device_id_from_host(host: str) -> str | None:
     hostname = host.split(":", 1)[0].lower().strip(".")
+    public_hostname = urlsplit(settings.public_base_url).hostname
+    if public_hostname and hostname == public_hostname.lower():
+        return None
     suffix = f".{settings.portal_proxy_domain.lower().strip('.')}"
     if not hostname.endswith(suffix):
         return None
@@ -78,6 +81,8 @@ def _proxy_headers(request: Request, upstream_host: str) -> dict[str, str]:
     for name, value in request.headers.items():
         lname = name.lower()
         if lname in HOP_BY_HOP_HEADERS or lname == "host" or lname == "content-length":
+            continue
+        if lname.startswith("x-forwarded-") or lname in {"forwarded", "x-scheme"}:
             continue
         headers[name] = value
     headers["host"] = upstream_host

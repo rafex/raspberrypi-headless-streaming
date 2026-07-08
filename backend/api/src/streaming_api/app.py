@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from .auth import Principal, authenticate, require_admin
 from .models import AckPayload, DesiredStateIn, DesiredStateOut, HealthPayload
@@ -19,7 +19,10 @@ async def portal_proxy_middleware(request: Request, call_next):
     host = request.headers.get("host", "")
     device_id = device_id_from_host(host)
     if device_id:
-        return await proxy_portal_request(request, store, device_id)
+        try:
+            return await proxy_portal_request(request, store, device_id)
+        except HTTPException as exc:
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     return await call_next(request)
 
 
