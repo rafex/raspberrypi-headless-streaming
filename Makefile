@@ -12,7 +12,7 @@
         web-api install-web-api enable-web-api disable-web-api \
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-backend-agent stop-backend-agent logs-backend-agent start-ngrok stop-ngrok logs-ngrok \
-        backend-token backend-admin-token backend-certs backend-secrets backend-github-secrets backend-install-raspi-certs \
+        backend-token backend-admin-token backend-certs backend-secrets backend-install-raspi-certs \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming apply-streaming-defaults start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
@@ -70,7 +70,6 @@ help:
 	@echo "  make backend-admin-token    - genera token bearer admin"
 	@echo "  make backend-certs          - genera CA mTLS y cert cliente (BACKEND_DEVICE_ID=$(BACKEND_DEVICE_ID))"
 	@echo "  make backend-secrets        - genera tokens + certs + envs locales"
-	@echo "  make backend-github-secrets - sube secrets a GitHub con gh"
 	@echo "  make backend-install-raspi-certs - instala cert cliente en la Raspi (RASPI_SSH=$(RASPI_SSH))"
 	@echo ""
 	@echo "Vista previa local (RTMP/MPEG-TS, nunca a la plataforma real):"
@@ -171,11 +170,6 @@ backend-secrets:
 	./backend/helpers/streaming-api-secrets.py init \
 	    --device-id $(BACKEND_DEVICE_ID) \
 	    --days $(BACKEND_CERT_DAYS)
-
-backend-github-secrets:
-	@echo "Cargando backend/helpers/github-secrets.env.local y subiendo secrets..."
-	@set -a; . backend/helpers/github-secrets.env.local; set +a; \
-	    backend/helpers/set-github-secrets.sh
 
 backend-install-raspi-certs:
 	./backend/helpers/install-raspi-client-certs.sh $(RASPI_SSH) \

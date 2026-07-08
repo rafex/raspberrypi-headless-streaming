@@ -101,8 +101,15 @@ backend/certs/backend/ca.crt
 backend/certs/backend/ca.key
 backend/certs/frontend/raspi3b.crt
 backend/certs/frontend/raspi3b.key
-backend/helpers/github-secrets.env.local
 backend/helpers/raspi-backend.env.local
+```
+
+Tambien imprime una sola vez los valores para reemplazar los GitHub Secrets:
+
+```text
+STREAMING_API_RASPI_TOKEN
+STREAMING_API_ADMIN_TOKEN
+STREAMING_API_CLIENT_CA_CRT_B64
 ```
 
 Luego instala el certificado cliente en la Raspi:
@@ -141,14 +148,6 @@ Actions, por lo que no requiere un secret extra para paquetes.
 base64 -i backend/certs/backend/ca.crt
 ```
 
-Para crear los secrets cuando ya tengas valores:
-
-```bash
-nano backend/helpers/github-secrets.env.local
-set -a
-source backend/helpers/github-secrets.env.local
-set +a
-make backend-github-secrets
-```
-
-`github-secrets.env.local` y `raspi-backend.env.local` estan ignorados por git.
+Los GitHub Secrets ya pueden existir con valores dummy; reemplazalos desde la
+UI de GitHub o con `gh secret set <NOMBRE>`. `raspi-backend.env.local` esta
+ignorado por git.

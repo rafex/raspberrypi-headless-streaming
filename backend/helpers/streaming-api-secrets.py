@@ -16,7 +16,6 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 BACKEND_CERTS = ROOT_DIR / "backend" / "certs" / "backend"
 FRONTEND_CERTS = ROOT_DIR / "backend" / "certs" / "frontend"
-GITHUB_ENV_LOCAL = ROOT_DIR / "backend" / "helpers" / "github-secrets.env.local"
 RASPI_ENV_LOCAL = ROOT_DIR / "backend" / "helpers" / "raspi-backend.env.local"
 
 
@@ -143,17 +142,6 @@ def cmd_init(args: argparse.Namespace) -> int:
     client_crt = FRONTEND_CERTS / f"{args.device_id}.crt"
     client_key = FRONTEND_CERTS / f"{args.device_id}.key"
 
-    github_env = "\n".join([
-        "# Generado por backend/helpers/streaming-api-secrets.py init",
-        "K3S_SSH_USER=",
-        "K3S_SSH_PRIVATE_KEY_FILE=",
-        f"STREAMING_API_RASPI_TOKEN={raspi_token}",
-        f"STREAMING_API_ADMIN_TOKEN={admin_token}",
-        f"STREAMING_API_CLIENT_CA_CRT_FILE={ca_file}",
-        "",
-    ])
-    write_private(args.github_env, github_env, overwrite=args.force)
-
     raspi_env = "\n".join([
         "# Copiar valores a /etc/raspi-streaming/health-reporter.env y backend-control-agent.env",
         "BACKEND_BASE_URL=https://streaming.rafex.io",
@@ -170,16 +158,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     write_private(args.raspi_env, raspi_env, overwrite=args.force)
 
     print("Material local generado:")
-    print(f"  GitHub secrets env : {args.github_env}")
     print(f"  Raspi env local    : {args.raspi_env}")
     print(f"  Raspi cert         : {client_crt}")
     print(f"  Raspi key          : {client_key}")
     print("")
+    print("Tokens generados. Copiar estos valores a GitHub Secrets:")
+    print(f"  STREAMING_API_RASPI_TOKEN={raspi_token}")
+    print(f"  STREAMING_API_ADMIN_TOKEN={admin_token}")
+    print(f"  STREAMING_API_CLIENT_CA_CRT_B64={ca_b64(ca_file)}")
+    print("")
     print("Siguientes pasos:")
-    print("  1. Editar K3S_SSH_USER y K3S_SSH_PRIVATE_KEY_FILE en github-secrets.env.local")
-    print("  2. source backend/helpers/github-secrets.env.local")
-    print("  3. backend/helpers/set-github-secrets.sh")
-    print(f"  4. backend/helpers/install-raspi-client-certs.sh root@192.168.3.169 --device-id {args.device_id}")
+    print("  1. Reemplazar los secrets dummy en GitHub con los valores reales.")
+    print(f"  2. backend/helpers/install-raspi-client-certs.sh root@192.168.3.169 --device-id {args.device_id}")
     return 0
 
 
@@ -205,7 +195,6 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--token-bytes", type=int, default=32)
     init.add_argument("--raspi-token", default="")
     init.add_argument("--admin-token", default="")
-    init.add_argument("--github-env", type=Path, default=GITHUB_ENV_LOCAL)
     init.add_argument("--raspi-env", type=Path, default=RASPI_ENV_LOCAL)
     init.add_argument("--force", action="store_true")
     init.add_argument("--force-ca", action="store_true")
