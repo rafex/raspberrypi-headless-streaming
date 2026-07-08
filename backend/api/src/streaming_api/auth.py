@@ -33,9 +33,16 @@ def _validate_mtls(request: Request) -> tuple[str, str]:
     verify_value = request.headers.get(settings.mtls_verify_header, "")
     subject = request.headers.get(settings.mtls_subject_header, "")
     cn = request.headers.get(settings.mtls_cn_header, "")
+    if not subject:
+        subject = request.headers.get("x-streaming-client-dn", "")
+    if not cn:
+        cn = request.headers.get("x-streaming-client-cn", "")
 
     # nginx-ingress commonly forwards X-SSL-Client-Verify=SUCCESS. HAProxy
     # Ingress validates at the edge and forwards X-SSL-Client-CN/DN instead.
+    # If TLS is terminated before the Ingress, the edge proxy forwards
+    # X-Streaming-Client-CN/DN because HAProxy Ingress strips X-SSL-* headers
+    # received from outside.
     if verify_value == settings.mtls_verify_success_value:
         return subject, cn
     if cn or subject:
