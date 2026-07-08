@@ -11,6 +11,7 @@
 .PHONY: help setup deps-web-api age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
+        boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-ngrok stop-ngrok logs-ngrok \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
@@ -34,6 +35,7 @@ help:
 	@echo "  make add-user        - crea/actualiza un usuario (WEBAPI_USER=admin WEBAPI_ROLE=operator por default)"
 	@echo "  make web-api         - instala y habilita el servicio en boot (requiere sudo)"
 	@echo "  make wifi-bootstrap  - instala bootstrap WiFi/AP de arranque (requiere sudo)"
+	@echo "  make boot-flow       - instala auto-stream diferido, health reporter y ngrok"
 	@echo "  make repair-wifi-bootstrap - desactiva DietPi WiFi y deja solo nuestro bootstrap"
 	@echo "  make setup           - corre los cuatro anteriores en secuencia"
 	@echo ""
@@ -100,6 +102,35 @@ status-wifi-bootstrap:
 
 logs-wifi-bootstrap:
 	journalctl -u raspi-wifi-bootstrap.service -f
+
+boot-flow: install-boot-flow
+
+install-boot-flow:
+	sudo ./scripts/boot-flow-install.sh
+
+status-boot-flow:
+	systemctl status boot-stream-orchestrator.service --no-pager -l
+
+logs-boot-flow:
+	journalctl -u boot-stream-orchestrator.service -f
+
+start-health-reporter:
+	sudo systemctl enable --now health-reporter.service
+
+stop-health-reporter:
+	sudo systemctl disable --now health-reporter.service
+
+logs-health-reporter:
+	journalctl -u health-reporter.service -f
+
+start-ngrok:
+	sudo systemctl enable --now ngrok-web.service
+
+stop-ngrok:
+	sudo systemctl disable --now ngrok-web.service
+
+logs-ngrok:
+	journalctl -u ngrok-web.service -f
 
 age-key:
 	./scripts/web-api-setup-age.sh
@@ -197,6 +228,11 @@ update-services:
 	    -e "s|__REPO_DIR__|$(REPO_DIR)|g" \
 	    systemd/preview.service \
 	    | sudo tee $(SYSTEMD_DIR)/preview.service > /dev/null
+	sed "s|__REPO_DIR__|$(REPO_DIR)|g" systemd/boot-stream-orchestrator.service \
+	    | sudo tee $(SYSTEMD_DIR)/boot-stream-orchestrator.service > /dev/null
+	sed "s|__REPO_DIR__|$(REPO_DIR)|g" systemd/health-reporter.service \
+	    | sudo tee $(SYSTEMD_DIR)/health-reporter.service > /dev/null
+	sudo cp systemd/ngrok-web.service $(SYSTEMD_DIR)/ngrok-web.service
 	sudo systemctl daemon-reload
 	sudo systemctl restart web-api.service
 	sudo systemctl disable streaming.service streaming-overlay.service preview.service || true

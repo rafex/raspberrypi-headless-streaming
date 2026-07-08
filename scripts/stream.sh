@@ -54,13 +54,14 @@ HEIGHT=1080
 FPS=30
 BITRATE=4500000
 AUDIO_BITRATE=128000
-AUDIO_RATE=44100
-AUDIO_CH=1
+AUDIO_RATE="${AUDIO_RATE:-44100}"
+AUDIO_CH="${AUDIO_CHANNELS:-1}"
 DURATION=0
 URL="${RTMP_URL:-}"
 KEY="${STREAM_KEY:-}"
 AUDIO_DEV="${AUDIO_DEVICE:-}"
 NO_AUDIO=false
+[[ "${STREAM_NO_AUDIO:-false}" == "true" ]] && NO_AUDIO=true
 
 usage() {
     grep '^#' "$0" | grep -v '#!/' | sed 's/^# \{0,1\}//'
@@ -136,7 +137,7 @@ if [[ "$NO_AUDIO" == false ]]; then
     fi
     AUDIO_ARGS=(-f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV" -acodec aac -b:a "${AUDIO_BITRATE}")
 else
-    AUDIO_ARGS=(-an)
+    AUDIO_ARGS=(-f lavfi -i "anullsrc=r=44100:cl=stereo" -acodec aac -b:a 32k)
 fi
 
 echo "=== Stream RTMP ==="
@@ -144,7 +145,7 @@ echo "  Resolución  : ${WIDTH}x${HEIGHT}"
 echo "  FPS         : ${FPS}"
 echo "  Bitrate     : ${BITRATE} bps ($(( BITRATE / 1000 )) kbps)"
 if [[ "$NO_AUDIO" == true ]]; then
-    echo "  Audio       : deshabilitado"
+    echo "  Audio       : silencio AAC (sin micrófono)"
 else
     echo "  Audio       : ${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch"
 fi

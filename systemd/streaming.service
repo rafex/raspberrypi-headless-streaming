@@ -33,8 +33,7 @@ ExecStart=/bin/bash scripts/stream.sh \
     -w ${STREAM_WIDTH} \
     -h ${STREAM_HEIGHT} \
     -f ${STREAM_FPS} \
-    -b ${STREAM_BITRATE} \
-    --no-audio
+    -b ${STREAM_BITRATE}
 
 # Esperar antes de reiniciar (da tiempo a que la cámara o red se recuperen)
 RestartSec=10

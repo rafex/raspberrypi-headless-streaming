@@ -1,0 +1,17 @@
+[Unit]
+Description=Arranque diferido de streaming tras WiFi estable
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+After=raspi-wifi-bootstrap.service web-api.service network-online.target
+Wants=raspi-wifi-bootstrap.service web-api.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=__REPO_DIR__
+ExecStart=__REPO_DIR__/scripts/boot-stream-orchestrator.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=boot-stream
+
+[Install]
+WantedBy=multi-user.target

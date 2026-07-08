@@ -1,0 +1,20 @@
+[Unit]
+Description=Reporte outbound de salud de Raspi Streaming
+Documentation=https://github.com/rafex/raspberrypi-headless-streaming
+After=network-online.target web-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=-/etc/raspi-streaming/health-reporter.env
+WorkingDirectory=__REPO_DIR__
+ExecStart=/usr/bin/env python3 __REPO_DIR__/scripts/health-reporter.py
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=health-reporter
+
+[Install]
+WantedBy=multi-user.target
