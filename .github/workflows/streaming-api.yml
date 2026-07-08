@@ -22,6 +22,7 @@ jobs:
       K3S_NAMESPACE: mvps
       RELEASE_NAME: streaming-api
       CHART_PATH: ./charts/streaming-api
+      SERVER_K3S: ${{ vars.SERVER_K3S }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,9 +58,25 @@ jobs:
             echo "Create it in GitHub repo settings with base64-encoded kubeconfig"
             exit 1
           fi
+          if [ -z "$SERVER_K3S" ]; then
+            echo "::error::Missing required variable: SERVER_K3S"
+            echo "Create it in GitHub repo variables. Example: 158.69.246.55"
+            exit 1
+          fi
           mkdir -p "$HOME/.kube"
           echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
+
+          SERVER="$SERVER_K3S"
+          if ! echo "$SERVER" | grep -q '^https\?://'; then
+            SERVER="https://${SERVER}:6443"
+          fi
+          CONTEXT="$(kubectl config current-context)"
+          CLUSTER="$(kubectl config view -o jsonpath="{.contexts[?(@.name==\"${CONTEXT}\")].context.cluster}")"
+          kubectl config set-cluster "$CLUSTER" \
+            --server="$SERVER" \
+            --insecure-skip-tls-verify=true
+
           kubectl cluster-info
           kubectl auth can-i get pods --all-namespaces
 
