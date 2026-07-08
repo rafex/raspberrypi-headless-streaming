@@ -12,6 +12,7 @@
         web-api install-web-api enable-web-api disable-web-api \
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-backend-agent stop-backend-agent logs-backend-agent start-ngrok stop-ngrok logs-ngrok \
+        backend-token backend-admin-token backend-certs backend-secrets backend-github-secrets backend-install-raspi-certs \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming apply-streaming-defaults start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
@@ -29,6 +30,9 @@ MONITOR_INTERVAL ?= 2
 MONITOR_LOGS ?= 28
 STREAMING_ENV ?= /etc/streaming.env
 STREAMING_DEFAULT_ENV ?= systemd/default.streaming.env
+BACKEND_DEVICE_ID ?= raspi3b
+BACKEND_CERT_DAYS ?= 825
+RASPI_SSH ?= root@192.168.3.169
 
 help:
 	@echo "Setup inicial (en orden, ver docs/web-api.md):"
@@ -60,6 +64,14 @@ help:
 	@echo "  make status-streaming  - muestra el estado del stream"
 	@echo "  make logs-streaming    - sigue los logs en tiempo real"
 	@echo "  make monitor-streaming - panel vivo: servicios, ffmpeg, red y logs"
+	@echo ""
+	@echo "Backend publico streaming.rafex.io:"
+	@echo "  make backend-token          - genera token bearer para Raspi"
+	@echo "  make backend-admin-token    - genera token bearer admin"
+	@echo "  make backend-certs          - genera CA mTLS y cert cliente (BACKEND_DEVICE_ID=$(BACKEND_DEVICE_ID))"
+	@echo "  make backend-secrets        - genera tokens + certs + envs locales"
+	@echo "  make backend-github-secrets - sube secrets a GitHub con gh"
+	@echo "  make backend-install-raspi-certs - instala cert cliente en la Raspi (RASPI_SSH=$(RASPI_SSH))"
 	@echo ""
 	@echo "Vista previa local (RTMP/MPEG-TS, nunca a la plataforma real):"
 	@echo "  make start-preview     - inicia el preview"
@@ -143,6 +155,31 @@ stop-ngrok:
 
 logs-ngrok:
 	journalctl -u ngrok-web.service -f
+
+backend-token:
+	./backend/helpers/streaming-api-secrets.py token --prefix rsp_
+
+backend-admin-token:
+	./backend/helpers/streaming-api-secrets.py token --prefix adm_
+
+backend-certs:
+	./backend/helpers/streaming-api-secrets.py certs \
+	    --device-id $(BACKEND_DEVICE_ID) \
+	    --days $(BACKEND_CERT_DAYS)
+
+backend-secrets:
+	./backend/helpers/streaming-api-secrets.py init \
+	    --device-id $(BACKEND_DEVICE_ID) \
+	    --days $(BACKEND_CERT_DAYS)
+
+backend-github-secrets:
+	@echo "Cargando backend/helpers/github-secrets.env.local y subiendo secrets..."
+	@set -a; . backend/helpers/github-secrets.env.local; set +a; \
+	    backend/helpers/set-github-secrets.sh
+
+backend-install-raspi-certs:
+	./backend/helpers/install-raspi-client-certs.sh $(RASPI_SSH) \
+	    --device-id $(BACKEND_DEVICE_ID)
 
 age-key:
 	./scripts/web-api-setup-age.sh

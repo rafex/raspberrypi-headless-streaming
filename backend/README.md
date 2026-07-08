@@ -78,20 +78,20 @@ uv run uvicorn streaming_api.app:app --reload --host 0.0.0.0 --port 8080
 Generar solo un token bearer:
 
 ```bash
-backend/helpers/streaming-api-secrets.py token --prefix rsp_
-backend/helpers/streaming-api-secrets.py token --prefix adm_
+make backend-token
+make backend-admin-token
 ```
 
 Generar CA mTLS y certificado cliente:
 
 ```bash
-backend/helpers/streaming-api-secrets.py certs --device-id raspi3b
+make backend-certs BACKEND_DEVICE_ID=raspi3b
 ```
 
 Flujo recomendado para inicializar todo el material local:
 
 ```bash
-backend/helpers/streaming-api-secrets.py init --device-id raspi3b
+make backend-secrets BACKEND_DEVICE_ID=raspi3b
 ```
 
 Ese comando crea:
@@ -108,7 +108,7 @@ backend/helpers/raspi-backend.env.local
 Luego instala el certificado cliente en la Raspi:
 
 ```bash
-backend/helpers/install-raspi-client-certs.sh root@192.168.3.169 --device-id raspi3b
+make backend-install-raspi-certs RASPI_SSH=root@192.168.3.169 BACKEND_DEVICE_ID=raspi3b
 ```
 
 Crear el secret de CA cliente en k3s:
@@ -148,7 +148,7 @@ nano backend/helpers/github-secrets.env.local
 set -a
 source backend/helpers/github-secrets.env.local
 set +a
-backend/helpers/set-github-secrets.sh
+make backend-github-secrets
 ```
 
 `github-secrets.env.local` y `raspi-backend.env.local` estan ignorados por git.
