@@ -126,18 +126,19 @@ backend/helpers/create-k8s-secrets.sh mvps
 
 ## GitHub Actions
 
-El workflow `.github/workflows/streaming-api.yml` construye la imagen en GHCR y
-despliega por SSH en `my-k3s-2` con Helm.
+El workflow `.github/workflows/streaming-api.yml` construye la imagen en GHCR,
+configura `kubectl` con `KUBE_CONFIG_DATA` y despliega con Helm.
 
 Secrets requeridos:
 
 ```text
-K3S_SSH_USER
-K3S_SSH_PRIVATE_KEY
+KUBE_CONFIG_DATA
 STREAMING_API_RASPI_TOKEN
 STREAMING_API_ADMIN_TOKEN
 STREAMING_API_CLIENT_CA_CRT_B64
 ```
+
+`KUBE_CONFIG_DATA` es el kubeconfig del cluster codificado en base64.
 
 La publicacion a GHCR usa `GITHUB_TOKEN`, el token automatico de GitHub
 Actions, por lo que no requiere un secret extra para paquetes.

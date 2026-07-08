@@ -21,7 +21,7 @@ jobs:
       IMAGE_TAG: ${{ github.sha }}
       K3S_NAMESPACE: mvps
       RELEASE_NAME: streaming-api
-      DEPLOY_HOST: my-k3s-2
+      CHART_PATH: ./charts/streaming-api
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,44 +47,72 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Package chart
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
         run: |
-          tar -czf streaming-api-chart.tgz charts/streaming-api
+          if [ -z "${{ secrets.KUBE_CONFIG_DATA }}" ]; then
+            echo "::error::Missing required secret: KUBE_CONFIG_DATA"
+            echo "Create it in GitHub repo settings with base64-encoded kubeconfig"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+          kubectl auth can-i get pods --all-namespaces
 
-      - name: Upload chart to k3s server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ env.DEPLOY_HOST }}
-          username: ${{ secrets.K3S_SSH_USER }}
-          key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
-          source: "streaming-api-chart.tgz"
-          target: "/tmp"
+      - name: Install Helm
+        uses: azure/setup-helm@v4.3.1
 
-      - name: Deploy chart on k3s server
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ env.DEPLOY_HOST }}
-          username: ${{ secrets.K3S_SSH_USER }}
-          key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
-          script: |
-            set -euo pipefail
-            rm -rf /tmp/streaming-api-chart
-            mkdir -p /tmp/streaming-api-chart
-            tar -xzf /tmp/streaming-api-chart.tgz -C /tmp/streaming-api-chart
-            kubectl create namespace "${{ env.K3S_NAMESPACE }}" --dry-run=client -o yaml | kubectl apply -f -
-            kubectl -n "${{ env.K3S_NAMESPACE }}" create secret generic streaming-api-secrets \
-              --from-literal=API_TOKEN_RASPI='${{ secrets.STREAMING_API_RASPI_TOKEN }}' \
-              --from-literal=API_TOKEN_ADMIN='${{ secrets.STREAMING_API_ADMIN_TOKEN }}' \
-              --dry-run=client -o yaml | kubectl apply -f -
-            if [ -n '${{ secrets.STREAMING_API_CLIENT_CA_CRT_B64 }}' ]; then
-              printf '%s' '${{ secrets.STREAMING_API_CLIENT_CA_CRT_B64 }}' | base64 -d > /tmp/streaming-api-client-ca.crt
-              kubectl -n "${{ env.K3S_NAMESPACE }}" create secret generic streaming-api-client-ca \
-                --from-file=ca.crt=/tmp/streaming-api-client-ca.crt \
-                --dry-run=client -o yaml | kubectl apply -f -
-              rm -f /tmp/streaming-api-client-ca.crt
-            fi
-            helm upgrade --install "${{ env.RELEASE_NAME }}" /tmp/streaming-api-chart/charts/streaming-api \
-              --namespace "${{ env.K3S_NAMESPACE }}" \
-              --set image.repository="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}" \
-              --set image.tag="${{ env.IMAGE_TAG }}" \
-              --set env.PUBLIC_BASE_URL="https://streaming.rafex.io"
+      - name: Ensure namespace exists
+        run: |
+          kubectl get namespace "$K3S_NAMESPACE" >/dev/null 2>&1 \
+            || kubectl create namespace "$K3S_NAMESPACE"
+
+      - name: Upsert API tokens in k3s
+        env:
+          STREAMING_API_RASPI_TOKEN: ${{ secrets.STREAMING_API_RASPI_TOKEN }}
+          STREAMING_API_ADMIN_TOKEN: ${{ secrets.STREAMING_API_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$STREAMING_API_RASPI_TOKEN" ]; then
+            echo "::error::Missing required secret: STREAMING_API_RASPI_TOKEN"
+            exit 1
+          fi
+          if [ -z "$STREAMING_API_ADMIN_TOKEN" ]; then
+            echo "::error::Missing required secret: STREAMING_API_ADMIN_TOKEN"
+            exit 1
+          fi
+          kubectl -n "$K3S_NAMESPACE" create secret generic streaming-api-secrets \
+            --from-literal=API_TOKEN_RASPI="$STREAMING_API_RASPI_TOKEN" \
+            --from-literal=API_TOKEN_ADMIN="$STREAMING_API_ADMIN_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Upsert mTLS client CA in k3s
+        env:
+          STREAMING_API_CLIENT_CA_CRT_B64: ${{ secrets.STREAMING_API_CLIENT_CA_CRT_B64 }}
+        run: |
+          if [ -z "$STREAMING_API_CLIENT_CA_CRT_B64" ]; then
+            echo "::error::Missing required secret: STREAMING_API_CLIENT_CA_CRT_B64"
+            exit 1
+          fi
+          printf '%s' "$STREAMING_API_CLIENT_CA_CRT_B64" \
+            | base64 --decode > /tmp/streaming-api-client-ca.crt
+          kubectl -n "$K3S_NAMESPACE" create secret generic streaming-api-client-ca \
+            --from-file=ca.crt=/tmp/streaming-api-client-ca.crt \
+            --dry-run=client -o yaml | kubectl apply -f -
+          rm -f /tmp/streaming-api-client-ca.crt
+
+      - name: Lint chart
+        run: |
+          helm lint "$CHART_PATH"
+
+      - name: Deploy Helm release
+        run: |
+          helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+            --namespace "$K3S_NAMESPACE" \
+            --set image.repository="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}" \
+            --set image.tag="$IMAGE_TAG" \
+            --set env.PUBLIC_BASE_URL="https://streaming.rafex.io" \
+            --wait --timeout 5m
