@@ -18,7 +18,7 @@ env:
   REQUIRE_MTLS: "true"
   MTLS_VERIFY_HEADER: "x-ssl-client-verify"
   MTLS_VERIFY_SUCCESS_VALUE: "SUCCESS"
-  MTLS_SUBJECT_HEADER: "x-ssl-client-subject"
+  MTLS_SUBJECT_HEADER: "x-ssl-client-dn"
   MTLS_CN_HEADER: "x-ssl-client-cn"
 
 secrets:
@@ -37,11 +37,12 @@ ingress:
   annotations:
     ingress.kubernetes.io/ssl-redirect: "true"
     ingress.kubernetes.io/backend-protocol: "http"
-    # Ajustar estas annotations segun el controlador HAProxy instalado.
-    # Deben validar el cert cliente y reenviar headers mTLS al backend.
-    haproxy-ingress.github.io/auth-tls-secret: "streaming-rafex-io/streaming-api-client-ca"
-    haproxy-ingress.github.io/auth-tls-verify-client: "on"
-    haproxy-ingress.github.io/auth-tls-pass-certificate-to-upstream: "true"
+    # HAProxy Ingress auth TLS. Valida el certificado cliente y reenvia
+    # X-SSL-Client-CN / X-SSL-Client-DN al backend.
+    ingress.kubernetes.io/auth-tls-secret: "streaming-rafex-io/streaming-api-client-ca"
+    ingress.kubernetes.io/auth-tls-verify-client: "on"
+    ingress.kubernetes.io/auth-tls-strict: "true"
+    ingress.kubernetes.io/auth-tls-cert-header: "true"
   hosts:
     - host: streaming.rafex.io
       paths:

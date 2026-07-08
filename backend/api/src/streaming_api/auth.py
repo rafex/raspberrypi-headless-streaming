@@ -31,13 +31,21 @@ def _validate_mtls(request: Request) -> tuple[str, str]:
         return "", ""
 
     verify_value = request.headers.get(settings.mtls_verify_header, "")
-    if verify_value != settings.mtls_verify_success_value:
+    subject = request.headers.get(settings.mtls_subject_header, "")
+    cn = request.headers.get(settings.mtls_cn_header, "")
+
+    # nginx-ingress commonly forwards X-SSL-Client-Verify=SUCCESS. HAProxy
+    # Ingress validates at the edge and forwards X-SSL-Client-CN/DN instead.
+    if verify_value == settings.mtls_verify_success_value:
+        return subject, cn
+    if cn or subject:
+        return subject, cn
+
+    if settings.require_mtls:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="mTLS client certificate required",
         )
-    subject = request.headers.get(settings.mtls_subject_header, "")
-    cn = request.headers.get(settings.mtls_cn_header, "")
     return subject, cn
 
 

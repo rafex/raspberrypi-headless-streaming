@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     require_mtls: bool = True
     mtls_verify_header: str = "x-ssl-client-verify"
     mtls_verify_success_value: str = "SUCCESS"
-    mtls_subject_header: str = "x-ssl-client-subject"
+    mtls_subject_header: str = "x-ssl-client-dn"
     mtls_cn_header: str = "x-ssl-client-cn"
 
     max_payload_bytes: int = 262_144
