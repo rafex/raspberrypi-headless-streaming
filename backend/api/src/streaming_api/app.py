@@ -53,6 +53,7 @@ if STATIC_DIR.exists():
 
 
 @app.get("/")
+@app.head("/")
 def frontend() -> RedirectResponse:
     return RedirectResponse("/static/index.html", status_code=302)
 
