@@ -8,3 +8,4 @@ backend/certs/**/*.csr
 backend/certs/**/*.srl
 !backend/certs/**/.gitkeep
 backend/helpers/github-secrets.env.local
+backend/helpers/raspi-backend.env.local

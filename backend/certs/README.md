@@ -6,10 +6,16 @@ claves reales.
 - `backend/certs/backend/`: CA/secret usado por el backend/Ingress para validar mTLS.
 - `backend/certs/frontend/`: certificado cliente para la Raspi u otros clientes autorizados.
 
-Generar certificados de desarrollo:
+Generar CA y certificado cliente:
 
 ```bash
-backend/helpers/generate-dev-certs.sh
+backend/helpers/streaming-api-secrets.py certs --device-id raspi3b
+```
+
+Generar tokens, certificados y archivos `.env.local` de operación:
+
+```bash
+backend/helpers/streaming-api-secrets.py init --device-id raspi3b
 ```
 
 Instalar el certificado cliente en la Raspi:

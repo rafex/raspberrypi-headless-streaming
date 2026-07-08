@@ -75,16 +75,40 @@ uv run uvicorn streaming_api.app:app --reload --host 0.0.0.0 --port 8080
 
 ## Certificados
 
-Generar CA y certificado cliente de desarrollo:
+Generar solo un token bearer:
 
 ```bash
-backend/helpers/generate-dev-certs.sh
+backend/helpers/streaming-api-secrets.py token --prefix rsp_
+backend/helpers/streaming-api-secrets.py token --prefix adm_
 ```
 
-Instalar certificado cliente en la Raspi:
+Generar CA mTLS y certificado cliente:
 
 ```bash
-backend/helpers/install-raspi-client-certs.sh root@192.168.3.169
+backend/helpers/streaming-api-secrets.py certs --device-id raspi3b
+```
+
+Flujo recomendado para inicializar todo el material local:
+
+```bash
+backend/helpers/streaming-api-secrets.py init --device-id raspi3b
+```
+
+Ese comando crea:
+
+```text
+backend/certs/backend/ca.crt
+backend/certs/backend/ca.key
+backend/certs/frontend/raspi3b.crt
+backend/certs/frontend/raspi3b.key
+backend/helpers/github-secrets.env.local
+backend/helpers/raspi-backend.env.local
+```
+
+Luego instala el certificado cliente en la Raspi:
+
+```bash
+backend/helpers/install-raspi-client-certs.sh root@192.168.3.169 --device-id raspi3b
 ```
 
 Crear el secret de CA cliente en k3s:
@@ -120,10 +144,11 @@ base64 -i backend/certs/backend/ca.crt
 Para crear los secrets cuando ya tengas valores:
 
 ```bash
-cp backend/helpers/github-secrets.env.example backend/helpers/github-secrets.env.local
 nano backend/helpers/github-secrets.env.local
 set -a
 source backend/helpers/github-secrets.env.local
 set +a
 backend/helpers/set-github-secrets.sh
 ```
+
+`github-secrets.env.local` y `raspi-backend.env.local` estan ignorados por git.
