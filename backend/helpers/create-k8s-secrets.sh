@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NAMESPACE="${1:-mvps}"
+NAMESPACE="${1:-streaming-rafex-io}"
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BACKEND_CERTS="${ROOT_DIR}/backend/certs/backend"
 

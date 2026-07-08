@@ -121,7 +121,7 @@ make backend-install-raspi-certs RASPI_SSH=root@192.168.3.169 BACKEND_DEVICE_ID=
 Crear el secret de CA cliente en k3s:
 
 ```bash
-backend/helpers/create-k8s-secrets.sh mvps
+backend/helpers/create-k8s-secrets.sh streaming-rafex-io
 ```
 
 ## GitHub Actions

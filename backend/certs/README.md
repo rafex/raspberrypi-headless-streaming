@@ -27,5 +27,5 @@ backend/helpers/install-raspi-client-certs.sh root@192.168.3.169
 Crear secrets en Kubernetes:
 
 ```bash
-backend/helpers/create-k8s-secrets.sh mvps
+backend/helpers/create-k8s-secrets.sh streaming-rafex-io
 ```

@@ -19,7 +19,7 @@ jobs:
     env:
       IMAGE_NAME: raspi-streaming-api
       IMAGE_TAG: ${{ github.sha }}
-      K3S_NAMESPACE: mvps
+      K3S_NAMESPACE: streaming-rafex-io
       RELEASE_NAME: streaming-api
       CHART_PATH: ./charts/streaming-api
       SERVER_K3S: ${{ vars.SERVER_K3S }}

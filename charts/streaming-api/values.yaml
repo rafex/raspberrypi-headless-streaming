@@ -5,8 +5,7 @@ image:
   tag: latest
   pullPolicy: Always
 
-imagePullSecrets:
-  - name: ghcr-pull-secret-mvp
+imagePullSecrets: []
 
 service:
   type: ClusterIP
@@ -40,7 +39,7 @@ ingress:
     ingress.kubernetes.io/backend-protocol: "http"
     # Ajustar estas annotations segun el controlador HAProxy instalado.
     # Deben validar el cert cliente y reenviar headers mTLS al backend.
-    haproxy-ingress.github.io/auth-tls-secret: "mvps/streaming-api-client-ca"
+    haproxy-ingress.github.io/auth-tls-secret: "streaming-rafex-io/streaming-api-client-ca"
     haproxy-ingress.github.io/auth-tls-verify-client: "on"
     haproxy-ingress.github.io/auth-tls-pass-certificate-to-upstream: "true"
   hosts:
