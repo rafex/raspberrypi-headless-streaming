@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+backend/certs/**/*.crt
+backend/certs/**/*.key
+backend/certs/**/*.csr
+backend/certs/**/*.srl
+!backend/certs/**/.gitkeep

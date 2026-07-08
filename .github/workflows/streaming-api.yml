@@ -1,0 +1,90 @@
+name: Build and Deploy Streaming API
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/api/**"
+      - "charts/streaming-api/**"
+      - ".github/workflows/streaming-api.yml"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: raspi-streaming-api
+      IMAGE_TAG: ${{ github.sha }}
+      K3S_NAMESPACE: mvps
+      RELEASE_NAME: streaming-api
+      DEPLOY_HOST: my-k3s-2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN_PACKAGES }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/api
+          file: backend/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Package chart
+        run: |
+          tar -czf streaming-api-chart.tgz charts/streaming-api
+
+      - name: Upload chart to k3s server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ secrets.K3S_SSH_USER }}
+          key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
+          source: "streaming-api-chart.tgz"
+          target: "/tmp"
+
+      - name: Deploy chart on k3s server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ secrets.K3S_SSH_USER }}
+          key: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            rm -rf /tmp/streaming-api-chart
+            mkdir -p /tmp/streaming-api-chart
+            tar -xzf /tmp/streaming-api-chart.tgz -C /tmp/streaming-api-chart
+            kubectl create namespace "${{ env.K3S_NAMESPACE }}" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl -n "${{ env.K3S_NAMESPACE }}" create secret generic streaming-api-secrets \
+              --from-literal=API_TOKEN_RASPI='${{ secrets.STREAMING_API_RASPI_TOKEN }}' \
+              --from-literal=API_TOKEN_ADMIN='${{ secrets.STREAMING_API_ADMIN_TOKEN }}' \
+              --dry-run=client -o yaml | kubectl apply -f -
+            if [ -n '${{ secrets.STREAMING_API_CLIENT_CA_CRT_B64 }}' ]; then
+              printf '%s' '${{ secrets.STREAMING_API_CLIENT_CA_CRT_B64 }}' | base64 -d > /tmp/streaming-api-client-ca.crt
+              kubectl -n "${{ env.K3S_NAMESPACE }}" create secret generic streaming-api-client-ca \
+                --from-file=ca.crt=/tmp/streaming-api-client-ca.crt \
+                --dry-run=client -o yaml | kubectl apply -f -
+              rm -f /tmp/streaming-api-client-ca.crt
+            fi
+            helm upgrade --install "${{ env.RELEASE_NAME }}" /tmp/streaming-api-chart/charts/streaming-api \
+              --namespace "${{ env.K3S_NAMESPACE }}" \
+              --set image.repository="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}" \
+              --set image.tag="${{ env.IMAGE_TAG }}" \
+              --set env.PUBLIC_BASE_URL="https://streaming.rafex.io"

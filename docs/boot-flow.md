@@ -21,6 +21,7 @@ Crea, si no existen:
 ```text
 /etc/raspi-streaming/boot-flow.env
 /etc/raspi-streaming/health-reporter.env
+/etc/raspi-streaming/backend-control-agent.env
 /etc/raspi-streaming/ngrok.env
 /etc/raspi-streaming/ngrok.yml
 ```
@@ -119,6 +120,8 @@ Config:
 ```env
 HEALTH_ENDPOINT=https://tu-endpoint-publico.example/raspi/health
 HEALTH_TOKEN=
+BACKEND_CLIENT_CERT=/etc/raspi-streaming/backend-client/raspi-client.crt
+BACKEND_CLIENT_KEY=/etc/raspi-streaming/backend-client/raspi-client.key
 HEALTH_INTERVAL_SECONDS=60
 ```
 
@@ -130,5 +133,29 @@ sudo systemctl enable --now health-reporter.service
 
 El payload incluye estado de servicios, IP, SSID, dispositivos, configuración
 sin stream keys y URL pública de ngrok si está disponible.
+
+## Control remoto desde backend
+
+El backend publica un `desired-state` para cada Raspi. El agente local hace
+polling outbound con el mismo token/certificado que el health reporter, aplica
+solo variables permitidas de `/etc/streaming.env` y ejecuta comandos acotados
+como `start_streaming_overlay`, `stop_all` o `apply_config`.
+
+```bash
+sudo nano /etc/raspi-streaming/backend-control-agent.env
+sudo systemctl enable --now backend-control-agent.service
+```
+
+Config ejemplo:
+
+```env
+BACKEND_BASE_URL=https://streaming.rafex.io
+BACKEND_DEVICE_ID=raspi3b
+BACKEND_TOKEN=
+BACKEND_CLIENT_CERT=/etc/raspi-streaming/backend-client/raspi-client.crt
+BACKEND_CLIENT_KEY=/etc/raspi-streaming/backend-client/raspi-client.key
+BACKEND_AGENT_INTERVAL_SECONDS=30
+STREAMING_ENV=/etc/streaming.env
+```
 
 No envía `STREAM_KEY`, `STREAM_KEY_META`, `RTMP_URL` ni `RTMP_URL_SECONDARY`.

@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import socket
+import ssl
 import subprocess
 import time
 import urllib.error
@@ -114,13 +115,23 @@ def payload() -> dict:
     }
 
 
-def post_json(url: str, body: dict, token: str = "") -> None:
+def post_json(
+    url: str,
+    body: dict,
+    token: str = "",
+    client_cert: str = "",
+    client_key: str = "",
+) -> None:
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    context = None
+    if client_cert and client_key:
+        context = ssl.create_default_context()
+        context.load_cert_chain(certfile=client_cert, keyfile=client_key)
+    with urllib.request.urlopen(req, timeout=10, context=context) as resp:
         resp.read()
 
 
@@ -129,6 +140,8 @@ def main() -> int:
     parser.add_argument("--endpoint", default=os.environ.get("HEALTH_ENDPOINT", ""))
     parser.add_argument("--token", default=os.environ.get("HEALTH_TOKEN", ""))
     parser.add_argument("--interval", type=int, default=int(os.environ.get("HEALTH_INTERVAL_SECONDS", "60")))
+    parser.add_argument("--client-cert", default=os.environ.get("BACKEND_CLIENT_CERT", ""))
+    parser.add_argument("--client-key", default=os.environ.get("BACKEND_CLIENT_KEY", ""))
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
 
@@ -139,7 +152,7 @@ def main() -> int:
     while True:
         body = payload()
         try:
-            post_json(args.endpoint, body, args.token)
+            post_json(args.endpoint, body, args.token, args.client_cert, args.client_key)
             print(f"[health-reporter] posted {body['timestamp']} to {args.endpoint}", flush=True)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             print(f"[health-reporter] post failed: {exc}", flush=True)

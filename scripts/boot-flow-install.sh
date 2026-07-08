@@ -30,6 +30,7 @@ install_config_if_missing() {
 
 install_config_if_missing "${REPO_DIR}/systemd/boot-flow.env.example" "${CONFIG_DIR}/boot-flow.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/health-reporter.env.example" "${CONFIG_DIR}/health-reporter.env" 600
+install_config_if_missing "${REPO_DIR}/systemd/backend-control-agent.env.example" "${CONFIG_DIR}/backend-control-agent.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/ngrok.env.example" "${CONFIG_DIR}/ngrok.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/ngrok.yml.example" "${CONFIG_DIR}/ngrok.yml" 600
 
@@ -40,6 +41,10 @@ sed "s|__REPO_DIR__|${REPO_DIR}|g" \
 sed "s|__REPO_DIR__|${REPO_DIR}|g" \
     "${REPO_DIR}/systemd/health-reporter.service" \
     > "${SYSTEMD_DIR}/health-reporter.service"
+
+sed "s|__REPO_DIR__|${REPO_DIR}|g" \
+    "${REPO_DIR}/systemd/backend-control-agent.service" \
+    > "${SYSTEMD_DIR}/backend-control-agent.service"
 
 cp "${REPO_DIR}/systemd/ngrok-web.service" "${SYSTEMD_DIR}/ngrok-web.service"
 
@@ -53,6 +58,7 @@ echo ""
 echo "Servicios instalados:"
 echo "  boot-stream-orchestrator.service (enabled; auto-stream depende de boot-flow.env)"
 echo "  health-reporter.service (disabled por defecto)"
+echo "  backend-control-agent.service (disabled por defecto)"
 echo "  ngrok-web.service (disabled por defecto)"
 echo ""
 echo "Para habilitar auto-stream:"
@@ -62,6 +68,10 @@ echo ""
 echo "Para health reporter:"
 echo "  sudo nano ${CONFIG_DIR}/health-reporter.env"
 echo "  sudo systemctl enable --now health-reporter.service"
+echo ""
+echo "Para control remoto desde backend:"
+echo "  sudo nano ${CONFIG_DIR}/backend-control-agent.env"
+echo "  sudo systemctl enable --now backend-control-agent.service"
 echo ""
 echo "Para ngrok:"
 echo "  instalar ngrok y poner authtoken en ${CONFIG_DIR}/ngrok.yml"

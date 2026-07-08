@@ -11,7 +11,7 @@
 .PHONY: help setup deps-web-api age-key add-user \
         web-api install-web-api enable-web-api disable-web-api \
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
-        boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-ngrok stop-ngrok logs-ngrok \
+        boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-backend-agent stop-backend-agent logs-backend-agent start-ngrok stop-ngrok logs-ngrok \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming apply-streaming-defaults start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
@@ -126,6 +126,15 @@ stop-health-reporter:
 logs-health-reporter:
 	journalctl -u health-reporter.service -f
 
+start-backend-agent:
+	sudo systemctl enable --now backend-control-agent.service
+
+stop-backend-agent:
+	sudo systemctl disable --now backend-control-agent.service
+
+logs-backend-agent:
+	journalctl -u backend-control-agent.service -f
+
 start-ngrok:
 	sudo systemctl enable --now ngrok-web.service
 
@@ -238,6 +247,8 @@ update-services:
 	    | sudo tee $(SYSTEMD_DIR)/boot-stream-orchestrator.service > /dev/null
 	sed "s|__REPO_DIR__|$(REPO_DIR)|g" systemd/health-reporter.service \
 	    | sudo tee $(SYSTEMD_DIR)/health-reporter.service > /dev/null
+	sed "s|__REPO_DIR__|$(REPO_DIR)|g" systemd/backend-control-agent.service \
+	    | sudo tee $(SYSTEMD_DIR)/backend-control-agent.service > /dev/null
 	sudo cp systemd/ngrok-web.service $(SYSTEMD_DIR)/ngrok-web.service
 	sudo systemctl daemon-reload
 	sudo systemctl restart web-api.service

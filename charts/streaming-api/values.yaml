@@ -1,0 +1,76 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/rafex/raspi-streaming-api
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: ghcr-pull-secret-mvp
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+env:
+  PUBLIC_BASE_URL: "https://streaming.rafex.io"
+  DATABASE_PATH: "/data/streaming-api.db"
+  REQUIRE_MTLS: "true"
+  MTLS_VERIFY_HEADER: "x-ssl-client-verify"
+  MTLS_VERIFY_SUCCESS_VALUE: "SUCCESS"
+  MTLS_SUBJECT_HEADER: "x-ssl-client-subject"
+  MTLS_CN_HEADER: "x-ssl-client-cn"
+
+secrets:
+  existingSecret: streaming-api-secrets
+  raspiTokenKey: API_TOKEN_RASPI
+  adminTokenKey: API_TOKEN_ADMIN
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClassName: ""
+
+ingress:
+  enabled: true
+  className: haproxy
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    ingress.kubernetes.io/backend-protocol: "http"
+    # Ajustar estas annotations segun el controlador HAProxy instalado.
+    # Deben validar el cert cliente y reenviar headers mTLS al backend.
+    haproxy-ingress.github.io/auth-tls-secret: "mvps/streaming-api-client-ca"
+    haproxy-ingress.github.io/auth-tls-verify-client: "on"
+    haproxy-ingress.github.io/auth-tls-pass-certificate-to-upstream: "true"
+  hosts:
+    - host: streaming.rafex.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 80
+
+serviceAccount:
+  create: false
+  automount: false
+
+podSecurityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: streaming-api
+description: Backend publico para salud y control remoto de Raspberry Pi streaming
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
