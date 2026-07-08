@@ -190,12 +190,15 @@ def validate_config(data: dict) -> dict:
         if not LOGO_PATH_RE.match(overlay_logo_file):
             errors.append("overlay_logo_file contiene caracteres no permitidos")
         else:
-            # Normalizar para neutralizar traversal (../../etc/shadow → /etc/shadow)
-            # y verificar que el path quede dentro del directorio gestionado.
+            # Normalizar para neutralizar traversal (../../etc/shadow -> /etc/shadow)
+            # y verificar que el path quede dentro del directorio gestionado o
+            # dentro de assets/ versionado del repositorio.
             normalized = os.path.normpath(overlay_logo_file)
-            if not normalized.startswith("/var/lib/raspi-streaming/"):
+            is_managed_upload = normalized.startswith("/var/lib/raspi-streaming/")
+            is_repo_asset = normalized.startswith("assets/") and ".." not in normalized.split(os.sep)
+            if not (is_managed_upload or is_repo_asset):
                 errors.append(
-                    "overlay_logo_file debe estar dentro de /var/lib/raspi-streaming/"
+                    "overlay_logo_file debe estar dentro de /var/lib/raspi-streaming/ o assets/"
                 )
             else:
                 overlay_logo_file = normalized
