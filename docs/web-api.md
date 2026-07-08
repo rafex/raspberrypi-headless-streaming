@@ -330,6 +330,21 @@ make restart-web-api
 Este archivo es compartido entre los servicios systemd y la web API.
 Se reescribe completamente en cada `PUT /api/config`.
 
+Los defaults versionados viven en `systemd/default.streaming.env` y no deben
+contener secretos. Para aplicar esos defaults sobre la Raspberry Pi sin perder
+las claves locales de YouTube/Facebook:
+
+```bash
+sudo ./scripts/apply-streaming-defaults.py
+# o
+make apply-streaming-defaults
+```
+
+El script crea un backup de `/etc/streaming.env`, reemplaza la configuracion
+base desde el repo y preserva `STREAM_KEY`, `STREAM_KEY_META` y
+`RTMP_URL_SECONDARY`. Si encuentra una URL vieja de YouTube con la key embebida,
+extrae esa key y deja `RTMP_URL=rtmp://a.rtmp.youtube.com/live2`.
+
 | Variable | Descripción |
 |---|---|
 | `RTMP_URL` | URL RTMP completa incluyendo stream key (primary) |

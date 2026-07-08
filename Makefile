@@ -14,7 +14,7 @@
         boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-ngrok stop-ngrok logs-ngrok \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
-        streaming start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
+        streaming apply-streaming-defaults start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
         start-preview stop-preview status-preview logs-preview
 
 WEBAPI_USER  ?= admin
@@ -27,6 +27,8 @@ STREAM_USER  := streamer
 REPO_DIR     := $(shell pwd)
 MONITOR_INTERVAL ?= 2
 MONITOR_LOGS ?= 28
+STREAMING_ENV ?= /etc/streaming.env
+STREAMING_DEFAULT_ENV ?= systemd/default.streaming.env
 
 help:
 	@echo "Setup inicial (en orden, ver docs/web-api.md):"
@@ -52,6 +54,7 @@ help:
 	@echo ""
 	@echo "Streaming:"
 	@echo "  make streaming         - crea usuario 'streamer' e instala servicios systemd"
+	@echo "  make apply-streaming-defaults - aplica defaults preservando stream keys locales"
 	@echo "  make start-streaming   - inicia el stream (sin overlay)"
 	@echo "  make stop-streaming    - detiene el stream"
 	@echo "  make status-streaming  - muestra el estado del stream"
@@ -168,6 +171,9 @@ logs-web-api:
 # Crea usuario "streamer" e instala los unit files de systemd para streaming.
 streaming:
 	sudo ./scripts/streaming-install.sh
+
+apply-streaming-defaults:
+	sudo ./scripts/apply-streaming-defaults.py --defaults $(STREAMING_DEFAULT_ENV) --env $(STREAMING_ENV)
 
 start-streaming:
 	sudo systemctl start streaming.service

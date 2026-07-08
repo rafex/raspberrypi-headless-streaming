@@ -70,6 +70,9 @@ if [[ -f /etc/streaming.env ]]; then
     chmod 640 /etc/streaming.env
     owner="$(stat -c '%U:%G' /etc/streaming.env)"
     echo "Permisos de /etc/streaming.env: 640 (${owner})"
+else
+    install -m 640 "${REPO_DIR}/systemd/default.streaming.env" /etc/streaming.env
+    echo "Archivo creado desde defaults: /etc/streaming.env"
 fi
 
 # --- 5. Instalar unit files con sustitución de placeholders ---
