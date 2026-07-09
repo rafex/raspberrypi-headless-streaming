@@ -1,8 +1,11 @@
 [Unit]
 Description=Raspberry Pi Headless Streaming — Vista previa local (RTMP/MPEG-TS)
 Documentation=https://github.com/rafex/raspberrypi-headless-streaming
-After=network-online.target
+After=network-online.target mediamtx.service
 Wants=network-online.target
+# El preview publica a rtmp://localhost:1935 (mediamtx). Wants= lo arranca
+# automáticamente al iniciar el preview; After= garantiza el orden.
+Requires=mediamtx.service
 StartLimitIntervalSec=120
 StartLimitBurst=5
 
