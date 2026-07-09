@@ -8,3 +8,15 @@ backend/certs/**/*.csr
 backend/certs/**/*.srl
 !backend/certs/**/.gitkeep
 backend/helpers/raspi-backend.env.local
+
+
+# opencode (local, no versionar)
+.opencode/sessions.db
+.opencode/sessions*db
+.opencode/sessions.db-shm
+.opencode/sessions.db-wal
+.opencode/worktrees/
+.opencode/worktrees.db
+.opencode/worktrees.log
+.opencode/node_modules/
+session-ses_*.md
