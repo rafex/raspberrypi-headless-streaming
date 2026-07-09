@@ -136,15 +136,18 @@ overlay_position() {
 }
 
 # --- Escapar texto para filtro drawtext de ffmpeg ---
-# Orden obligatorio: \ primero, luego ' y %, para no doble-escapar.
+# Orden obligatorio: \ primero, luego ' % y :, para no doble-escapar.
 #   \  →  \\   (carácter de escape de ffmpeg)
 #   '  →  \'   (cierra la comilla que rodea el valor)
 #   %  →  %%   (prefijo de expresiones dinámicas %{...})
+#   :  →  \:   (separador de opciones del filtergraph; las comillas simples
+#              no lo protegen, p. ej. una URL "https://..." rompe el parser)
 escape_drawtext() {
     printf '%s' "$1" \
         | sed 's/\\/\\\\/g' \
         | sed "s/'/\\\\'/g" \
-        | sed 's/%/%%/g'
+        | sed 's/%/%%/g' \
+        | sed 's/:/\\:/g'
 }
 
 # --- Calcular posición de texto ---
