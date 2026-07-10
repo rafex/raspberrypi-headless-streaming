@@ -8,6 +8,7 @@ backend/certs/**/*.csr
 backend/certs/**/*.srl
 !backend/certs/**/.gitkeep
 backend/helpers/raspi-backend.env.local
+server/webapi/secrets.enc.yaml
 
 
 # opencode (local, no versionar)
