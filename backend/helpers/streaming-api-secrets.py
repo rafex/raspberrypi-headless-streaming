@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import getpass
+import hashlib
 import os
 import secrets
 import shutil
@@ -35,6 +37,17 @@ def require_openssl() -> None:
 
 def generate_token(prefix: str, nbytes: int) -> str:
     return f"{prefix}{secrets.token_urlsafe(nbytes)}"
+
+
+def generate_password_hash(password: str, iterations: int = 210_000) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return "$".join([
+        "pbkdf2_sha256",
+        str(iterations),
+        base64.b64encode(salt).decode("ascii"),
+        base64.b64encode(digest).decode("ascii"),
+    ])
 
 
 def write_private(path: Path, content: str, overwrite: bool = False) -> None:
@@ -127,6 +140,22 @@ def cmd_token(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_session_secret(args: argparse.Namespace) -> int:
+    print(generate_token("", args.bytes))
+    return 0
+
+
+def cmd_password_hash(args: argparse.Namespace) -> int:
+    password = args.password
+    if not password:
+        password = getpass.getpass("Password: ")
+        confirm = getpass.getpass("Confirm: ")
+        if password != confirm:
+            die("las contraseñas no coinciden")
+    print(generate_password_hash(password, args.iterations))
+    return 0
+
+
 def cmd_certs(args: argparse.Namespace) -> int:
     generate_certs(args.device_id, args.days, args.force, args.force_ca)
     return 0
@@ -181,6 +210,15 @@ def build_parser() -> argparse.ArgumentParser:
     token.add_argument("--prefix", default="rsp_")
     token.add_argument("--bytes", type=int, default=32)
     token.set_defaults(func=cmd_token)
+
+    session_secret = sub.add_parser("session-secret", help="Genera secreto para firmar sesiones del portal.")
+    session_secret.add_argument("--bytes", type=int, default=48)
+    session_secret.set_defaults(func=cmd_session_secret)
+
+    password_hash = sub.add_parser("password-hash", help="Genera hash PBKDF2 para la contraseña del portal.")
+    password_hash.add_argument("--password", default="", help="Contraseña en claro; si se omite, se pide en prompt.")
+    password_hash.add_argument("--iterations", type=int, default=210_000)
+    password_hash.set_defaults(func=cmd_password_hash)
 
     certs = sub.add_parser("certs", help="Genera CA mTLS y certificado cliente.")
     certs.add_argument("--device-id", default="raspi3b")

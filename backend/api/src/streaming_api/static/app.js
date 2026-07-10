@@ -2,7 +2,8 @@
   "use strict";
 
   const DEVICE_ID = "raspi3b";
-  const tokenKey = "streaming_api_admin_token";
+  const tokenKey = "streaming_api_session_token";
+  const usernameKey = "streaming_api_username";
   const $ = (id) => document.getElementById(id);
 
   function token() {
@@ -10,10 +11,8 @@
   }
 
   async function api(path, { method = "GET", body } = {}) {
-    const headers = {
-      "Authorization": `Bearer ${token()}`,
-      "Content-Type": "application/json",
-    };
+    const headers = { "Content-Type": "application/json" };
+    if (token()) headers.Authorization = `Bearer ${token()}`;
     const res = await fetch(path, {
       method,
       headers,
@@ -22,6 +21,15 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || data.error || `Error ${res.status}`);
     return data;
+  }
+
+  async function login(username, password) {
+    const data = await api("/ui/api/login", {
+      method: "POST",
+      body: { username, password },
+    });
+    sessionStorage.setItem(tokenKey, data.access_token);
+    localStorage.setItem(usernameKey, username);
   }
 
   async function headless(path, options = {}) {
@@ -123,6 +131,7 @@
       } catch {}
       renderState(state, config, localStatus);
     } catch (err) {
+      sessionStorage.removeItem(tokenKey);
       setDashboardVisible(false);
       $("auth-error").textContent = err.message;
       $("auth-error").hidden = false;
@@ -145,12 +154,22 @@
     }
   }
 
-  $("save-token-btn").addEventListener("click", async () => {
-    const value = $("admin-token").value.trim();
-    if (!value) return;
-    sessionStorage.setItem(tokenKey, value);
-    $("auth-error").hidden = true;
-    await refresh();
+  $("login-btn").addEventListener("click", async () => {
+    const username = $("login-username").value.trim();
+    const password = $("login-password").value;
+    if (!username || !password) return;
+    $("login-btn").disabled = true;
+    try {
+      await login(username, password);
+      $("login-password").value = "";
+      $("auth-error").hidden = true;
+      await refresh();
+    } catch (err) {
+      $("auth-error").textContent = err.message;
+      $("auth-error").hidden = false;
+    } finally {
+      $("login-btn").disabled = false;
+    }
   });
 
   $("refresh-btn").addEventListener("click", refresh);
@@ -161,8 +180,8 @@
   $("copy-ssh-btn").addEventListener("click", () => copyText($("ssh-command").textContent.trim()));
 
   const existing = token();
+  $("login-username").value = localStorage.getItem(usernameKey) || "";
   if (existing) {
-    $("admin-token").value = existing;
     refresh();
   }
   setInterval(refresh, 15_000);

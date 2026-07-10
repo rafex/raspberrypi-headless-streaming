@@ -92,6 +92,9 @@ jobs:
         env:
           STREAMING_API_RASPI_TOKEN: ${{ secrets.STREAMING_API_RASPI_TOKEN }}
           STREAMING_API_ADMIN_TOKEN: ${{ secrets.STREAMING_API_ADMIN_TOKEN }}
+          STREAMING_API_PORTAL_USERNAME: ${{ secrets.STREAMING_API_PORTAL_USERNAME }}
+          STREAMING_API_PORTAL_PASSWORD_HASH: ${{ secrets.STREAMING_API_PORTAL_PASSWORD_HASH }}
+          STREAMING_API_PORTAL_SESSION_SECRET: ${{ secrets.STREAMING_API_PORTAL_SESSION_SECRET }}
         run: |
           if [ -z "$STREAMING_API_RASPI_TOKEN" ]; then
             echo "::error::Missing required secret: STREAMING_API_RASPI_TOKEN"
@@ -101,9 +104,24 @@ jobs:
             echo "::error::Missing required secret: STREAMING_API_ADMIN_TOKEN"
             exit 1
           fi
+          if [ -z "$STREAMING_API_PORTAL_USERNAME" ]; then
+            echo "::error::Missing required secret: STREAMING_API_PORTAL_USERNAME"
+            exit 1
+          fi
+          if [ -z "$STREAMING_API_PORTAL_PASSWORD_HASH" ]; then
+            echo "::error::Missing required secret: STREAMING_API_PORTAL_PASSWORD_HASH"
+            exit 1
+          fi
+          if [ -z "$STREAMING_API_PORTAL_SESSION_SECRET" ]; then
+            echo "::error::Missing required secret: STREAMING_API_PORTAL_SESSION_SECRET"
+            exit 1
+          fi
           kubectl -n "$K3S_NAMESPACE" create secret generic streaming-api-secrets \
             --from-literal=API_TOKEN_RASPI="$STREAMING_API_RASPI_TOKEN" \
             --from-literal=API_TOKEN_ADMIN="$STREAMING_API_ADMIN_TOKEN" \
+            --from-literal=PORTAL_USERNAME="$STREAMING_API_PORTAL_USERNAME" \
+            --from-literal=PORTAL_PASSWORD_HASH="$STREAMING_API_PORTAL_PASSWORD_HASH" \
+            --from-literal=PORTAL_SESSION_SECRET="$STREAMING_API_PORTAL_SESSION_SECRET" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Upsert mTLS client CA in k3s

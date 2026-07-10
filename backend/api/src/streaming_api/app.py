@@ -6,8 +6,15 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .auth import Principal, authenticate, authenticate_admin_token, require_admin
-from .models import AckPayload, DesiredStateIn, DesiredStateOut, HealthPayload
+from .auth import (
+    Principal,
+    authenticate,
+    authenticate_admin_token,
+    create_portal_session,
+    require_admin,
+    verify_portal_credentials,
+)
+from .models import AckPayload, DesiredStateIn, DesiredStateOut, HealthPayload, PortalLoginIn, PortalLoginOut
 from .portal_proxy import (
     device_id_from_host,
     portal_host_for_device,
@@ -64,6 +71,14 @@ def frontend() -> RedirectResponse:
 @app.head("/portal/{device_id}/")
 def redirect_to_portal(device_id: str) -> RedirectResponse:
     return RedirectResponse(f"https://{portal_host_for_device(device_id)}/", status_code=302)
+
+
+@app.post("/ui/api/login", response_model=PortalLoginOut)
+def ui_login(credentials: PortalLoginIn) -> PortalLoginOut:
+    if not verify_portal_credentials(credentials.username, credentials.password):
+        raise HTTPException(status_code=401, detail="usuario o contraseña inválidos")
+    access_token, expires_at = create_portal_session()
+    return PortalLoginOut(access_token=access_token, expires_at=expires_at)
 
 
 @app.get("/ui/api/raspi/{device_id}/state")

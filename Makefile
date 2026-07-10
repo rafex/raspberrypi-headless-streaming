@@ -69,6 +69,8 @@ help:
 	@echo "Backend publico streaming.rafex.io:"
 	@echo "  make backend-token          - genera token bearer para Raspi"
 	@echo "  make backend-admin-token    - genera token bearer admin"
+	@echo "  make backend-session-secret - genera secreto para sesiones del portal remoto"
+	@echo "  make backend-password-hash  - genera hash PBKDF2 para contraseña del portal"
 	@echo "  make backend-certs          - genera CA mTLS y cert cliente (BACKEND_DEVICE_ID=$(BACKEND_DEVICE_ID))"
 	@echo "  make backend-secrets        - genera tokens + certs + envs locales"
 	@echo "  make backend-install-raspi-certs - instala cert cliente en la Raspi (RASPI_SSH=$(RASPI_SSH))"
@@ -164,6 +166,12 @@ backend-token:
 
 backend-admin-token:
 	./backend/helpers/streaming-api-secrets.py token --prefix adm_
+
+backend-session-secret:
+	./backend/helpers/streaming-api-secrets.py session-secret
+
+backend-password-hash:
+	./backend/helpers/streaming-api-secrets.py password-hash
 
 backend-certs:
 	./backend/helpers/streaming-api-secrets.py certs \

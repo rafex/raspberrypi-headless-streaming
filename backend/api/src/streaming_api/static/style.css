@@ -60,6 +60,10 @@ label {
   font-size: 0.9rem;
 }
 
+label + label {
+  margin-top: 12px;
+}
+
 input {
   display: block;
   width: 100%;

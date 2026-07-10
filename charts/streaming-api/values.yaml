@@ -28,6 +28,9 @@ secrets:
   existingSecret: streaming-api-secrets
   raspiTokenKey: API_TOKEN_RASPI
   adminTokenKey: API_TOKEN_ADMIN
+  portalUsernameKey: PORTAL_USERNAME
+  portalPasswordHashKey: PORTAL_PASSWORD_HASH
+  portalSessionSecretKey: PORTAL_SESSION_SECRET
 
 persistence:
   enabled: true

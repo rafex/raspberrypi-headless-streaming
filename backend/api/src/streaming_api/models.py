@@ -26,6 +26,17 @@ class HealthPayload(BaseModel):
     recent_stream_errors: str = ""
 
 
+class PortalLoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class PortalLoginOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: int
+
+
 class ControlCommand(BaseModel):
     action: Literal[
         "none",

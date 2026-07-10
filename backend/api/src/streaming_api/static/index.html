@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Raspi Streaming</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260710-ssh">
+  <link rel="stylesheet" href="/static/style.css?v=20260710-login">
 </head>
 <body>
   <main class="wrap">
@@ -18,10 +18,13 @@
 
     <section id="auth-card" class="panel">
       <h2>Acceso</h2>
-      <label>Admin token
-        <input id="admin-token" type="password" autocomplete="off" placeholder="adm_...">
+      <label>Usuario
+        <input id="login-username" type="text" autocomplete="username" placeholder="usuario">
       </label>
-      <button id="save-token-btn" type="button">Entrar</button>
+      <label>Contraseña
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="contraseña">
+      </label>
+      <button id="login-btn" type="button">Entrar</button>
       <p id="auth-error" class="error" hidden></p>
     </section>
 
@@ -76,6 +79,6 @@
       <p id="message" class="message" hidden></p>
     </section>
   </main>
-  <script src="/static/app.js?v=20260710-ssh"></script>
+  <script src="/static/app.js?v=20260710-login"></script>
 </body>
 </html>
