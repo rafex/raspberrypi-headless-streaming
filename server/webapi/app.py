@@ -26,11 +26,17 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
 
-from . import auth, config_store, device_detect, preview_store, secrets_store, stream_control
+from . import auth, config_store, device_detect, mic_control, preview_store, secrets_store, stream_control
 
 # Límite de conexiones SSE simultáneas — cada una ocupa un worker de gunicorn.
 _SSE_MAX = 5
 _sse_sem = threading.Semaphore(_SSE_MAX)
+
+# Límite aparte para el stream SSE del nivel de micrófono: solo se abre mientras
+# el acordeón de Audio está desplegado, y cada conexión puede disparar captura
+# del device, así que lo acotamos más agresivamente.
+_MIC_SSE_MAX = 3
+_mic_sse_sem = threading.Semaphore(_MIC_SSE_MAX)
 
 # Rate limiter compartido entre todas las instancias de app (factory pattern).
 _limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
@@ -172,8 +178,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         def generate():
             try:
                 while True:
-                    data = {svc: stream_control.status(svc) for svc in stream_control.SERVICES}
-                    yield f"data: {json.dumps(data)}\n\n"
+                    services = {svc: stream_control.status(svc) for svc in stream_control.SERVICES}
+                    yield f"data: {json.dumps({'services': services})}\n\n"
                     time.sleep(5)
             finally:
                 _sse_sem.release()
@@ -191,6 +197,112 @@ def create_app(test_config: dict | None = None) -> Flask:
             "cameras": device_detect.list_cameras(),
             "mics":    device_detect.list_mics(),
         })
+
+    def _resolve_audio_device() -> str:
+        cfg = config_store.read_config(app.config["STREAMING_ENV_PATH"])
+        if cfg.get("STREAM_NO_AUDIO") == "true":
+            return ""
+        dev = (cfg.get("AUDIO_DEVICE") or "").strip()
+        if dev:
+            return dev
+        mics = device_detect.list_mics()
+        return mics[0]["dev"] if mics else ""
+
+    def _mic_snapshot(services: dict | None = None, measure: bool = True) -> dict:
+        """Estado del micrófono: ganancia (siempre) y nivel (si no está ocupado).
+
+        `services` permite reusar el status ya calculado (SSE) y evitar más
+        llamadas a systemctl. En el SSE `measure=True` usa caché con TTL para
+        no abrir el device en cada worker/cliente.
+        """
+        device = _resolve_audio_device()
+        if not device:
+            return {"device": "", "available": False, "busy": False,
+                    "reason": "no-audio", "gain": None, "level": None}
+
+        if services is not None:
+            busy = any(services.get(svc, {}).get("active") for svc in stream_control.SERVICES)
+        else:
+            busy = any(stream_control.is_active(svc) for svc in stream_control.SERVICES)
+
+        gain = mic_control.get_gain(device)
+        level = None
+        if measure and not busy:
+            # max_age=4s: el loop SSE gira cada 5s, así clientes concurrentes
+            # comparten una sola captura por ventana.
+            level = mic_control.measure_level(device, max_age=4.0)
+
+        if busy:
+            reason = "busy"
+        elif level is None:
+            reason = "no-signal"
+        else:
+            reason = "ok"
+
+        return {
+            "device": device,
+            "available": not busy and level is not None,
+            "busy": busy,
+            "reason": reason,
+            "gain": gain,
+            "level": level,
+        }
+
+    @app.get("/api/mic/status")
+    @auth.require_role("operator")
+    def mic_status():
+        return jsonify(_mic_snapshot(measure=True))
+
+    @app.get("/api/mic/events")
+    @auth.require_role("operator")
+    def mic_events():
+        """Stream SSE del nivel del micrófono.
+
+        El frontend abre esta conexión SOLO mientras el acordeón de Audio está
+        desplegado y la cierra al plegarlo, así no se mide el device cuando
+        nadie está mirando. measure_level cachea entre workers (TTL 4s).
+        """
+        if not _mic_sse_sem.acquire(blocking=False):
+            return jsonify({"error": "Demasiadas conexiones de micrófono activas"}), 429
+
+        def generate():
+            try:
+                while True:
+                    yield f"data: {json.dumps(_mic_snapshot(measure=True))}\n\n"
+                    time.sleep(5)
+            finally:
+                _mic_sse_sem.release()
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.put("/api/mic/gain")
+    @auth.require_role("operator")
+    def mic_gain():
+        data = request.get_json(silent=True) or {}
+        raw = data.get("percent")
+        try:
+            percent = int(raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "percent debe ser un entero entre 0 y 100"}), 400
+        if not (0 <= percent <= 100):
+            return jsonify({"error": "percent debe estar entre 0 y 100"}), 400
+
+        device = _resolve_audio_device()
+        if not device:
+            return jsonify({"error": "No hay micrófono configurado"}), 400
+
+        try:
+            gain = mic_control.set_gain(device, percent)
+        except mic_control.MicControlError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        _audit.info("mic_gain_set user=%s ip=%s device=%s percent=%d", _user(), _client_ip(), device, percent)
+        return jsonify({"device": device, "gain": gain})
+
 
     @app.get("/api/config")
     @auth.require_role("viewer")

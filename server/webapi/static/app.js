@@ -42,6 +42,7 @@
     $("dashboard-view").hidden = true;
     $("login-view").hidden = false;
     if (eventSource) { eventSource.close(); eventSource = null; }
+    closeMicStream();
   }
 
   // ──────────────────────────────────────────────────
@@ -140,7 +141,8 @@
     eventSource = new EventSource("/api/events");
     eventSource.onmessage = (e) => {
       try {
-        const data = JSON.parse(e.data);
+        const payload = JSON.parse(e.data);
+        const data = payload.services || payload;
         renderServices(data);
         updatePreviewStatus(data["preview"]);
         lockOverlayToggle(anyServiceActive(data));
@@ -566,6 +568,136 @@
   }
 
   // ──────────────────────────────────────────────────
+  // VU meter + ganancia del micrófono
+  // ──────────────────────────────────────────────────
+  let micGainInFlight = false;
+
+  function setVu(pct, peakPct) {
+    const fill = $("vu-fill");
+    const peak = $("vu-peak");
+    if (fill) fill.style.width = `${Math.max(0, Math.min(100, pct || 0))}%`;
+    if (peak) {
+      if (peakPct == null) {
+        peak.hidden = true;
+      } else {
+        peak.hidden = false;
+        peak.style.left = `${Math.max(0, Math.min(100, peakPct))}%`;
+      }
+    }
+  }
+
+  function renderMicGain(gain) {
+    const slider = $("mic-gain");
+    const valEl  = $("mic-gain-val");
+    if (!slider) return;
+    if (gain && typeof gain.percent === "number") {
+      if (!micGainInFlight) slider.value = String(gain.percent);
+      slider.disabled = false;
+      valEl.textContent = `${gain.percent}%` + (gain.db != null ? ` (${gain.db} dB)` : "");
+    } else {
+      slider.disabled = true;
+      valEl.textContent = "no disponible";
+    }
+  }
+
+  function renderMicStatus(data) {
+    const box = $("mic-meter");
+    const msg = $("mic-status");
+    if (!box || !msg) return;
+    renderMicGain(data.gain);
+
+    box.classList.toggle("is-busy", data.reason === "busy");
+    if (data.available && data.level) {
+      setVu(data.level.mean_pct, data.level.peak_pct);
+      const mean = data.level.mean_db != null ? `${data.level.mean_db} dB` : "—";
+      const peak = data.level.max_db != null ? `${data.level.max_db} dB` : "—";
+      msg.className = "device-status";
+      msg.textContent = `Nivel medio ${mean} · pico ${peak}`;
+    } else {
+      setVu(0, null);
+      msg.className = "device-status";
+      if (data.reason === "busy")      msg.textContent = "Transmisión/preview activo: la medición se pausa, pero puedes ajustar la ganancia.";
+      else if (data.reason === "no-audio")  msg.textContent = "Sin micrófono configurado (modo sin audio).";
+      else if (data.reason === "no-signal") msg.textContent = "No se detectó señal. Verifica el micrófono.";
+      else msg.textContent = "Esperando medición…";
+    }
+  }
+
+  async function refreshMic() {
+    if (role !== "operator") return;
+    const msg = $("mic-status");
+    const btn = $("mic-refresh");
+    if (btn) btn.disabled = true;
+    if (msg) { msg.className = "device-status"; msg.textContent = "Midiendo…"; }
+    try {
+      const data = await api("/api/mic/status");
+      renderMicStatus(data);
+    } catch (err) {
+      if (msg) { msg.className = "error"; msg.textContent = err.message; }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  $("mic-refresh")?.addEventListener("click", refreshMic);
+
+  // SSE del nivel del micrófono: se abre SOLO mientras el acordeón de Audio
+  // está desplegado, y se cierra al plegarlo. Así no se mide el device (arecord)
+  // cuando nadie está viendo el panel de audio.
+  let micEventSource = null;
+
+  function openMicStream() {
+    if (role !== "operator" || micEventSource) return;
+    const msg = $("mic-status");
+    if (msg) { msg.className = "device-status"; msg.textContent = "Midiendo…"; }
+    micEventSource = new EventSource("/api/mic/events");
+    micEventSource.onmessage = (e) => {
+      try { renderMicStatus(JSON.parse(e.data)); } catch {}
+    };
+    micEventSource.onerror = () => {
+      // Cierra en error transitorio; se reabrirá si el acordeón sigue abierto.
+      closeMicStream();
+      if (isAudioAccordionOpen()) setTimeout(syncMicStream, 30_000);
+    };
+  }
+
+  function closeMicStream() {
+    if (micEventSource) { micEventSource.close(); micEventSource = null; }
+  }
+
+  function isAudioAccordionOpen() {
+    return Boolean($("acrd-audio")?.open);
+  }
+
+  function syncMicStream() {
+    if (role === "operator" && isAudioAccordionOpen()) openMicStream();
+    else closeMicStream();
+  }
+
+  $("acrd-audio")?.addEventListener("toggle", syncMicStream);
+
+  $("mic-gain")?.addEventListener("input", () => {
+    const val = $("mic-gain").value;
+    $("mic-gain-val").textContent = `${val}%`;
+  });
+
+  $("mic-gain")?.addEventListener("change", async () => {
+    const percent = Number($("mic-gain").value);
+    micGainInFlight = true;
+    $("mic-gain").disabled = true;
+    try {
+      const data = await api("/api/mic/gain", { method: "PUT", body: { percent } });
+      renderMicGain(data.gain);
+    } catch (err) {
+      const msg = $("mic-status");
+      if (msg) { msg.className = "error"; msg.textContent = err.message; }
+    } finally {
+      micGainInFlight = false;
+      $("mic-gain").disabled = false;
+    }
+  });
+
+  // ──────────────────────────────────────────────────
   // Detección de dispositivos
   // ──────────────────────────────────────────────────
   function audioOptionLabel(item) {
@@ -740,6 +872,7 @@
       await refreshStatus();
       await loadConfig();
       await loadPreviewConfig();
+      syncMicStream();
       startEventSource();
     } catch (err) {
       $("login-error").textContent = err.message;

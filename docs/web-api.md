@@ -180,6 +180,20 @@ previa, ver más abajo):
     se auto-selecciona 48 000 Hz y se muestra un hint.
 - Toggle **Boost de audio ×2**: aplica `aresample=async=1,volume=2.0` al
   pipeline de audio — útil para micrófonos de solapa con nivel bajo.
+- **Nivel del micrófono (VU meter) y ganancia de captura**:
+  - Barra de nivel que se actualiza en vivo vía SSE (`GET /api/mic/events`).
+    La conexión SSE se abre **solo mientras el acordeón de Audio está
+    desplegado** y se cierra al plegarlo, para no capturar del micrófono
+    (`ffmpeg volumedetect`, ~1s) cuando nadie está viendo el panel.
+  - Botón **Medir ahora** para forzar una medición puntual (`GET /api/mic/status`).
+  - Slider de **ganancia de captura** (`PUT /api/mic/gain`) que ajusta el
+    control ALSA vía `amixer`. Funciona en cualquier momento, incluso durante
+    la transmisión; la medición del nivel se pausa mientras
+    streaming/streaming-overlay/preview usan el micrófono (`busy`).
+  - El dispositivo se toma de `AUDIO_DEVICE` en `/etc/streaming.env` (o el
+    primer micrófono detectado). No requiere sudo: el usuario `webapi`
+    pertenece al grupo `audio`. La medición se cachea en `/dev/shm` con un
+    `flock` para coordinar los múltiples workers de gunicorn.
 
 ### Paso 3 — Destino
 
@@ -269,6 +283,8 @@ El toggle que decide si se usa `streaming-overlay.service` o
 Vista previa.
 
 El estado se actualiza automáticamente vía Server-Sent Events (`/api/events`).
+El nivel del micrófono usa un stream SSE aparte (`/api/mic/events`) que solo
+se abre mientras el acordeón de Audio está desplegado.
 
 ---
 

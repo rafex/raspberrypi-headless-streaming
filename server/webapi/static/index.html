@@ -105,7 +105,7 @@
             <!-- ════════════════════════════════════════
                  PASO 2 — Audio
                  ════════════════════════════════════════ -->
-            <details class="acrd">
+            <details class="acrd" id="acrd-audio">
               <summary class="acrd-hdr">
                 <span class="acrd-num">2</span>
                 <span class="acrd-title">Audio</span>
@@ -148,6 +148,25 @@
                     <input type="checkbox" id="cfg-audio-boost">
                     <span class="toggle-slider"></span>
                   </label>
+                </div>
+
+                <!-- ── Nivel y ganancia del micrófono (medición en vivo) ── -->
+                <div id="mic-meter" class="mic-meter" style="margin-top:20px">
+                  <div class="mic-meter-head">
+                    <span class="section-label" style="margin:0">Nivel del micrófono</span>
+                    <button type="button" id="mic-refresh" class="btn-scan">Medir ahora</button>
+                  </div>
+                  <div class="vu-track">
+                    <div class="vu-fill" id="vu-fill"></div>
+                    <div class="vu-peak" id="vu-peak" hidden></div>
+                  </div>
+                  <p id="mic-status" class="device-status">Esperando medición…</p>
+
+                  <p class="section-label" style="margin-top:10px">
+                    Ganancia de captura <span id="mic-gain-val" class="mic-gain-val"></span>
+                  </p>
+                  <input type="range" id="mic-gain" class="mic-gain-slider" min="0" max="100" step="1" value="50" disabled>
+                  <p class="field-hint">Ajusta el volumen de entrada antes de transmitir. La ganancia funciona incluso durante la transmisión; el nivel se actualiza en vivo cuando no hay stream ni preview activos.</p>
                 </div>
 
               </div>

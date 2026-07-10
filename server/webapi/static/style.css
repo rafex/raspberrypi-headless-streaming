@@ -646,3 +646,81 @@ h3 {
   margin: 2px 0 8px;
   line-height: 1.4;
 }
+
+/* ────────────────────────────────────────────────
+   VU meter + ganancia del micrófono
+   ──────────────────────────────────────────────── */
+.mic-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.vu-track {
+  position: relative;
+  height: 16px;
+  background: var(--panel);
+  border: 1px solid #2a3340;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.vu-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--good) 0%, var(--good) 60%, #eab308 78%, var(--bad) 100%);
+  transition: width 0.15s linear;
+}
+
+.vu-peak {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text);
+  opacity: 0.8;
+  transition: left 0.15s linear;
+}
+
+.mic-meter.is-busy .vu-fill { background: #2a3340; }
+
+.mic-gain-val {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.mic-gain-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  padding: 0;
+  margin: 6px 0 0;
+  background: #2a3340;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.mic-gain-slider:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mic-gain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.mic-gain-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
