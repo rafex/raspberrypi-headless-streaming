@@ -73,14 +73,23 @@ El portal puede seguir cambiando la configuración como antes.
 
 ## ngrok
 
-Instala `ngrok` fuera del repo. El authtoken se guarda en el YAML local de
-ngrok, no en `ngrok.env`:
+`make boot-flow` instala `ngrok` si falta. El authtoken se guarda en el YAML
+local de ngrok, no en `ngrok.env`. El archivo puede declarar ambos tuneles:
+portal web y SSH.
 
 ```yaml
 # /etc/raspi-streaming/ngrok.yml
 version: 3
 agent:
   authtoken: <your-authtoken>
+
+tunnels:
+  web:
+    proto: http
+    addr: https://127.0.0.1:8443
+  ssh:
+    proto: tcp
+    addr: 22
 ```
 
 Luego ajusta los parametros no secretos del tunel:
@@ -99,6 +108,19 @@ NGROK_CONFIG=/etc/raspi-streaming/ngrok.yml
 NGROK_DOMAIN=
 NGROK_LOCAL_URL=https://127.0.0.1:8443
 NGROK_EXTRA_ARGS=
+```
+
+Si `ngrok.yml` contiene `tunnels:`, `ngrok-web.service` ejecuta
+`ngrok start --all`. Para ver el endpoint SSH:
+
+```bash
+curl -s http://127.0.0.1:4040/api/tunnels
+```
+
+El tunnel SSH aparece como `tcp://HOST:PORT`. La conexion queda:
+
+```bash
+ssh root@HOST -p PORT
 ```
 
 El reporter lee la URL pública desde la API local de ngrok:
