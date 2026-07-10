@@ -56,23 +56,35 @@ def read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def public_ngrok_url() -> str:
+def ngrok_tunnels() -> dict[str, str]:
     raw = run(["curl", "-fsS", "http://127.0.0.1:4040/api/tunnels"], timeout=3)
     if not raw:
-        return ""
+        return {}
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
+        return {}
+    tunnels: dict[str, str] = {}
+    for tunnel in data.get("tunnels", []):
+        name = str(tunnel.get("name", "")).strip()
+        url = str(tunnel.get("public_url", ""))
+        if name and url:
+            tunnels[name] = url
+        if url.startswith("https://") and "web" not in tunnels:
+            tunnels["web"] = url
+        if url.startswith("tcp://") and "ssh" not in tunnels:
+            tunnels["ssh"] = url
+    return tunnels
+
+
+def ssh_command(ssh_url: str) -> str:
+    if not ssh_url.startswith("tcp://"):
         return ""
-    for tunnel in data.get("tunnels", []):
-        url = str(tunnel.get("public_url", ""))
-        if url.startswith("https://"):
-            return url
-    for tunnel in data.get("tunnels", []):
-        url = str(tunnel.get("public_url", ""))
-        if url:
-            return url
-    return ""
+    endpoint = ssh_url.removeprefix("tcp://").strip()
+    host, sep, port = endpoint.rpartition(":")
+    if not sep or not host or not port:
+        return ""
+    return f"ssh root@{host} -p {port}"
 
 
 def service_state(service: str) -> dict[str, str | bool]:
@@ -101,13 +113,18 @@ def payload() -> dict:
     ip = run(["sh", "-c", "ip -4 -o addr show scope global | awk '{print $2\":\"$4}'"])
     route = run(["ip", "route", "show", "default"])
     ssid = run(["iwgetid", "-r"])
+    tunnels = ngrok_tunnels()
+    web_url = tunnels.get("web", "")
+    ssh_url = tunnels.get("ssh", "")
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": socket.gethostname(),
         "ip": ip,
         "default_route": route,
         "wifi_ssid": ssid,
-        "ngrok_url": public_ngrok_url(),
+        "ngrok_url": web_url,
+        "ngrok_ssh_url": ssh_url,
+        "ngrok_ssh_command": ssh_command(ssh_url),
         "services": {
             "wifi_bootstrap": service_state("raspi-wifi-bootstrap.service"),
             "wifi-bootstrap": service_state("raspi-wifi-bootstrap.service"),

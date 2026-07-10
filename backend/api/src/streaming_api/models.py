@@ -17,6 +17,8 @@ class HealthPayload(BaseModel):
     default_route: str = ""
     wifi_ssid: str = ""
     ngrok_url: str = ""
+    ngrok_ssh_url: str = ""
+    ngrok_ssh_command: str = ""
     services: dict[str, Any] = Field(default_factory=dict)
     devices: dict[str, Any] = Field(default_factory=dict)
     stream_config: dict[str, Any] = Field(default_factory=dict)

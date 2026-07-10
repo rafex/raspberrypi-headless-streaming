@@ -89,6 +89,26 @@ button:disabled {
 .success { background: var(--good); }
 .danger { background: #991b1b; }
 
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .error { color: var(--bad); }
 .message { color: var(--muted); }
 
@@ -120,6 +140,24 @@ button:disabled {
 
 .kv dd {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.copy-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.copy-line code {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  background: #0b1020;
+  color: #dbeafe;
   overflow-wrap: anywhere;
 }
 

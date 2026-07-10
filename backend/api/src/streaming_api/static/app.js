@@ -34,6 +34,25 @@
     $("message").textContent = text;
   }
 
+  async function copyText(text) {
+    if (!text || text === "-") return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showMessage("Comando SSH copiado");
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = text;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+      showMessage("Comando SSH copiado");
+    }
+  }
+
   function setDashboardVisible(visible) {
     $("auth-card").hidden = visible;
     $("dashboard").hidden = !visible;
@@ -66,6 +85,7 @@
     const health = state.last_health || {};
     const services = localStatus || health.services || {};
     const ngrokUrl = health.ngrok_url || "";
+    const sshCommand = health.ngrok_ssh_command || "";
     const wifi = health.wifi_ssid || "-";
 
     $("connection-state").textContent = ngrokUrl ? "Raspi comunicada" : "Sin tunnel reportado";
@@ -76,6 +96,8 @@
     $("default-route").textContent = health.default_route || "-";
     $("ngrok-url").textContent = ngrokUrl || "-";
     $("ngrok-url").href = ngrokUrl || "#";
+    $("ssh-command").textContent = sshCommand || "-";
+    $("copy-ssh-btn").disabled = !sshCommand;
     renderServices(services);
     $("config-view").textContent = JSON.stringify(config || health.stream_config || {}, null, 2);
   }
@@ -136,6 +158,7 @@
   $("start-stream-btn").addEventListener("click", () => runCommand("Iniciar stream", "/api/stream/streaming/start"));
   $("start-overlay-btn").addEventListener("click", () => runCommand("Iniciar con overlay", "/api/stream/streaming-overlay/start"));
   $("start-preview-btn").addEventListener("click", () => runCommand("Iniciar preview", "/api/stream/preview/start"));
+  $("copy-ssh-btn").addEventListener("click", () => copyText($("ssh-command").textContent.trim()));
 
   const existing = token();
   if (existing) {
