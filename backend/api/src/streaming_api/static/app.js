@@ -45,18 +45,19 @@
   }
 
   function renderServices(services = {}) {
+    const pick = (...keys) => keys.map((key) => services[key]).find(Boolean);
     const known = [
       ["streaming", "Streaming"],
-      ["streaming-overlay", "Streaming overlay"],
+      [["streaming-overlay", "streaming_overlay"], "Streaming overlay"],
       ["preview", "Preview"],
-      ["web-api", "Portal local"],
-      ["ngrok_web", "ngrok"],
+      [["web-api", "web_api"], "Portal local"],
+      [["ngrok-web", "ngrok_web"], "ngrok"],
       ["backend_agent", "Backend agent"],
     ];
-    $("services").innerHTML = known.map(([key, label]) => `
+    $("services").innerHTML = known.map(([keys, label]) => `
       <div class="service">
         <div class="name">${label}</div>
-        ${serviceBadge(services[key])}
+        ${serviceBadge(Array.isArray(keys) ? pick(...keys) : services[keys])}
       </div>
     `).join("");
   }

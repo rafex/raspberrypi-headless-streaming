@@ -27,6 +27,21 @@ def run(cmd: list[str], timeout: int = 5) -> str:
         return ""
 
 
+def run_status(cmd: list[str], timeout: int = 5) -> str:
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except Exception:
+        return ""
+    return result.stdout.strip()
+
+
 def read_env(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     try:
@@ -61,8 +76,8 @@ def public_ngrok_url() -> str:
 
 
 def service_state(service: str) -> dict[str, str | bool]:
-    active = run(["systemctl", "is-active", service])
-    enabled = run(["systemctl", "is-enabled", service])
+    active = run_status(["systemctl", "is-active", service])
+    enabled = run_status(["systemctl", "is-enabled", service])
     return {
         "active": active == "active",
         "state": active or "unknown",
@@ -95,11 +110,15 @@ def payload() -> dict:
         "ngrok_url": public_ngrok_url(),
         "services": {
             "wifi_bootstrap": service_state("raspi-wifi-bootstrap.service"),
+            "wifi-bootstrap": service_state("raspi-wifi-bootstrap.service"),
             "web_api": service_state("web-api.service"),
+            "web-api": service_state("web-api.service"),
             "streaming": service_state("streaming.service"),
             "streaming_overlay": service_state("streaming-overlay.service"),
+            "streaming-overlay": service_state("streaming-overlay.service"),
             "preview": service_state("preview.service"),
             "ngrok_web": service_state("ngrok-web.service"),
+            "ngrok-web": service_state("ngrok-web.service"),
         },
         "devices": {
             "audio": run(["arecord", "-l"]),
