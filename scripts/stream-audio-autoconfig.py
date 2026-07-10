@@ -15,6 +15,7 @@ import argparse
 import glob
 import os
 import re
+import stat
 import subprocess
 from pathlib import Path
 
@@ -113,7 +114,12 @@ def write_env(path: Path, updates: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o640)
+    if path.exists():
+        st = path.stat()
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.chmod(tmp, stat.S_IMODE(st.st_mode))
+    else:
+        os.chmod(tmp, 0o640)
     tmp.replace(path)
 
 

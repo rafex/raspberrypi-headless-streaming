@@ -64,14 +64,22 @@ find "$REPO_DIR/scripts" -name "*.sh" -exec chmod g+x {} \;
 echo "Permisos de repo asignados: ${REPO_DIR} → grupo ${STREAM_USER} (lectura/ejecución)"
 
 # --- 4. Permisos sobre /etc/streaming.env ---
-# systemd lee el EnvironmentFile como root — streamer no necesita acceso directo.
-# Solo aseguramos que root pueda leerlo (ya es el caso por defecto).
+# web-api lee/escribe este archivo para pintar y guardar el portal; streamer
+# queda como grupo compartido para que los servicios y scripts puedan leerlo.
 if [[ -f /etc/streaming.env ]]; then
-    chmod 640 /etc/streaming.env
+    if id webapi >/dev/null 2>&1; then
+        usermod -aG "$STREAM_USER" webapi
+        chown webapi:"$STREAM_USER" /etc/streaming.env
+        chmod 660 /etc/streaming.env
+    else
+        chgrp "$STREAM_USER" /etc/streaming.env
+        chmod 640 /etc/streaming.env
+    fi
     owner="$(stat -c '%U:%G' /etc/streaming.env)"
-    echo "Permisos de /etc/streaming.env: 640 (${owner})"
+    mode="$(stat -c '%a' /etc/streaming.env)"
+    echo "Permisos de /etc/streaming.env: ${mode} (${owner})"
 else
-    install -m 640 "${REPO_DIR}/systemd/default.streaming.env" /etc/streaming.env
+    install -m 660 -o root -g "$STREAM_USER" "${REPO_DIR}/systemd/default.streaming.env" /etc/streaming.env
     echo "Archivo creado desde defaults: /etc/streaming.env"
 fi
 

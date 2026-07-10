@@ -88,8 +88,9 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
     echo "Usuario de sistema creado: ${SERVICE_USER}"
 fi
-# Grupos necesarios: video/audio (detección de dispositivos), systemd-journal (journalctl para last_errors)
-for grp in video audio systemd-journal; do
+# Grupos necesarios: video/audio (detección de dispositivos), systemd-journal
+# (journalctl para last_errors), streamer (lectura/escritura compartida de /etc/*.env).
+for grp in video audio systemd-journal streamer; do
     if getent group "$grp" >/dev/null 2>&1; then
         usermod -aG "$grp" "$SERVICE_USER"
         echo "Usuario ${SERVICE_USER} agregado al grupo ${grp}"
@@ -147,14 +148,19 @@ chmod 600 "$AGE_KEY_FILE"
 
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR" "$TLS_DIR" "$AGE_DIR"
 
+config_group="$SERVICE_USER"
+if getent group streamer >/dev/null 2>&1; then
+    config_group="streamer"
+fi
+
 # --- 8a. streaming.env — crearlo si no existe y asignar permisos a webapi ---
 STREAMING_ENV="/etc/streaming.env"
 if [[ ! -f "$STREAMING_ENV" ]]; then
     install -m 640 "${REPO_DIR}/systemd/default.streaming.env" "$STREAMING_ENV"
     echo "Archivo de streaming creado: ${STREAMING_ENV}"
 fi
-chown "${SERVICE_USER}:${SERVICE_USER}" "$STREAMING_ENV"
-chmod 640 "$STREAMING_ENV"
+chown "${SERVICE_USER}:${config_group}" "$STREAMING_ENV"
+chmod 660 "$STREAMING_ENV"
 
 # --- 8a-bis. preview.env — destino local de la vista previa (nunca la plataforma real) ---
 PREVIEW_ENV="/etc/preview.env"
@@ -168,8 +174,8 @@ PREVIEW_OVERLAY=true
 EOF
     echo "Archivo de preview creado: ${PREVIEW_ENV}"
 fi
-chown "${SERVICE_USER}:${SERVICE_USER}" "$PREVIEW_ENV"
-chmod 640 "$PREVIEW_ENV"
+chown "${SERVICE_USER}:${config_group}" "$PREVIEW_ENV"
+chmod 660 "$PREVIEW_ENV"
 
 # --- 8b. Directorio de logos subidos desde la web ---
 LOGO_DIR="/var/lib/raspi-streaming/assets/logos"
