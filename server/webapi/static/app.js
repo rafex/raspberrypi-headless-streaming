@@ -6,6 +6,7 @@
   let eventSource = null;
   let overlayPref = true;
   let gpuEncoderPref = false;
+  let lastSavedConfigJSON = null;
 
   const $ = (id) => document.getElementById(id);
 
@@ -91,9 +92,10 @@
       }
       // streaming-overlay.service maneja tanto overlays como GPU encoder (cámara USB);
       // streaming.service (libcamera-vid) solo aplica cuando ninguno está activo.
-      document.getElementById("btn-stream-start")?.addEventListener("click", (e) =>
-        handleStreamAction((overlayPref || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget)
-      );
+      document.getElementById("btn-stream-start")?.addEventListener("click", (e) => {
+        if (!confirmStartWithUnsavedChanges()) return;
+        handleStreamAction((overlayPref || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget);
+      });
       document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
         handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
       );
@@ -221,7 +223,10 @@
     ["preview-port", "preview-rtmp-name", "preview-client-ip"].forEach((id) => {
       $(id).addEventListener("input", updatePreviewVlcHint);
     });
-    $("btn-preview-start").addEventListener("click", (e) => handlePreviewStart(e.currentTarget));
+    $("btn-preview-start").addEventListener("click", (e) => {
+      if (!confirmStartWithUnsavedChanges()) return;
+      handlePreviewStart(e.currentTarget);
+    });
     $("btn-preview-stop").addEventListener("click", (e) => handleStreamAction("preview", "stop", e.currentTarget));
   }
 
@@ -837,6 +842,7 @@
       updateAudioDeviceDetails();
 
       updateSummaries();
+      lastSavedConfigJSON = configSnapshot();
     } catch {
       // formulario queda vacío si falla
     }
@@ -956,6 +962,27 @@
       overlay_text_pos:    $("cfg-overlay-text-pos").value,
       overlay_timestamp:   overlayPref ? $("cfg-overlay-timestamp").checked : false,
     };
+  }
+
+  // Snapshot del formulario para detectar cambios sin guardar. Se actualiza
+  // después de cargar la config persistida y después de guardarla con éxito.
+  function configSnapshot() {
+    return JSON.stringify(buildConfigBody());
+  }
+
+  function hasUnsavedChanges() {
+    return lastSavedConfigJSON !== null && configSnapshot() !== lastSavedConfigJSON;
+  }
+
+  // Antes de iniciar stream o preview: si hay cambios sin guardar, confirmar
+  // que el usuario quiere continuar con la última configuración guardada.
+  function confirmStartWithUnsavedChanges() {
+    if (!hasUnsavedChanges()) return true;
+    return confirm(
+      "Hay cambios sin guardar en la configuración.\n\n" +
+      "Si continúas, se usará la última configuración guardada (no la que ves en el formulario).\n\n" +
+      "¿Iniciar de todas formas?"
+    );
   }
 
   function verifyPersistedConfig(intended, persisted) {
