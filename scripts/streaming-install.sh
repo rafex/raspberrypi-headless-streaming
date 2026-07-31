@@ -105,6 +105,18 @@ if modinfo bcm2835-codec >/dev/null 2>&1; then
     echo "bcm2835-codec" > "$MODULES_LOAD_FILE"
     chmod 644 "$MODULES_LOAD_FILE"
     echo "Módulo bcm2835-codec configurado para carga automática: ${MODULES_LOAD_FILE}"
+
+    # DietPi incluye por defecto un blacklist de este módulo (asume que no se
+    # necesita el codec del VideoCore en uso headless). systemd-modules-load
+    # respeta ese blacklist y descarta silenciosamente la entrada de arriba
+    # en cada arranque, aunque el archivo esté bien escrito. Neutralizarlo
+    # para que la carga automática funcione de verdad.
+    DIETPI_BLACKLIST="/etc/modprobe.d/dietpi-disable_rpi_codec.conf"
+    if [[ -f "$DIETPI_BLACKLIST" ]] && grep -q '^blacklist bcm2835_codec' "$DIETPI_BLACKLIST"; then
+        sed -i 's/^blacklist bcm2835_codec/#blacklist bcm2835_codec  # comentado por raspi-streaming (GPU encoder)/' "$DIETPI_BLACKLIST"
+        echo "  Blacklist de DietPi neutralizado: ${DIETPI_BLACKLIST}"
+    fi
+
     if ! lsmod 2>/dev/null | grep -q bcm2835_codec; then
         modprobe bcm2835-codec 2>/dev/null \
             && echo "  Módulo cargado correctamente." \
