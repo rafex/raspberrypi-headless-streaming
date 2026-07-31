@@ -38,7 +38,7 @@ Valores principales:
 
 ```env
 AUTO_STREAM_ENABLED=false
-AUTO_STREAM_DELAY_SECONDS=420
+AUTO_STREAM_DELAY_SECONDS=600
 AUTO_STREAM_SERVICE=streaming-overlay.service
 AUTO_STREAM_WAIT_SERVICES="web-api.service ngrok-web.service health-reporter.service"
 AUTO_STREAM_REQUIRE_DEFAULT_ROUTE=true
@@ -54,7 +54,7 @@ AUTO_STREAM_ENABLED=true
 El servicio no inicia streaming en modo AP porque exige ruta default. Si
 `RTMP_URL` está vacío en `/etc/streaming.env`, tampoco arranca.
 
-### Por qué 420s (7 min) y no menos
+### Por qué 600s (10 min) y no menos
 
 Con `AUTO_STREAM_DELAY_SECONDS=120` (2 min) se observaron fallos intermitentes
 al primer intento tras reboot: `ffmpeg` reportaba `Device or resource busy` al
@@ -64,10 +64,10 @@ después del arranque. `systemd` reintentaba automáticamente (`Restart=on-failu
 `RestartSec=10`) y el segundo intento sí funcionaba — pero es un margen
 justo, no garantizado, especialmente en un Pi 3B con almacenamiento SD lento.
 
-420s da margen adicional a: WiFi completamente asociado y con IP estable,
+600s da margen amplio a: WiFi completamente asociado y con IP estable,
 módulos de kernel (`bcm2835-codec`, `uvcvideo`) inicializados, y cualquier
 `apt`/`fsck`/servicio de arranque tardío del sistema terminado. El costo es
-que la transmisión automática tarda ~2 minutos más en aparecer — aceptable
+que la transmisión automática tarda unos minutos más en aparecer — aceptable
 para un dispositivo que arranca una vez y transmite por horas.
 
 ## Audio base automático

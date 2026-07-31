@@ -116,8 +116,8 @@ SSH ni volver a correr `make install-streaming` manualmente.
 
 El "Device or resource busy" del primer reinicio, aunque ya no es el
 problema principal, motivó subir `AUTO_STREAM_DELAY_SECONDS` de 120s a
-420s (7 minutos) — ver la sección correspondiente en
-[boot-flow.md](boot-flow.md#por-qué-420s-7-min-y-no-menos).
+600s (10 minutos) — ver la sección correspondiente en
+[boot-flow.md](boot-flow.md#por-qué-600s-10-min-y-no-menos).
 
 ---
 
