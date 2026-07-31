@@ -183,6 +183,76 @@ Por eso overlays con GPU encoder siguen costando más CPU que GPU encoder sin ov
 
 ---
 
+## Bug encontrado: preview local fallaba con GPU encoder (mediamtx rechaza el stream)
+
+### El síntoma
+
+Con `GPU_ENCODER=true`, el stream en vivo a YouTube funcionaba bien, pero la **vista previa local** (que usa `mediamtx` como servidor RTMP en `localhost:1935`) fallaba sistemáticamente: `preview.service` entraba en loop de reinicio (`activating (auto-restart)`), y el log de mediamtx mostraba:
+
+```
+INF [RTMP] [conn [::1]:xxxxx] opened
+INF [RTMP] [conn [::1]:xxxxx] closed: unable to parse H264 config: EOF
+```
+
+La conexión se cerraba casi de inmediato (~1 segundo), siempre con el mismo error.
+
+### El diagnóstico
+
+`h264_v4l2m2m` en ffmpeg **nunca rellena `AVCodecContext.extradata`** (el SPS/PPS que describe el stream H.264). Cuando el muxer FLV abre la conexión RTMP, necesita ese extradata para construir el "AVC sequence header" — el primer paquete que declara el códec al servidor. Sin extradata, ffmpeg envía un header vacío o inválido.
+
+- **YouTube/Facebook toleran esto**: derivan el SPS/PPS directamente de los NALs que van embebidos en el propio stream (Annex-B), sin depender del header inicial.
+- **mediamtx es estricto**: valida el header al conectar y, si está vacío, cierra la conexión inmediatamente con `unable to parse H264 config: EOF`.
+
+Esto explica por qué el stream en vivo a YouTube funcionaba desde el principio (documentado arriba, 59.1% CPU) mientras el preview fallaba — apuntan a servidores RTMP con distinto nivel de tolerancia.
+
+### Los intentos que no funcionaron
+
+Se probaron los bitstream filters diseñados para extraer/inyectar extradata:
+
+```bash
+-bsf:v extract_extradata   # extrae SPS/PPS del stream hacia el extradata del contexto
+-bsf:v dump_extra=freq=keyframe  # inyecta el extradata conocido antes de cada keyframe
+```
+
+Ninguno resolvió el problema en el caso RTMP en vivo. La razón: estos filtros necesitan que **ya exista** un paquete codificado para extraer o inyectar el extradata — pero el muxer FLV escribe su header **antes** de que fluya el primer paquete (más aún con `h264_v4l2m2m`, que tiene "hardware delay" y tarda en emitir el primer frame). Cuando se probó `extract_extradata` contra un **archivo local** (seekable), sí funcionó (`extradata_size=56` confirmado con `ffprobe`) — porque ffmpeg puede reescribir el header al cerrar el archivo. Contra una conexión de red (no seekable), no hay segunda oportunidad.
+
+### La solución: pipeline de dos etapas vía MPEG-TS
+
+MPEG-TS no necesita extradata declarado por adelantado — el SPS/PPS viaja embebido en el propio stream (igual que Annex-B) y el demuxer TS los extrae al leer. La solución es codificar a un TS intermedio y remuxear con `-c copy` (sin recodificar) al FLV/RTMP final en un segundo proceso ffmpeg:
+
+```bash
+ffmpeg <captura + filtros> -vcodec h264_v4l2m2m -b:v "$BITRATE" -f mpegts - \
+  | ffmpeg -f mpegts -i - -c copy -f flv "$URL"
+```
+
+Para cuando el segundo ffmpeg abre la conexión RTMP, ya leyó suficiente del TS entrante para conocer el SPS/PPS — el header que envía a mediamtx (o a cualquier servidor RTMP) ya viene completo.
+
+Verificado en la Pi: mediamtx pasó de rechazar la conexión a reportar:
+
+```
+INF [path preview] stream is available and online, 2 tracks (H264, MPEG-4 Audio)
+INF [RTMP] [conn [::1]:xxxxx] is publishing to path 'preview'
+```
+
+### La implementación
+
+`stream-overlay.sh` ahora tiene una función `run_ffmpeg_pipeline()` que decide automáticamente:
+
+```bash
+run_ffmpeg_pipeline() {
+    if [[ "$_HW_ENC" == "h264_v4l2m2m" && "$TRANSPORT" == "rtmp" ]]; then
+        ffmpeg ... "$@" -f mpegts - | ffmpeg -f mpegts -i - -c copy "${OUTPUT_ARGS[@]}"
+    else
+        ffmpeg ... "$@" "${OUTPUT_ARGS[@]}"
+    fi
+}
+```
+
+- Solo aplica el pipeline de dos etapas cuando el encoder es GPU **y** el transporte es `rtmp` — el modo `tcp`/`udp` de preview (MPEG-TS directo) ya no necesita el fix, porque el formato de salida ya es TS.
+- El stream en vivo a YouTube, que ya funcionaba directo, ahora también pasa por el pipeline (por simplicidad de código, un solo camino para todos los destinos RTMP) — no rompe nada, solo agrega un proceso `-c copy` adicional con costo de CPU despreciable (~26% observado en la prueba, principalmente por el arranque del proceso; en régimen estable es mucho menor porque es solo remux sin recodificar).
+
+---
+
 ## Riesgos y consideraciones
 
 ### Impacto en RAM del sistema
