@@ -321,6 +321,14 @@ fi
 HAS_OVERLAY=false
 [[ -n "$LOGO_FILE" || -n "$FRAME_FILE" || -n "$TEXT_CONTENT" || "$USE_TIMESTAMP" == true || -n "$BANNER_TEXT" ]] && HAS_OVERLAY=true
 
+# --- Detectar encoder GPU una sola vez ---
+# h264_v4l2m2m acepta frames ya filtrados (overlay/drawtext) sin hwupload/hwdownload,
+# así que puede usarse con o sin overlays activos (solo cámara USB v4l2, no libcamera).
+_HW_ENC=""
+if [[ "$GPU_ENCODER" == "true" && "$CAPTURE_MODE" != "libcamera" ]]; then
+    _HW_ENC=$(detect_hw_encoder)
+fi
+
 # --- Información antes de transmitir ---
 echo "=== Stream con overlays ==="
 echo "  Resolución  : ${WIDTH}x${HEIGHT}"
@@ -354,7 +362,7 @@ esac
 echo ""
 
 # --- Advertencia de CPU para Pi 3B ---
-if [[ "$HAS_OVERLAY" == true ]]; then
+if [[ "$HAS_OVERLAY" == true && "$_HW_ENC" != "h264_v4l2m2m" ]]; then
     echo "AVISO: Los overlays requieren re-encoding por CPU (libx264)."
     echo "       En Pi 3B monitorear temperatura y uso de CPU."
     echo ""
@@ -404,6 +412,13 @@ if [[ -n "$BANNER_TEXT" ]]; then
     CURRENT="[vbanner]"
 fi
 
+# h264_v4l2m2m requiere 4:2:0; las imágenes de overlay (logo/frame PNG) suelen
+# dejar el frame en un formato con alpha (yuva420p/rgba). Forzar conversión final.
+if [[ "$HAS_OVERLAY" == true && "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+    FILTER_PARTS+=("${CURRENT}format=yuv420p[vgpu]")
+    CURRENT="[vgpu]"
+fi
+
 # --- Salida según transporte: rtmp (único o dual), tcp o udp (mpegts) ---
 case "$TRANSPORT" in
     rtmp)
@@ -448,10 +463,6 @@ else
     [[ "$DURATION" -gt 0 ]] && DURATION_ARGS=(-t "$DURATION")
 
     if [[ "$HAS_OVERLAY" == false ]]; then
-        _HW_ENC=""
-        if [[ "$GPU_ENCODER" == "true" ]]; then
-            _HW_ENC=$(detect_hw_encoder)
-        fi
         if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
             echo "Encoder: h264_v4l2m2m  (GPU VideoCore — menor uso de CPU)"
             echo ""
@@ -472,13 +483,26 @@ else
         fi
     else
         FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
-        ffmpeg -hide_banner -loglevel warning \
-            -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
-            "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
-            "${DURATION_ARGS[@]}" \
-            -filter_complex "$FILTER_COMPLEX" \
-            -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
-            -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-            "${OUTPUT_ARGS[@]}"
+        if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+            echo "Encoder: h264_v4l2m2m  (GPU VideoCore — con overlays)"
+            echo ""
+            ffmpeg -hide_banner -loglevel warning \
+                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
+                "${DURATION_ARGS[@]}" \
+                -filter_complex "$FILTER_COMPLEX" \
+                -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
+                -vcodec h264_v4l2m2m -b:v "$BITRATE" \
+                "${OUTPUT_ARGS[@]}"
+        else
+            ffmpeg -hide_banner -loglevel warning \
+                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
+                "${DURATION_ARGS[@]}" \
+                -filter_complex "$FILTER_COMPLEX" \
+                -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
+                -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
+                "${OUTPUT_ARGS[@]}"
+        fi
     fi
 fi

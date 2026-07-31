@@ -89,7 +89,8 @@
         if (isActive) toggle.checked = withOverlay;
         overlayPref = toggle.checked;
       }
-      // GPU encoder activo siempre usa "streaming" (sin overlay), aunque overlayPref esté activo.
+      // streaming-overlay.service maneja tanto overlays como GPU encoder (cámara USB);
+      // streaming.service (libcamera-vid) solo aplica cuando ninguno está activo.
       document.getElementById("btn-stream-start")?.addEventListener("click", (e) =>
         handleStreamAction((overlayPref || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget)
       );
@@ -561,26 +562,17 @@
   });
 
   // Toggle "Aplicar overlay": controla Stream e Iniciar preview.
-  // Si se activa, el GPU encoder se apaga (overlays requieren libx264).
+  // h264_v4l2m2m acepta frames ya filtrados, así que overlay + GPU encoder
+  // pueden usarse juntos — no hay exclusión mutua.
   overlayPref = $("overlay-enabled-toggle")?.checked ?? true;
   $("overlay-enabled-toggle")?.addEventListener("change", (e) => {
     overlayPref = e.target.checked;
-    if (overlayPref && gpuEncoderPref) {
-      gpuEncoderPref = false;
-      const gpuToggle = $("gpu-encoder-toggle");
-      if (gpuToggle) gpuToggle.checked = false;
-      updateSummaries();
-    }
+    updateSummaries();
   });
 
-  // Toggle GPU Encoder: si se activa, los overlays se apagan (incompatibles).
+  // Toggle GPU Encoder (h264_v4l2m2m, VideoCore).
   $("gpu-encoder-toggle")?.addEventListener("change", (e) => {
     gpuEncoderPref = e.target.checked;
-    if (gpuEncoderPref && overlayPref) {
-      overlayPref = false;
-      const overlayToggle = $("overlay-enabled-toggle");
-      if (overlayToggle) overlayToggle.checked = false;
-    }
     updateSummaries();
   });
 

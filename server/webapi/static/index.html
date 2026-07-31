@@ -9,7 +9,7 @@
 <body>
   <main class="wrap">
     <h1>Raspi Streaming</h1>
-    <p id="app-version" style="text-align:center;font-size:0.7rem;opacity:0.35;margin:-8px 0 4px;letter-spacing:0.04em;font-family:monospace">565c286</p>
+    <p id="app-version" style="text-align:center;font-size:0.7rem;opacity:0.35;margin:-8px 0 4px;letter-spacing:0.04em;font-family:monospace">pending</p>
 
     <!-- ===== Login ===== -->
     <section id="login-view">
@@ -291,7 +291,7 @@
                 <div class="toggle-row">
                   <div>
                     <span>Encoder GPU (h264_v4l2m2m)</span>
-                    <div class="field-hint">Usa el VideoCore del Raspberry Pi para codificar H.264 con menor carga de CPU. Solo actúa cuando no hay overlays — si activas overlays, se desactiva automáticamente.</div>
+                    <div class="field-hint">Usa el VideoCore del Raspberry Pi para codificar H.264 con menor carga de CPU. Compatible con overlays (logo, texto, timestamp) — el filtro corre en CPU y solo el encode final pasa a GPU.</div>
                   </div>
                   <label class="toggle-switch">
                     <input type="checkbox" id="gpu-encoder-toggle">
