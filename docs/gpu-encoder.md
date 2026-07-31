@@ -62,7 +62,7 @@ bcm2835_codec         ...
 /dev/video10  /dev/video11  /dev/video12  /dev/video18  /dev/video31
 ```
 
-Si el módulo no carga automáticamente, el script `streaming-install.sh` escribe `/etc/modules-load.d/raspi-streaming.conf` para cargarlo en cada boot.
+Si el módulo no carga automáticamente, el script `streaming-install.sh` escribe `/etc/modules-load.d/raspi-streaming.conf` para cargarlo en cada boot. **Importante:** DietPi trae por defecto un blacklist de `bcm2835_codec` (`/etc/modprobe.d/dietpi-disable_rpi_codec.conf`) que anula silenciosamente esa entrada — `streaming-install.sh` lo neutraliza automáticamente, pero si el módulo sigue sin cargar tras reboot, verificar ese archivo. Ver [reboot-validation.md](reboot-validation.md) para el diagnóstico completo de este bug.
 
 ### Paso 4 — Confirmar el encoder en ffmpeg
 
