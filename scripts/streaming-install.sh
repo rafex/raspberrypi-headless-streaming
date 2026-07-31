@@ -99,6 +99,23 @@ sed -e "s|__STREAM_USER__|${STREAM_USER}|g" \
     "${REPO_DIR}/systemd/preview.service" \
     > "${SYSTEMD_DIR}/preview.service"
 
+# --- 5b. Encoder de hardware H.264 (Pi 3B/4B): cargar bcm2835-codec en boot ---
+MODULES_LOAD_FILE="/etc/modules-load.d/raspi-streaming.conf"
+if modinfo bcm2835-codec >/dev/null 2>&1; then
+    echo "bcm2835-codec" > "$MODULES_LOAD_FILE"
+    chmod 644 "$MODULES_LOAD_FILE"
+    echo "Módulo bcm2835-codec configurado para carga automática: ${MODULES_LOAD_FILE}"
+    if ! lsmod 2>/dev/null | grep -q bcm2835_codec; then
+        modprobe bcm2835-codec 2>/dev/null \
+            && echo "  Módulo cargado correctamente." \
+            || echo "  AVISO: no se pudo cargar ahora (se cargará en el próximo arranque)."
+    else
+        echo "  Módulo ya activo."
+    fi
+else
+    echo "AVISO: bcm2835-codec no disponible en este sistema (sin encoder GPU)."
+fi
+
 systemctl daemon-reload
 echo "Servicios instalados:"
 echo "  ${SYSTEMD_DIR}/streaming.service"

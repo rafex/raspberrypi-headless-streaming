@@ -279,15 +279,34 @@ if [[ "$MODE" == "record" ]]; then
     _duration_args=()
     [[ "$REC_DURATION" -gt 0 ]] && _duration_args=(-t "$REC_DURATION")
 
-    ffmpeg \
-        "${_CAPTURE_ARGS[@]}" \
-        -vcodec libx264 \
-        -preset ultrafast \
-        -b:v "$BITRATE" \
-        -fps_mode cfr \
-        -movflags +faststart \
-        "${_duration_args[@]}" \
-        -y "$OUTPUT_FILE"
+    _HW_ENC=""
+    if [[ "$_HAS_OVERLAY" == false ]]; then
+        _HW_ENC=$(detect_hw_encoder)
+    fi
+
+    if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+        ok "Encoder: h264_v4l2m2m (GPU VideoCore)"
+        echo ""
+        ffmpeg \
+            "${_CAPTURE_ARGS[@]}" \
+            -vf "format=yuv420p" \
+            -vcodec h264_v4l2m2m \
+            -b:v "$BITRATE" \
+            -fps_mode cfr \
+            -movflags +faststart \
+            "${_duration_args[@]}" \
+            -y "$OUTPUT_FILE"
+    else
+        ffmpeg \
+            "${_CAPTURE_ARGS[@]}" \
+            -vcodec libx264 \
+            -preset ultrafast \
+            -b:v "$BITRATE" \
+            -fps_mode cfr \
+            -movflags +faststart \
+            "${_duration_args[@]}" \
+            -y "$OUTPUT_FILE"
+    fi
 
     echo ""
     ok "Grabación finalizada: $OUTPUT_FILE"
@@ -326,10 +345,27 @@ else
     _output_args=(-f flv "$RTMP_URL")
 fi
 
-ffmpeg \
-    "${_CAPTURE_ARGS[@]}" \
-    -vcodec libx264 \
-    -preset ultrafast \
-    -b:v "$BITRATE" \
-    -fps_mode cfr \
-    "${_output_args[@]}"
+_HW_ENC=""
+if [[ "$_HAS_OVERLAY" == false ]]; then
+    _HW_ENC=$(detect_hw_encoder)
+fi
+
+if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+    ok "Encoder: h264_v4l2m2m (GPU VideoCore)"
+    echo ""
+    ffmpeg \
+        "${_CAPTURE_ARGS[@]}" \
+        -vf "format=yuv420p" \
+        -vcodec h264_v4l2m2m \
+        -b:v "$BITRATE" \
+        -fps_mode cfr \
+        "${_output_args[@]}"
+else
+    ffmpeg \
+        "${_CAPTURE_ARGS[@]}" \
+        -vcodec libx264 \
+        -preset ultrafast \
+        -b:v "$BITRATE" \
+        -fps_mode cfr \
+        "${_output_args[@]}"
+fi

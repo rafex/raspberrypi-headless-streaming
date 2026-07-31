@@ -278,11 +278,35 @@
             </details>
 
             <!-- ════════════════════════════════════════
-                 PASO 5 — Overlays
+                 PASO 5 — Encoder GPU
                  ════════════════════════════════════════ -->
             <details class="acrd">
               <summary class="acrd-hdr">
                 <span class="acrd-num">5</span>
+                <span class="acrd-title">Encoder</span>
+                <span class="acrd-chip" id="sum-encoder">CPU · libx264</span>
+              </summary>
+              <div class="acrd-body">
+                <div class="toggle-row">
+                  <div>
+                    <span>Encoder GPU (h264_v4l2m2m)</span>
+                    <div class="field-hint">Usa el VideoCore del Raspberry Pi para codificar H.264 con menor carga de CPU. Solo actúa cuando no hay overlays — si activas overlays, se desactiva automáticamente.</div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="gpu-encoder-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <p class="field-hint" style="margin-top:10px">Requiere <code>bcm2835-codec</code> cargado en el kernel (se configura automáticamente con <code>make install-streaming</code>). Si el hardware no está disponible, el sistema regresa a libx264 sin interrumpir la transmisión.</p>
+              </div>
+            </details>
+
+            <!-- ════════════════════════════════════════
+                 PASO 6 — Overlays
+                 ════════════════════════════════════════ -->
+            <details class="acrd">
+              <summary class="acrd-hdr">
+                <span class="acrd-num">6</span>
                 <span class="acrd-title">Overlays</span>
                 <span class="acrd-chip" id="sum-overlay">Ninguno</span>
               </summary>

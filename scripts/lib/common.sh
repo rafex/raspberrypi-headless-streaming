@@ -108,6 +108,42 @@ supports_mjpeg() {
     v4l2-ctl --device="$1" --list-formats 2>/dev/null | grep -qE "MJPG|MJPEG"
 }
 
+# ---------------------------------------------------------------------------
+# detect_hw_encoder
+# Verifica si h264_v4l2m2m está disponible: ffmpeg compilado + módulo
+# bcm2835-codec cargado (genera /dev/video10-31 en Pi 3B/4B).
+# Si el módulo existe pero no está cargado, intenta cargarlo con modprobe.
+# Devuelve por stdout: "h264_v4l2m2m" si disponible, "" si no.
+# ---------------------------------------------------------------------------
+detect_hw_encoder() {
+    command -v ffmpeg >/dev/null 2>&1 || { echo ""; return; }
+    ffmpeg -encoders 2>/dev/null | grep -q "h264_v4l2m2m" || { echo ""; return; }
+
+    local _has_m2m=false _dev
+    for _dev in /dev/video10 /dev/video11 /dev/video12 /dev/video18 /dev/video31; do
+        [[ -e "$_dev" ]] && { _has_m2m=true; break; }
+    done
+
+    if [[ "$_has_m2m" == false ]]; then
+        modprobe bcm2835-codec 2>/dev/null || true
+        sleep 1
+        for _dev in /dev/video10 /dev/video11 /dev/video12 /dev/video18 /dev/video31; do
+            [[ -e "$_dev" ]] && { _has_m2m=true; break; }
+        done
+    fi
+
+    [[ "$_has_m2m" == false ]] && { echo ""; return; }
+
+    for _dev in /dev/video10 /dev/video11 /dev/video12 /dev/video18 /dev/video31; do
+        [[ -e "$_dev" ]] || continue
+        if v4l2-ctl -d "$_dev" --list-formats-out 2>/dev/null | grep -qE "YU12|NV12"; then
+            echo "h264_v4l2m2m"
+            return
+        fi
+    done
+    echo ""
+}
+
 mic_default_rate() {
     # Devuelve 48000 para BOYA/Focusrite, 44100 para el resto
     local name="$1"

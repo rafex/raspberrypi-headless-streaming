@@ -54,6 +54,14 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+_COMMON="${SCRIPT_DIR}/lib/common.sh"
+if [[ -f "$_COMMON" ]]; then
+    source "$_COMMON"
+else
+    detect_hw_encoder() { echo ""; }
+fi
+
 # --- Valores por defecto ---
 WIDTH=1280
 HEIGHT=720
@@ -282,23 +290,45 @@ if [[ "$MODE" == "capture" ]]; then
     echo "===================="
     echo ""
 
-    ffmpeg \
-        -hide_banner \
-        -loglevel warning \
-        -thread_queue_size 8192 \
-        -f v4l2 \
-        -input_format mjpeg \
-        -video_size "${WIDTH}x${HEIGHT}" \
-        -framerate "$FPS" \
-        -i "$CAM_DEV" \
-        "${AUDIO_ARGS[@]}" \
-        "${DURATION_ARGS[@]}" \
-        -vcodec libx264 \
-        -preset ultrafast \
-        -b:v "$BITRATE" \
-        -fps_mode cfr \
-        -movflags +faststart \
-        "$OUTPUT"
+    _HW_ENC=$(detect_hw_encoder)
+    if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+        echo "Encoder: h264_v4l2m2m  (GPU VideoCore)"
+        ffmpeg \
+            -hide_banner \
+            -loglevel warning \
+            -thread_queue_size 8192 \
+            -f v4l2 \
+            -input_format mjpeg \
+            -video_size "${WIDTH}x${HEIGHT}" \
+            -framerate "$FPS" \
+            -i "$CAM_DEV" \
+            "${AUDIO_ARGS[@]}" \
+            "${DURATION_ARGS[@]}" \
+            -vf "format=yuv420p" \
+            -vcodec h264_v4l2m2m \
+            -b:v "$BITRATE" \
+            -fps_mode cfr \
+            -movflags +faststart \
+            "$OUTPUT"
+    else
+        ffmpeg \
+            -hide_banner \
+            -loglevel warning \
+            -thread_queue_size 8192 \
+            -f v4l2 \
+            -input_format mjpeg \
+            -video_size "${WIDTH}x${HEIGHT}" \
+            -framerate "$FPS" \
+            -i "$CAM_DEV" \
+            "${AUDIO_ARGS[@]}" \
+            "${DURATION_ARGS[@]}" \
+            -vcodec libx264 \
+            -preset ultrafast \
+            -b:v "$BITRATE" \
+            -fps_mode cfr \
+            -movflags +faststart \
+            "$OUTPUT"
+    fi
 
     echo ""
     echo "Captura finalizada: ${OUTPUT}"
@@ -330,21 +360,43 @@ if [[ "$MODE" == "stream" ]]; then
     echo "========================="
     echo ""
 
-    ffmpeg \
-        -hide_banner \
-        -loglevel warning \
-        -thread_queue_size 8192 \
-        -f v4l2 \
-        -input_format mjpeg \
-        -video_size "${WIDTH}x${HEIGHT}" \
-        -framerate "$FPS" \
-        -i "$CAM_DEV" \
-        "${AUDIO_ARGS[@]}" \
-        "${DURATION_ARGS[@]}" \
-        -vcodec libx264 \
-        -preset ultrafast \
-        -b:v "$BITRATE" \
-        -fps_mode cfr \
-        -f flv \
-        "$URL"
+    _HW_ENC=$(detect_hw_encoder)
+    if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+        echo "Encoder: h264_v4l2m2m  (GPU VideoCore)"
+        ffmpeg \
+            -hide_banner \
+            -loglevel warning \
+            -thread_queue_size 8192 \
+            -f v4l2 \
+            -input_format mjpeg \
+            -video_size "${WIDTH}x${HEIGHT}" \
+            -framerate "$FPS" \
+            -i "$CAM_DEV" \
+            "${AUDIO_ARGS[@]}" \
+            "${DURATION_ARGS[@]}" \
+            -vf "format=yuv420p" \
+            -vcodec h264_v4l2m2m \
+            -b:v "$BITRATE" \
+            -fps_mode cfr \
+            -f flv \
+            "$URL"
+    else
+        ffmpeg \
+            -hide_banner \
+            -loglevel warning \
+            -thread_queue_size 8192 \
+            -f v4l2 \
+            -input_format mjpeg \
+            -video_size "${WIDTH}x${HEIGHT}" \
+            -framerate "$FPS" \
+            -i "$CAM_DEV" \
+            "${AUDIO_ARGS[@]}" \
+            "${DURATION_ARGS[@]}" \
+            -vcodec libx264 \
+            -preset ultrafast \
+            -b:v "$BITRATE" \
+            -fps_mode cfr \
+            -f flv \
+            "$URL"
+    fi
 fi

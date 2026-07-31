@@ -14,6 +14,7 @@ FIELDS = (
     "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
     "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
     "STREAM_AUDIO_BOOST",
+    "GPU_ENCODER",
     "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
     "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD", "OVERLAY_LOGO_W",
     "OVERLAY_BANNER", "OVERLAY_BANNER_POS",
@@ -164,6 +165,12 @@ def validate_config(data: dict) -> dict:
     else:
         audio_boost = bool(audio_boost_raw)
 
+    gpu_encoder_raw = data.get("gpu_encoder", False)
+    if isinstance(gpu_encoder_raw, str):
+        gpu_encoder = gpu_encoder_raw.lower() in ("true", "1", "yes")
+    else:
+        gpu_encoder = bool(gpu_encoder_raw)
+
     video_device = str(data.get("video_device", "")).strip()
     if video_device and not re.match(r"^/dev/video\d+$", video_device):
         errors.append("video_device debe ser /dev/videoN")
@@ -253,6 +260,7 @@ def validate_config(data: dict) -> dict:
         "AUDIO_RATE":         str(audio_rate),
         "STREAM_NO_AUDIO":    "true" if no_audio else "false",
         "STREAM_AUDIO_BOOST": "true" if audio_boost else "false",
+        "GPU_ENCODER":        "true" if gpu_encoder else "false",
         "OVERLAY_TEXT":       overlay_text,
         "OVERLAY_TEXT_POS":   overlay_text_pos,
         "OVERLAY_TIMESTAMP":  "true" if overlay_timestamp else "false",

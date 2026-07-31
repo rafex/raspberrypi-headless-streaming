@@ -5,6 +5,7 @@
   let role = null;
   let eventSource = null;
   let overlayPref = true;
+  let gpuEncoderPref = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -88,8 +89,9 @@
         if (isActive) toggle.checked = withOverlay;
         overlayPref = toggle.checked;
       }
+      // GPU encoder activo siempre usa "streaming" (sin overlay), aunque overlayPref esté activo.
       document.getElementById("btn-stream-start")?.addEventListener("click", (e) =>
-        handleStreamAction(overlayPref ? "streaming-overlay" : "streaming", "start", e.currentTarget)
+        handleStreamAction((overlayPref && !gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget)
       );
       document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
         handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
@@ -534,6 +536,10 @@
     const preset  = $("cfg-preset").value || "veryfast";
     $("sum-video").textContent = `${Math.round(bitrate / 1000)} kbps · ${preset}`;
 
+    // Encoder
+    const sumEncoder = $("sum-encoder");
+    if (sumEncoder) sumEncoder.textContent = gpuEncoderPref ? "GPU · h264_v4l2m2m" : "CPU · libx264";
+
     // Overlays
     const parts = [
       $("cfg-overlay-logo-file").value.trim() && "Logo",
@@ -554,17 +560,35 @@
     $(id)?.addEventListener("input", updateSummaries);
   });
 
-  // Toggle único "Aplicar overlay": controla tanto el botón Iniciar (Stream)
-  // como Iniciar preview. Se deshabilita mientras cualquiera de los dos esté
-  // activo (ver lockOverlayToggle, llamado desde refreshStatus/SSE).
+  // Toggle "Aplicar overlay": controla Stream e Iniciar preview.
+  // Si se activa, el GPU encoder se apaga (overlays requieren libx264).
   overlayPref = $("overlay-enabled-toggle")?.checked ?? true;
   $("overlay-enabled-toggle")?.addEventListener("change", (e) => {
     overlayPref = e.target.checked;
+    if (overlayPref && gpuEncoderPref) {
+      gpuEncoderPref = false;
+      const gpuToggle = $("gpu-encoder-toggle");
+      if (gpuToggle) gpuToggle.checked = false;
+      updateSummaries();
+    }
+  });
+
+  // Toggle GPU Encoder: si se activa, los overlays se apagan (incompatibles).
+  $("gpu-encoder-toggle")?.addEventListener("change", (e) => {
+    gpuEncoderPref = e.target.checked;
+    if (gpuEncoderPref && overlayPref) {
+      overlayPref = false;
+      const overlayToggle = $("overlay-enabled-toggle");
+      if (overlayToggle) overlayToggle.checked = false;
+    }
+    updateSummaries();
   });
 
   function lockOverlayToggle(anyActive) {
-    const toggle = $("overlay-enabled-toggle");
-    if (toggle) toggle.disabled = anyActive;
+    const overlayToggle = $("overlay-enabled-toggle");
+    if (overlayToggle) overlayToggle.disabled = anyActive;
+    const gpuToggle = $("gpu-encoder-toggle");
+    if (gpuToggle) gpuToggle.disabled = anyActive;
   }
 
   // ──────────────────────────────────────────────────
@@ -782,6 +806,11 @@
       $("cfg-audio-rate").value     = cfg.AUDIO_RATE || "44100";
       $("cfg-audio-boost").checked  = cfg.STREAM_AUDIO_BOOST === "true";
 
+      // GPU Encoder
+      gpuEncoderPref = cfg.GPU_ENCODER === "true";
+      const gpuToggleEl = $("gpu-encoder-toggle");
+      if (gpuToggleEl) gpuToggleEl.checked = gpuEncoderPref;
+
       // Overlays — Logo
       const logoFile = cfg.OVERLAY_LOGO_FILE || "";
       $("cfg-overlay-logo-file").value = logoFile;
@@ -924,6 +953,7 @@
       audio_rate:          Number($("cfg-audio-rate").value),
       stream_no_audio:     noAudio,
       stream_audio_boost:  $("cfg-audio-boost").checked,
+      gpu_encoder:         gpuEncoderPref,
       overlay_logo_file:   $("cfg-overlay-logo-file").value.trim(),
       overlay_logo_pos:    $("cfg-overlay-logo-pos").value,
       overlay_logo_pad:    Number($("cfg-overlay-logo-pad").value) || 20,
@@ -948,6 +978,7 @@
       ["AUDIO_RATE", String(intended.audio_rate)],
       ["STREAM_NO_AUDIO", intended.stream_no_audio ? "true" : "false"],
       ["STREAM_AUDIO_BOOST", intended.stream_audio_boost ? "true" : "false"],
+      ["GPU_ENCODER", intended.gpu_encoder ? "true" : "false"],
       ["OVERLAY_LOGO_FILE", intended.overlay_logo_file],
       ["OVERLAY_LOGO_POS", intended.overlay_logo_pos],
       ["OVERLAY_LOGO_PAD", String(intended.overlay_logo_pad)],

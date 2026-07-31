@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Transmite video en vivo con overlays aplicados: logo, marco, texto y timestamp.
-# Los overlays requieren re-encoding por CPU (libx264) ya que ffmpeg debe decodificar
-# el H264 del hardware para aplicar filtros antes de re-codificar.
+# Sin overlays activos puede usar el encoder de hardware h264_v4l2m2m (VideoCore)
+# cuando GPU_ENCODER=true; con overlays siempre usa libx264 (filtros en CPU).
 #
 # Uso:
 #   ./stream-overlay.sh [opciones] -u RTMP_URL
@@ -66,6 +66,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ASSETS_DIR="${SCRIPT_DIR}/../assets"
 
+# Importar detect_hw_encoder y helpers compartidos.
+# die() local se define más abajo y sobreescribe la de common.sh.
+_COMMON="${SCRIPT_DIR}/lib/common.sh"
+if [[ -f "$_COMMON" ]]; then
+    # shellcheck source=lib/common.sh
+    source "$_COMMON"
+else
+    detect_hw_encoder() { echo ""; }
+fi
+
 # --- Valores por defecto ---
 WIDTH=1920
 HEIGHT=1080
@@ -103,6 +113,7 @@ PORT="${PREVIEW_PORT:-1935}"
 CLIENT_IP="${PREVIEW_CLIENT_IP:-}"
 RTMP_NAME="${PREVIEW_RTMP_NAME:-preview}"
 PREVIEW_OVERLAY="${PREVIEW_OVERLAY:-true}"
+GPU_ENCODER="${GPU_ENCODER:-false}"
 
 # PREVIEW_MODE=true (solo systemd/preview.service la define) garantiza que
 # este proceso NUNCA pueda salir hacia la plataforma real, sin depender del
@@ -436,12 +447,28 @@ else
     [[ "$DURATION" -gt 0 ]] && DURATION_ARGS=(-t "$DURATION")
 
     if [[ "$HAS_OVERLAY" == false ]]; then
-        ffmpeg -hide_banner -loglevel warning \
-            -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
-            "${AUDIO_ARGS[@]}" \
-            "${DURATION_ARGS[@]}" \
-            -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-            "${OUTPUT_ARGS[@]}"
+        _HW_ENC=""
+        if [[ "$GPU_ENCODER" == "true" ]]; then
+            _HW_ENC=$(detect_hw_encoder)
+        fi
+        if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
+            echo "Encoder: h264_v4l2m2m  (GPU VideoCore — menor uso de CPU)"
+            echo ""
+            ffmpeg -hide_banner -loglevel warning \
+                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${AUDIO_ARGS[@]}" \
+                "${DURATION_ARGS[@]}" \
+                -vf "format=yuv420p" \
+                -vcodec h264_v4l2m2m -b:v "$BITRATE" \
+                "${OUTPUT_ARGS[@]}"
+        else
+            ffmpeg -hide_banner -loglevel warning \
+                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${AUDIO_ARGS[@]}" \
+                "${DURATION_ARGS[@]}" \
+                -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
+                "${OUTPUT_ARGS[@]}"
+        fi
     else
         FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
         ffmpeg -hide_banner -loglevel warning \
