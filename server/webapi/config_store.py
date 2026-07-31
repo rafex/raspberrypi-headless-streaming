@@ -15,13 +15,15 @@ FIELDS = (
     "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
     "STREAM_AUDIO_BOOST",
     "GPU_ENCODER",
-    "OVERLAY_TEXT", "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP",
-    "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD", "OVERLAY_LOGO_W",
-    "OVERLAY_BANNER", "OVERLAY_BANNER_POS",
+    "OVERLAY_TEXT_ENABLED", "OVERLAY_TEXT", "OVERLAY_TEXT_POS",
+    "OVERLAY_TIMESTAMP", "OVERLAY_TIMESTAMP_POS",
+    "OVERLAY_LOGO_ENABLED", "OVERLAY_LOGO_FILE", "OVERLAY_LOGO_POS", "OVERLAY_LOGO_PAD", "OVERLAY_LOGO_W",
+    "OVERLAY_BANNER_ENABLED", "OVERLAY_BANNER", "OVERLAY_BANNER_POS",
 )
 
 VALID_PRESETS     = ("ultrafast", "superfast", "veryfast", "faster", "fast")
 VALID_TEXT_POS    = ("tl", "tr", "bl", "br", "center")
+VALID_TIMESTAMP_POS = ("tl", "tr", "bl", "br", "center")
 VALID_LOGO_POS    = ("tl", "tr", "bl", "br")
 VALID_BANNER_POS  = ("footer", "header")
 VALID_PLATFORMS   = ("youtube", "facebook", "custom", "dual")
@@ -113,6 +115,12 @@ def validate_config(data: dict) -> dict:
         if not RTMP_URL_RE.match(rtmp_url):
             errors.append("rtmp_url debe ser una URL rtmp:// o rtmps:// válida")
 
+    def _bool(key, default=True):
+        raw = data.get(key, default)
+        if isinstance(raw, str):
+            return raw.lower() in ("true", "1", "yes")
+        return bool(raw)
+
     def _int_in_range(key, lo, hi):
         raw = data.get(key)
         try:
@@ -180,18 +188,23 @@ def validate_config(data: dict) -> dict:
         errors.append("audio_device debe ser plughw:N,M, hw:N,M o plughw:CARD=NOMBRE,DEV=N")
 
     # --- Overlay ---
+    # Cada overlay tiene su propio toggle *_enabled, independiente de los demás.
+    # El contenido (texto/logo/banner) se guarda siempre, incluso deshabilitado —
+    # solo *_enabled decide si stream-overlay.sh lo renderiza.
+    overlay_text_enabled = _bool("overlay_text_enabled")
     overlay_text = str(data.get("overlay_text", "")).strip().replace("\n", " ").replace("\r", "")[:200]
 
     overlay_text_pos = str(data.get("overlay_text_pos", "bl")).strip()
     if overlay_text_pos not in VALID_TEXT_POS:
         errors.append(f"overlay_text_pos debe ser uno de: {', '.join(VALID_TEXT_POS)}")
 
-    overlay_timestamp_raw = data.get("overlay_timestamp", False)
-    if isinstance(overlay_timestamp_raw, str):
-        overlay_timestamp = overlay_timestamp_raw.lower() in ("true", "1", "yes")
-    else:
-        overlay_timestamp = bool(overlay_timestamp_raw)
+    overlay_timestamp = _bool("overlay_timestamp", default=False)
 
+    overlay_timestamp_pos = str(data.get("overlay_timestamp_pos", "tl")).strip()
+    if overlay_timestamp_pos not in VALID_TIMESTAMP_POS:
+        errors.append(f"overlay_timestamp_pos debe ser uno de: {', '.join(VALID_TIMESTAMP_POS)}")
+
+    overlay_logo_enabled = _bool("overlay_logo_enabled")
     overlay_logo_file = str(data.get("overlay_logo_file", "")).strip()
     if overlay_logo_file:
         if not LOGO_PATH_RE.match(overlay_logo_file):
@@ -232,6 +245,7 @@ def validate_config(data: dict) -> dict:
         errors.append("overlay_logo_w debe ser un entero")
         overlay_logo_w = 0
 
+    overlay_banner_enabled = _bool("overlay_banner_enabled")
     overlay_banner = str(data.get("overlay_banner", "")).strip().replace("\n", " ").replace("\r", "")[:200]
 
     overlay_banner_pos = str(data.get("overlay_banner_pos", "footer")).strip()
@@ -261,13 +275,17 @@ def validate_config(data: dict) -> dict:
         "STREAM_NO_AUDIO":    "true" if no_audio else "false",
         "STREAM_AUDIO_BOOST": "true" if audio_boost else "false",
         "GPU_ENCODER":        "true" if gpu_encoder else "false",
+        "OVERLAY_TEXT_ENABLED": "true" if overlay_text_enabled else "false",
         "OVERLAY_TEXT":       overlay_text,
         "OVERLAY_TEXT_POS":   overlay_text_pos,
         "OVERLAY_TIMESTAMP":  "true" if overlay_timestamp else "false",
+        "OVERLAY_TIMESTAMP_POS": overlay_timestamp_pos,
+        "OVERLAY_LOGO_ENABLED": "true" if overlay_logo_enabled else "false",
         "OVERLAY_LOGO_FILE":  overlay_logo_file,
         "OVERLAY_LOGO_POS":   overlay_logo_pos,
         "OVERLAY_LOGO_PAD":   str(overlay_logo_pad),
         "OVERLAY_LOGO_W":     str(overlay_logo_w),
+        "OVERLAY_BANNER_ENABLED": "true" if overlay_banner_enabled else "false",
         "OVERLAY_BANNER":     overlay_banner,
         "OVERLAY_BANNER_POS": overlay_banner_pos,
     }

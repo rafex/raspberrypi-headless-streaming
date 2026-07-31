@@ -313,21 +313,17 @@
               </summary>
               <div class="acrd-body">
 
-                <!-- ── Aplicar overlay (común a Stream e Iniciar preview) ── -->
-                <div class="toggle-row">
-                  <div>
-                    <span>Aplicar overlay</span>
-                    <div class="field-hint">Controla tanto "Iniciar" (Stream) como "Iniciar preview": apagado, ambos capturan sin logo/banner/fecha-hora — útil para descartar problemas de cámara/audio</div>
-                  </div>
+                <p class="field-hint">Cada overlay tiene su propio interruptor: apagarlo lo oculta del stream y del preview, pero conserva el valor guardado — puedes prepararlo y activarlo después sin volver a escribirlo.</p>
+
+                <!-- ── Logo ── -->
+                <div class="toggle-row" style="margin-top:20px">
+                  <span class="section-label" style="margin:0">Logo PNG</span>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="overlay-enabled-toggle" checked>
+                    <input type="checkbox" id="cfg-overlay-logo-enabled">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
-
-                <!-- ── Logo ── -->
-                <p class="section-label" style="margin-top:20px">Logo PNG</p>
-                <div class="logo-path-row">
+                <div class="logo-path-row" style="margin-top:10px">
                   <input type="text" id="cfg-overlay-logo-file"
                     placeholder="/var/lib/raspi-streaming/assets/logos/logo.png" autocomplete="off">
                   <label class="btn-upload" for="logo-file-input" title="Subir archivo">&#128194;</label>
@@ -373,8 +369,14 @@
                 <input type="number" id="cfg-overlay-logo-pad" min="0" max="200" value="20" placeholder="px">
 
                 <!-- ── Banner ── -->
-                <p class="section-label" style="margin-top:20px">Banner — barra negra con texto centrado</p>
-                <input type="text" id="cfg-overlay-banner"
+                <div class="toggle-row" style="margin-top:24px">
+                  <span class="section-label" style="margin:0">Banner — barra negra con texto centrado</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-overlay-banner-enabled">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <input type="text" id="cfg-overlay-banner" style="margin-top:10px"
                   placeholder="Ej: Cámara Principal — Entrada Sur" maxlength="200">
 
                 <div class="banner-pos-row" style="margin-top:10px">
@@ -384,8 +386,14 @@
                 <input type="hidden" id="cfg-overlay-banner-pos" value="footer">
 
                 <!-- ── Texto libre ── -->
-                <p class="section-label" style="margin-top:20px">Texto libre (esquina)</p>
-                <input type="text" id="cfg-overlay-text"
+                <div class="toggle-row" style="margin-top:24px">
+                  <span class="section-label" style="margin:0">Texto libre (esquina)</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-overlay-text-enabled">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <input type="text" id="cfg-overlay-text" style="margin-top:10px"
                   placeholder="Ej: Cámara 1 — Entrada Principal" maxlength="200">
 
                 <p class="section-label" style="margin-top:10px">Posición del texto</p>
@@ -403,13 +411,27 @@
                 <input type="hidden" id="cfg-overlay-text-pos" value="bl">
 
                 <!-- ── Timestamp ── -->
-                <div class="toggle-row" style="margin-top:20px">
-                  <span>Timestamp en tiempo real</span>
+                <div class="toggle-row" style="margin-top:24px">
+                  <span class="section-label" style="margin:0">Timestamp en tiempo real</span>
                   <label class="toggle-switch">
                     <input type="checkbox" id="cfg-overlay-timestamp">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
+
+                <p class="section-label" style="margin-top:10px">Posición del timestamp</p>
+                <div class="pos-grid-3x3">
+                  <button type="button" class="pos-btn" data-timestamppos="tl">↖</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="tr">↗</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="center">⊙</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="bl">↙</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="br">↘</button>
+                </div>
+                <input type="hidden" id="cfg-overlay-timestamp-pos" value="tl">
 
               </div>
             </details>

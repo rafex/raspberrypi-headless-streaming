@@ -4,7 +4,6 @@
   let csrfToken = null;
   let role = null;
   let eventSource = null;
-  let overlayPref = true;
   let gpuEncoderPref = false;
   let lastSavedConfigJSON = null;
 
@@ -83,18 +82,11 @@
       </div>`;
 
     if (role === "operator") {
-      // Mientras el stream esté activo, el toggle de Overlays refleja la
-      // realidad (no se puede cambiar sin reiniciar) en vez del preference local.
-      const toggle = $("overlay-enabled-toggle");
-      if (toggle) {
-        if (isActive) toggle.checked = withOverlay;
-        overlayPref = toggle.checked;
-      }
       // streaming-overlay.service maneja tanto overlays como GPU encoder (cámara USB);
       // streaming.service (libcamera-vid) solo aplica cuando ninguno está activo.
       document.getElementById("btn-stream-start")?.addEventListener("click", (e) => {
         if (!confirmStartWithUnsavedChanges()) return;
-        handleStreamAction((overlayPref || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget);
+        handleStreamAction((anyOverlayActive() || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget);
       });
       document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
         handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
@@ -204,8 +196,12 @@
           IP del cliente (UDP)
           <input type="text" id="preview-client-ip" placeholder="192.168.1.50">
         </label>
-        <p class="field-hint">El toggle "Aplicar overlay" del paso 6 (Overlays) también controla este preview. El Encoder GPU (paso 5), si está activo y disponible, también se usa aquí.</p>
-        <p class="field-hint" id="preview-vlc-hint"></p>
+        <p class="field-hint">Los overlays activos del paso 6 (Overlays) y el Encoder GPU del paso 5, si están disponibles, también se usan aquí.</p>
+        <p class="field-hint" id="preview-url-label"></p>
+        <div class="preview-url-row">
+          <code id="preview-url-text"></code>
+          <button type="button" id="preview-url-copy" class="copy-btn" title="Copiar URL">&#128203;</button>
+        </div>
         <div class="service-actions">
           <button id="btn-preview-start" class="btn-start">Iniciar preview</button>
           <button id="btn-preview-stop"  class="btn-stop" disabled>Detener</button>
@@ -228,6 +224,7 @@
       handlePreviewStart(e.currentTarget);
     });
     $("btn-preview-stop").addEventListener("click", (e) => handleStreamAction("preview", "stop", e.currentTarget));
+    $("preview-url-copy").addEventListener("click", (e) => copyPreviewUrl(e.currentTarget));
   }
 
   function updatePreviewTransportUI() {
@@ -243,11 +240,42 @@
     const port = $("preview-port").value || (t === "rtmp" ? 1935 : 1234);
     const name = $("preview-rtmp-name").value.trim() || "preview";
     const host = window.location.hostname;
-    let hint = "";
-    if (t === "rtmp")      hint = `Ver con VLC: vlc rtmp://${host}:1935/${name}`;
-    else if (t === "tcp")  hint = `Ver con VLC (después de iniciar): vlc tcp://${host}:${port}`;
-    else                   hint = `Ver con VLC en el cliente: vlc udp://@:${port}`;
-    $("preview-vlc-hint").textContent = hint;
+    let label = "", url = "";
+    if (t === "rtmp") {
+      label = "Ver con VLC:";
+      url = `rtmp://${host}:1935/${name}`;
+    } else if (t === "tcp") {
+      label = "Ver con VLC (después de iniciar):";
+      url = `tcp://${host}:${port}`;
+    } else {
+      label = "Ver con VLC en el cliente:";
+      url = `udp://@:${port}`;
+    }
+    $("preview-url-label").textContent = label;
+    $("preview-url-text").textContent = url;
+  }
+
+  async function copyPreviewUrl(btn) {
+    const url = $("preview-url-text")?.textContent || "";
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Fallback para contextos sin permiso/API de clipboard (http, navegadores viejos).
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch {}
+      document.body.removeChild(ta);
+    }
+    if (!btn) return;
+    const original = btn.textContent;
+    btn.textContent = "✓";
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1200);
   }
 
   async function loadPreviewConfig() {
@@ -288,7 +316,7 @@
           port:      Number($("preview-port").value) || (transport === "rtmp" ? 1935 : 1234),
           client_ip: $("preview-client-ip").value.trim(),
           rtmp_name: $("preview-rtmp-name").value.trim() || "preview",
-          overlay:   overlayPref,
+          overlay:   anyOverlayActive(),
         },
       });
       await api("/api/stream/preview/start", { method: "POST" });
@@ -494,6 +522,20 @@
   });
 
   // ──────────────────────────────────────────────────
+  // Timestamp position — 3×3 grid
+  // ──────────────────────────────────────────────────
+  function setTimestampPos(pos) {
+    $("cfg-overlay-timestamp-pos").value = pos;
+    document.querySelectorAll(".pos-btn[data-timestamppos]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.timestamppos === pos)
+    );
+  }
+
+  document.querySelectorAll(".pos-btn[data-timestamppos]").forEach((btn) => {
+    btn.addEventListener("click", () => setTimestampPos(btn.dataset.timestamppos));
+  });
+
+  // ──────────────────────────────────────────────────
   // Banner position — footer / header buttons
   // ──────────────────────────────────────────────────
   function setBannerPos(pos) {
@@ -546,11 +588,11 @@
     const sumEncoder = $("sum-encoder");
     if (sumEncoder) sumEncoder.textContent = gpuEncoderPref ? "GPU · h264_v4l2m2m" : "CPU · libx264";
 
-    // Overlays
+    // Overlays — solo cuenta lo que está habilitado y tiene contenido
     const parts = [
-      $("cfg-overlay-logo-file").value.trim() && "Logo",
-      $("cfg-overlay-banner").value.trim()    && "Banner",
-      $("cfg-overlay-text").value.trim()      && "Texto",
+      $("cfg-overlay-logo-enabled").checked   && $("cfg-overlay-logo-file").value.trim() && "Logo",
+      $("cfg-overlay-banner-enabled").checked && $("cfg-overlay-banner").value.trim()    && "Banner",
+      $("cfg-overlay-text-enabled").checked   && $("cfg-overlay-text").value.trim()      && "Texto",
       $("cfg-overlay-timestamp").checked      && "Hora",
     ].filter(Boolean);
     $("sum-overlay").textContent = parts.length ? parts.join(" · ") : "Ninguno";
@@ -559,31 +601,28 @@
   ["cfg-audio-rate", "cfg-preset"].forEach((id) => {
     $(id)?.addEventListener("change", updateSummaries);
   });
-  ["cfg-audio-stereo", "cfg-audio-boost", "cfg-overlay-timestamp"].forEach((id) => {
+  ["cfg-audio-stereo", "cfg-audio-boost", "cfg-overlay-timestamp",
+   "cfg-overlay-logo-enabled", "cfg-overlay-banner-enabled", "cfg-overlay-text-enabled"].forEach((id) => {
     $(id)?.addEventListener("change", updateSummaries);
   });
   ["cfg-overlay-logo-file", "cfg-overlay-banner", "cfg-overlay-text"].forEach((id) => {
     $(id)?.addEventListener("input", updateSummaries);
   });
 
-  // Toggle "Aplicar overlay": controla Stream e Iniciar preview.
-  // h264_v4l2m2m acepta frames ya filtrados, así que overlay + GPU encoder
-  // pueden usarse juntos — no hay exclusión mutua.
-  overlayPref = $("overlay-enabled-toggle")?.checked ?? true;
-  $("overlay-enabled-toggle")?.addEventListener("change", (e) => {
-    overlayPref = e.target.checked;
-    updateSummaries();
-  });
-
-  // Toggle GPU Encoder (h264_v4l2m2m, VideoCore).
+  // Toggle GPU Encoder (h264_v4l2m2m, VideoCore). h264_v4l2m2m acepta frames ya
+  // filtrados, así que overlay + GPU encoder pueden usarse juntos sin exclusión mutua.
   $("gpu-encoder-toggle")?.addEventListener("change", (e) => {
     gpuEncoderPref = e.target.checked;
     updateSummaries();
   });
 
+  // Cada toggle de overlay (logo/banner/texto/timestamp) se bloquea mientras
+  // hay un servicio activo — igual que el GPU encoder, no cambia sin reiniciar.
   function lockOverlayToggle(anyActive) {
-    const overlayToggle = $("overlay-enabled-toggle");
-    if (overlayToggle) overlayToggle.disabled = anyActive;
+    ["cfg-overlay-logo-enabled", "cfg-overlay-banner-enabled", "cfg-overlay-text-enabled", "cfg-overlay-timestamp"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = anyActive;
+    });
     const gpuToggle = $("gpu-encoder-toggle");
     if (gpuToggle) gpuToggle.disabled = anyActive;
   }
@@ -809,6 +848,7 @@
       if (gpuToggleEl) gpuToggleEl.checked = gpuEncoderPref;
 
       // Overlays — Logo
+      $("cfg-overlay-logo-enabled").checked = cfg.OVERLAY_LOGO_ENABLED !== "false";
       const logoFile = cfg.OVERLAY_LOGO_FILE || "";
       $("cfg-overlay-logo-file").value = logoFile;
 
@@ -827,15 +867,18 @@
       setLogoPos(cfg.OVERLAY_LOGO_POS || "br");
 
       // Overlays — Banner
+      $("cfg-overlay-banner-enabled").checked = cfg.OVERLAY_BANNER_ENABLED !== "false";
       $("cfg-overlay-banner").value = cfg.OVERLAY_BANNER || "";
       setBannerPos(cfg.OVERLAY_BANNER_POS || "footer");
 
       // Overlays — Texto libre
+      $("cfg-overlay-text-enabled").checked = cfg.OVERLAY_TEXT_ENABLED !== "false";
       $("cfg-overlay-text").value = cfg.OVERLAY_TEXT || "";
       setTextPos(cfg.OVERLAY_TEXT_POS || "bl");
 
       // Overlays — Timestamp
       $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
+      setTimestampPos(cfg.OVERLAY_TIMESTAMP_POS || "tl");
 
       await loadDevices(cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_DEVICE || "");
       if (noAudio) $("cfg-audio-device").value = "__none__";
@@ -952,16 +995,32 @@
       stream_no_audio:     noAudio,
       stream_audio_boost:  $("cfg-audio-boost").checked,
       gpu_encoder:         gpuEncoderPref,
-      overlay_logo_file:   overlayPref ? $("cfg-overlay-logo-file").value.trim() : "",
+      // El valor de cada overlay se guarda siempre (aunque su toggle esté apagado) para
+      // no perderlo — solo el *_enabled decide si se renderiza en el stream/preview.
+      overlay_logo_enabled: $("cfg-overlay-logo-enabled").checked,
+      overlay_logo_file:   $("cfg-overlay-logo-file").value.trim(),
       overlay_logo_pos:    $("cfg-overlay-logo-pos").value,
       overlay_logo_pad:    Number($("cfg-overlay-logo-pad").value) || 20,
       overlay_logo_w:      Number($("cfg-overlay-logo-w").value)   || 0,
-      overlay_banner:      overlayPref ? $("cfg-overlay-banner").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200) : "",
+      overlay_banner_enabled: $("cfg-overlay-banner-enabled").checked,
+      overlay_banner:      $("cfg-overlay-banner").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200),
       overlay_banner_pos:  $("cfg-overlay-banner-pos").value,
-      overlay_text:        overlayPref ? $("cfg-overlay-text").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200) : "",
+      overlay_text_enabled: $("cfg-overlay-text-enabled").checked,
+      overlay_text:        $("cfg-overlay-text").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200),
       overlay_text_pos:    $("cfg-overlay-text-pos").value,
-      overlay_timestamp:   overlayPref ? $("cfg-overlay-timestamp").checked : false,
+      overlay_timestamp:   $("cfg-overlay-timestamp").checked,
+      overlay_timestamp_pos: $("cfg-overlay-timestamp-pos").value,
     };
+  }
+
+  // "Hay algún overlay que efectivamente se va a renderizar" — usado para decidir
+  // el servicio a arrancar (streaming vs streaming-overlay) y el preview.
+  function anyOverlayActive() {
+    const logoOn   = $("cfg-overlay-logo-enabled")?.checked   && $("cfg-overlay-logo-file").value.trim();
+    const bannerOn = $("cfg-overlay-banner-enabled")?.checked && $("cfg-overlay-banner").value.trim();
+    const textOn   = $("cfg-overlay-text-enabled")?.checked   && $("cfg-overlay-text").value.trim();
+    const tsOn     = $("cfg-overlay-timestamp")?.checked;
+    return Boolean(logoOn || bannerOn || textOn || tsOn);
   }
 
   // Snapshot del formulario para detectar cambios sin guardar. Se actualiza
@@ -998,15 +1057,19 @@
       ["STREAM_NO_AUDIO", intended.stream_no_audio ? "true" : "false"],
       ["STREAM_AUDIO_BOOST", intended.stream_audio_boost ? "true" : "false"],
       ["GPU_ENCODER", intended.gpu_encoder ? "true" : "false"],
+      ["OVERLAY_LOGO_ENABLED", intended.overlay_logo_enabled ? "true" : "false"],
       ["OVERLAY_LOGO_FILE", intended.overlay_logo_file],
       ["OVERLAY_LOGO_POS", intended.overlay_logo_pos],
       ["OVERLAY_LOGO_PAD", String(intended.overlay_logo_pad)],
       ["OVERLAY_LOGO_W", String(intended.overlay_logo_w)],
+      ["OVERLAY_BANNER_ENABLED", intended.overlay_banner_enabled ? "true" : "false"],
       ["OVERLAY_BANNER", intended.overlay_banner],
       ["OVERLAY_BANNER_POS", intended.overlay_banner_pos],
+      ["OVERLAY_TEXT_ENABLED", intended.overlay_text_enabled ? "true" : "false"],
       ["OVERLAY_TEXT", intended.overlay_text],
       ["OVERLAY_TEXT_POS", intended.overlay_text_pos],
       ["OVERLAY_TIMESTAMP", intended.overlay_timestamp ? "true" : "false"],
+      ["OVERLAY_TIMESTAMP_POS", intended.overlay_timestamp_pos],
     ];
     const expectedAudio = intended.stream_no_audio ? "" : intended.audio_device;
     checks.push(["AUDIO_DEVICE", expectedAudio]);

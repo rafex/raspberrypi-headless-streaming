@@ -26,7 +26,8 @@
 #   --preset P     Preset libx264: ultrafast, superfast, veryfast, faster, fast
 #                  (default: veryfast — recomendado para Pi 3B)
 #
-# Opciones de overlays (combinables):
+# Opciones de overlays (combinables, cada uno con su propio toggle *_ENABLED
+# vía variable de entorno — ver más abajo):
 #   --logo FILE    Ruta a PNG del logo (default: assets/logo.png si existe)
 #   --logo-pos P   Posición del logo: tl, tr, bl, br, center (default: br)
 #   --logo-pad N   Padding en px desde el borde (default: 20)
@@ -34,6 +35,7 @@
 #   --text TEXT    Texto estático a mostrar en pantalla
 #   --text-pos P   Posición del texto: tl, tr, bl, br, center (default: bl)
 #   --timestamp    Mostrar timestamp en tiempo real
+#   --timestamp-pos P  Posición del timestamp: tl, tr, bl, br, center (default: tl)
 #
 # Opciones de audio:
 #   -a ABITRATE    Bitrate de audio en bits/s (default: 128000)
@@ -54,6 +56,11 @@
 #                  garantizar que el preview nunca salga a la plataforma real)
 #   PREVIEW_OVERLAY  false (con PREVIEW_MODE=true) ignora logo/marco/texto/
 #                    timestamp/banner configurados — preview sin overlays
+#   OVERLAY_LOGO_ENABLED    false oculta el logo sin borrar OVERLAY_LOGO_FILE
+#   OVERLAY_BANNER_ENABLED  false oculta el banner sin borrar OVERLAY_BANNER
+#   OVERLAY_TEXT_ENABLED    false oculta el texto libre sin borrar OVERLAY_TEXT
+#                           (los tres default true; --logo/--banner/--text por
+#                           CLI siempre ganan, sin importar el toggle)
 #
 # Ejemplos:
 #   ./stream-overlay.sh -u rtmp://a.rtmp.youtube.com/live2/KEY --logo assets/logo.png
@@ -92,17 +99,33 @@ AUDIO_DEV="${AUDIO_DEVICE:-}"
 NO_AUDIO=false
 [[ "${STREAM_NO_AUDIO:-false}" == "true" ]] && NO_AUDIO=true
 
+# Cada overlay tiene su propio toggle *_ENABLED (default true — así los usos
+# manuales del script por CLI, sin estas variables definidas, no cambian de
+# comportamiento). El valor del overlay se guarda siempre en streaming.env
+# aunque esté deshabilitado; solo el toggle decide si se usa en el pipeline.
+LOGO_ENABLED=true
+[[ "${OVERLAY_LOGO_ENABLED:-true}" != "true" ]] && LOGO_ENABLED=false
 LOGO_FILE="${OVERLAY_LOGO_FILE:-}"
 LOGO_POS="${OVERLAY_LOGO_POS:-tl}"
 LOGO_PAD="${OVERLAY_LOGO_PAD:-20}"
 LOGO_W="${OVERLAY_LOGO_W:-150}"
 FRAME_FILE=""
+TEXT_ENABLED=true
+[[ "${OVERLAY_TEXT_ENABLED:-true}" != "true" ]] && TEXT_ENABLED=false
 TEXT_CONTENT="${OVERLAY_TEXT:-}"
 TEXT_POS="${OVERLAY_TEXT_POS:-bl}"
 USE_TIMESTAMP=false
 [[ "${OVERLAY_TIMESTAMP:-true}" == "true" ]] && USE_TIMESTAMP=true
+TIMESTAMP_POS="${OVERLAY_TIMESTAMP_POS:-tl}"
+BANNER_ENABLED=true
+[[ "${OVERLAY_BANNER_ENABLED:-true}" != "true" ]] && BANNER_ENABLED=false
 BANNER_TEXT="${OVERLAY_BANNER:-}"
 BANNER_POS="${OVERLAY_BANNER_POS:-footer}"
+# Marcan si --logo/--banner/--text llegaron por CLI (deben ganar siempre,
+# sin importar lo que digan los toggles *_ENABLED del entorno).
+_LOGO_FROM_CLI=false
+_BANNER_FROM_CLI=false
+_TEXT_FROM_CLI=false
 DUAL_URL="${RTMP_URL_SECONDARY:-}"
 AUDIO_BOOST=false
 [[ "${STREAM_AUDIO_BOOST:-false}" == "true" ]] && AUDIO_BOOST=true
@@ -190,15 +213,16 @@ while [[ $# -gt 0 ]]; do
         --audio-ch)   AUDIO_CH="$2"; shift 2 ;;
         -t)           DURATION="$2"; shift 2 ;;
         --preset)     PRESET="$2"; shift 2 ;;
-        --logo)       LOGO_FILE="$2"; shift 2 ;;
+        --logo)       LOGO_FILE="$2"; _LOGO_FROM_CLI=true; shift 2 ;;
         --logo-pos)   LOGO_POS="$2"; shift 2 ;;
         --logo-pad)   LOGO_PAD="$2"; shift 2 ;;
         --frame)      FRAME_FILE="$2"; shift 2 ;;
-        --text)       TEXT_CONTENT="$2"; shift 2 ;;
+        --text)       TEXT_CONTENT="$2"; _TEXT_FROM_CLI=true; shift 2 ;;
         --text-pos)   TEXT_POS="$2"; shift 2 ;;
         --timestamp)  USE_TIMESTAMP=true; shift ;;
+        --timestamp-pos) TIMESTAMP_POS="$2"; shift 2 ;;
         --no-audio)   NO_AUDIO=true; shift ;;
-        --banner)       BANNER_TEXT="$2"; shift 2 ;;
+        --banner)       BANNER_TEXT="$2"; _BANNER_FROM_CLI=true; shift 2 ;;
         --banner-pos)   BANNER_POS="$2"; shift 2 ;;
         --dual)         DUAL_URL="$2"; shift 2 ;;
         --audio-boost)  AUDIO_BOOST=true; shift ;;
@@ -242,6 +266,12 @@ fi
 if [[ -z "$FRAME_FILE" && "${OVERLAY_FRAME_FILE+set}" != "set" && -f "${ASSETS_DIR}/frame.png" ]]; then
     FRAME_FILE="${ASSETS_DIR}/frame.png"
 fi
+
+# Aplicar el toggle *_ENABLED de cada overlay: si está apagado (y no vino por
+# CLI explícito), su contenido no se usa, aunque siga guardado en streaming.env.
+[[ "$LOGO_ENABLED"   != true && "$_LOGO_FROM_CLI"   == false ]] && LOGO_FILE=""
+[[ "$BANNER_ENABLED" != true && "$_BANNER_FROM_CLI" == false ]] && BANNER_TEXT=""
+[[ "$TEXT_ENABLED"   != true && "$_TEXT_FROM_CLI"   == false ]] && TEXT_CONTENT=""
 
 if [[ "$PREVIEW_MODE" == "true" ]]; then
     # Nunca usar el destino real, sin importar -u/-k/RTMP_URL/STREAM_KEY/dual.
@@ -398,7 +428,8 @@ if [[ -n "$TEXT_CONTENT" ]]; then
     CURRENT="[vtext]"
 fi
 if [[ "$USE_TIMESTAMP" == true ]]; then
-    FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%F %T}':fontcolor=white:fontsize=20:x=10:y=10:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
+    TSPOS=$(text_position "$TIMESTAMP_POS")
+    FILTER_PARTS+=("${CURRENT}drawtext=text='%{localtime\\:%F %T}':fontcolor=white:fontsize=20:${TSPOS}:box=1:boxcolor=black@0.5:boxborderw=5[vts]")
     CURRENT="[vts]"
 fi
 if [[ -n "$BANNER_TEXT" ]]; then
