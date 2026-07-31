@@ -954,15 +954,15 @@
       stream_no_audio:     noAudio,
       stream_audio_boost:  $("cfg-audio-boost").checked,
       gpu_encoder:         gpuEncoderPref,
-      overlay_logo_file:   $("cfg-overlay-logo-file").value.trim(),
+      overlay_logo_file:   overlayPref ? $("cfg-overlay-logo-file").value.trim() : "",
       overlay_logo_pos:    $("cfg-overlay-logo-pos").value,
       overlay_logo_pad:    Number($("cfg-overlay-logo-pad").value) || 20,
       overlay_logo_w:      Number($("cfg-overlay-logo-w").value)   || 0,
-      overlay_banner:      $("cfg-overlay-banner").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200),
+      overlay_banner:      overlayPref ? $("cfg-overlay-banner").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200) : "",
       overlay_banner_pos:  $("cfg-overlay-banner-pos").value,
-      overlay_text:        $("cfg-overlay-text").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200),
+      overlay_text:        overlayPref ? $("cfg-overlay-text").value.trim().replace(/[\r\n]+/g, " ").slice(0, 200) : "",
       overlay_text_pos:    $("cfg-overlay-text-pos").value,
-      overlay_timestamp:   $("cfg-overlay-timestamp").checked,
+      overlay_timestamp:   overlayPref ? $("cfg-overlay-timestamp").checked : false,
     };
   }
 
