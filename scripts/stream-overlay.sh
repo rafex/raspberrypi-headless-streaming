@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Transmite video en vivo con overlays aplicados: logo, marco, texto y timestamp.
-# Sin overlays activos puede usar el encoder de hardware h264_v4l2m2m (VideoCore)
-# cuando GPU_ENCODER=true; con overlays siempre usa libx264 (filtros en CPU).
+# Puede usar el encoder de hardware h264_v4l2m2m (VideoCore) cuando GPU_ENCODER=true,
+# con o sin overlays activos (cámara USB v4l2; libcamera CSI siempre usa libx264).
 #
 # Uso:
 #   ./stream-overlay.sh [opciones] -u RTMP_URL
@@ -434,6 +434,22 @@ esac
 
 AUDIO_MAP_ARGS=(-map "${EXTRA_IDX}:a:0")
 
+# h264_v4l2m2m no rellena el extradata (SPS/PPS) que el muxer FLV necesita
+# ANTES de abrir la conexión RTMP. Servidores tolerantes (YouTube, Facebook)
+# lo aceptan igual; servidores estrictos (mediamtx, usado en preview local)
+# lo rechazan con "unable to parse H264 config: EOF" apenas conectan.
+# Fix: codificar a MPEG-TS (no requiere extradata previo — el demuxer TS
+# extrae el SPS/PPS del propio stream) y remuxear con -c copy a FLV/RTMP en
+# un segundo proceso. tcp/udp ya usan mpegts directamente y no lo necesitan.
+run_ffmpeg_pipeline() {
+    if [[ "$_HW_ENC" == "h264_v4l2m2m" && "$TRANSPORT" == "rtmp" ]]; then
+        ffmpeg -hide_banner -loglevel error "$@" -f mpegts - \
+            | ffmpeg -hide_banner -loglevel warning -f mpegts -i - -c copy "${OUTPUT_ARGS[@]}"
+    else
+        ffmpeg -hide_banner -loglevel warning "$@" "${OUTPUT_ARGS[@]}"
+    fi
+}
+
 if [[ "$CAPTURE_MODE" == "libcamera" ]]; then
     # --- CSI camera: libcamera-vid → pipe → ffmpeg ---
     if [[ "$HAS_OVERLAY" == false ]]; then
@@ -466,43 +482,39 @@ else
         if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
             echo "Encoder: h264_v4l2m2m  (GPU VideoCore — menor uso de CPU)"
             echo ""
-            ffmpeg -hide_banner -loglevel warning \
+            run_ffmpeg_pipeline \
                 -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
                 "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
                 -vf "format=yuv420p" \
-                -vcodec h264_v4l2m2m -b:v "$BITRATE" \
-                "${OUTPUT_ARGS[@]}"
+                -vcodec h264_v4l2m2m -b:v "$BITRATE"
         else
-            ffmpeg -hide_banner -loglevel warning \
+            run_ffmpeg_pipeline \
                 -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
                 "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
-                -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-                "${OUTPUT_ARGS[@]}"
+                -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE"
         fi
     else
         FILTER_COMPLEX=$(IFS=","; echo "${FILTER_PARTS[*]}")
         if [[ "$_HW_ENC" == "h264_v4l2m2m" ]]; then
             echo "Encoder: h264_v4l2m2m  (GPU VideoCore — con overlays)"
             echo ""
-            ffmpeg -hide_banner -loglevel warning \
+            run_ffmpeg_pipeline \
                 -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
                 "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
                 -filter_complex "$FILTER_COMPLEX" \
                 -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
-                -vcodec h264_v4l2m2m -b:v "$BITRATE" \
-                "${OUTPUT_ARGS[@]}"
+                -vcodec h264_v4l2m2m -b:v "$BITRATE"
         else
-            ffmpeg -hide_banner -loglevel warning \
+            run_ffmpeg_pipeline \
                 -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
                 "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
                 -filter_complex "$FILTER_COMPLEX" \
                 -map "$CURRENT" "${AUDIO_MAP_ARGS[@]}" \
-                -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE" \
-                "${OUTPUT_ARGS[@]}"
+                -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE"
         fi
     fi
 fi
