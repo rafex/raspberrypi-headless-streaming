@@ -204,7 +204,7 @@
           IP del cliente (UDP)
           <input type="text" id="preview-client-ip" placeholder="192.168.1.50">
         </label>
-        <p class="field-hint">El toggle "Aplicar overlay" del paso 5 (Overlays) también controla este preview.</p>
+        <p class="field-hint">El toggle "Aplicar overlay" del paso 6 (Overlays) también controla este preview. El Encoder GPU (paso 5), si está activo y disponible, también se usa aquí.</p>
         <p class="field-hint" id="preview-vlc-hint"></p>
         <div class="service-actions">
           <button id="btn-preview-start" class="btn-start">Iniciar preview</button>
