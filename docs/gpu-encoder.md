@@ -102,23 +102,84 @@ Reducción de carga de CPU en la etapa de encode: **~35%**.
 
 ---
 
-## Cuándo se usa y cuándo no
+## Overlay + GPU encoder: compatibilidad confirmada
 
-El encoder GPU solo actúa cuando **no hay overlays activos**.
+### La duda inicial
 
-Los overlays (logo, banner, timestamp, texto) requieren `filter_complex` de ffmpeg, que opera íntegramente en CPU. Encadenar ese pipeline a `h264_v4l2m2m` requeriría `hwupload`/`hwdownload`, lo que añade latencia y complejidad sin beneficio real en Pi 3B. Por eso el sistema implementa exclusión mutua:
+Cuando se integró `h264_v4l2m2m` por primera vez, se asumió que era incompatible con overlays. El razonamiento fue: los overlays (logo, texto, timestamp, banner) requieren `filter_complex` de ffmpeg, y ese filtrado corre en CPU produciendo frames de software. Encoders de hardware acelerado (VAAPI, CUDA/NVENC) normalmente exigen que el frame viva en un "hardware frame context" — pasar de CPU a ese contexto requiere `hwupload`, y de vuelta `hwdownload`, con overhead y complejidad extra.
 
-- **GPU ON → overlays desactivados automáticamente**
-- **Overlays ON → GPU desactivado automáticamente**
+Por esa suposición, se implementó **exclusión mutua** en el portal y en los scripts: activar GPU encoder apagaba overlays automáticamente y viceversa. `stream-overlay.sh` solo intentaba `h264_v4l2m2m` cuando `HAS_OVERLAY=false`.
 
-Esta lógica existe tanto en el portal web (JavaScript) como en los scripts de streaming (`GPU_ENCODER` solo toma efecto cuando `HAS_OVERLAY=false`).
+### La prueba
 
-La variable `GPU_ENCODER` en `/etc/streaming.env` persiste la preferencia:
+La suposición nunca se verificó directamente — se decidió probarlo en la Pi real antes de aceptarla como definitiva. Se corrió un ffmpeg de prueba (`-f null -`, sin tocar el stream en vivo) con `drawtext` encadenado directo a `h264_v4l2m2m`, sin ningún `hwupload`:
+
+```bash
+ffmpeg -f v4l2 -input_format mjpeg -framerate 30 -video_size 1280x720 -i /dev/video0 \
+  -vf 'format=yuv420p,drawtext=text=TEST:...' \
+  -vcodec h264_v4l2m2m -b:v 1500000 -f null -
+```
+
+Resultado: **corrió sin errores**, a ~29fps y velocidad 0.97x (casi tiempo real). El log confirmó:
 
 ```
-GPU_ENCODER=true   # usa h264_v4l2m2m si el hardware lo soporta
+Stream mapping:
+  Stream #0:0 -> #0:0 (rawvideo (native) -> h264 (h264_v4l2m2m))
+```
+
+**La suposición era incorrecta.** `h264_v4l2m2m` en ffmpeg es un wrapper V4L2 mem2mem, no un encoder de hardware-frame-context como VAAPI/NVENC — acepta buffers de memoria normal directamente. No necesita `hwupload`/`hwdownload`.
+
+### El incidente durante la prueba
+
+La prueba usó `/dev/video0` (la única cámara USB conectada) en paralelo mientras el stream en vivo (`streaming-overlay.service`) también la tenía abierta. V4L2 no soporta acceso concurrente al dispositivo — esto causó una contención que cortó el stream en vivo por ~2 minutos (`systemctl stop` implícito por el conflicto de dispositivo). Se restauró el servicio inmediatamente después de detectar el corte.
+
+**Lección operativa:** cualquier prueba de ffmpeg contra la cámara en vivo debe hacerse solo con el stream detenido, o aceptando una interrupción breve — no hay forma de probar en paralelo con una sola cámara USB.
+
+### El cambio de código
+
+Se quitó la exclusión mutua y se ajustó el pipeline:
+
+- **`stream-overlay.sh`**: `_HW_ENC` (resultado de `detect_hw_encoder()`) ahora se calcula una sola vez, después de determinar `HAS_OVERLAY`, y se usa en ambas ramas (con y sin overlay). Cuando hay overlays **y** GPU encoder activo, se agrega un filtro final `format=yuv420p` al `filter_complex` — necesario porque las imágenes PNG de overlay (logo) dejan el frame en un formato con canal alpha (`yuva420p`/`rgba`) que `h264_v4l2m2m` no acepta; el encoder solo trabaja en YUV 4:2:0 plano.
+- **`app.js`**: se eliminaron los listeners de exclusión mutua entre los toggles de Overlay y GPU Encoder. Ambos son independientes ahora.
+- **`index.html`**: el texto del toggle GPU se actualizó para reflejar la compatibilidad.
+
+La variable `GPU_ENCODER` en `/etc/streaming.env` sigue igual:
+
+```
+GPU_ENCODER=true   # usa h264_v4l2m2m si el hardware lo soporta (con o sin overlays)
 GPU_ENCODER=false  # siempre libx264
 ```
+
+### Resultado en producción (Pi 3B, prueba en vivo)
+
+Con el stream real transmitiendo a YouTube, se activaron simultáneamente: logo (PNG, esquina superior derecha), texto personalizado, timestamp y banner de texto — los 4 tipos de overlay a la vez, más GPU encoder:
+
+```
+ffmpeg ... -filter_complex [1:v]scale=120:-1[logo_s],[0:v][logo_s]overlay=...[vlogo],
+  [vlogo]drawtext=...[vtext],[vtext]drawtext=...[vts],[vts]drawbox=...,drawtext=...[vbanner],
+  [vbanner]format=yuv420p[vgpu] -map [vgpu] -map 2:a:0 -vcodec h264_v4l2m2m -b:v 2500000 -f flv ...
+```
+
+| Parámetro | Valor |
+|---|---|
+| Resolución | 1280×720 @ 30fps |
+| Bitrate | 2.5 Mbps |
+| Overlays activos | logo + texto + timestamp + banner (los 4 a la vez) |
+| Encoder | `h264_v4l2m2m` (GPU VideoCore) |
+| **CPU medido** | **59.1%** |
+| Destino | YouTube (RTMP en vivo) |
+
+Como referencia, la documentación de overlays (`docs/overlays.md`) reporta que 2-3 overlays con `libx264 veryfast` en Pi 3B ya se acercan a saturación (80-95% CPU), y 4+ overlays "posible saturación". Con GPU encoder, los mismos 4 overlays simultáneos quedaron en 59% — margen considerable de sobra.
+
+### Qué sigue costando CPU
+
+El GPU encoder solo delega la **etapa de encode H.264**. Estas etapas siguen en CPU sin importar el encoder:
+
+- Decodificación MJPEG de la cámara USB → yuvj422p
+- `filter_complex`: overlay de imágenes, `drawtext`, `drawbox`
+- Conversión final `format=yuv420p`
+
+Por eso overlays con GPU encoder siguen costando más CPU que GPU encoder sin overlays (~50% medido previamente) — la diferencia (~9 puntos porcentuales en esta prueba) es el costo real del filtrado, no del encode.
 
 ---
 
@@ -162,9 +223,9 @@ Si aparecen líneas como `gpu_mem_1024=16`, cambiarlas a `gpu_mem_1024=128`.
 
 Si `detect_hw_encoder()` no detecta el hardware (módulo no cargado, dispositivos ausentes, firmware incorrecto), todos los scripts caen silenciosamente a `libx264`. No hay error fatal.
 
-### No afecta overlays existentes
+### Overlays con imágenes PNG y canal alpha
 
-Activar el encoder GPU con el portal en modo "sin overlays" no modifica ninguna configuración de overlay guardada. Al desactivar el GPU encoder y volver a activar overlays, la configuración previa se restaura.
+Los overlays de imagen (logo, marco) pueden dejar el frame en `yuva420p` o `rgba` tras el `overlay` filter de ffmpeg. `h264_v4l2m2m` no acepta esos formatos — solo YUV 4:2:0 plano sin alpha. El pipeline agrega automáticamente un filtro `format=yuv420p` al final de la cadena cuando detecta overlays + GPU encoder combinados; no requiere configuración manual.
 
 ---
 
