@@ -91,7 +91,7 @@
       }
       // GPU encoder activo siempre usa "streaming" (sin overlay), aunque overlayPref esté activo.
       document.getElementById("btn-stream-start")?.addEventListener("click", (e) =>
-        handleStreamAction((overlayPref && !gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget)
+        handleStreamAction((overlayPref || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget)
       );
       document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
         handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
