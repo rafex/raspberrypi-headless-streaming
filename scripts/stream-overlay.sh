@@ -234,11 +234,12 @@ fi
 [[ "$AUDIO_BITRATE" =~ ^[0-9]+$ ]] || die "Bitrate de audio inválido: $AUDIO_BITRATE"
 [[ "$DURATION" =~ ^[0-9]+$ ]]      || die "Duración inválida: $DURATION"
 
-# Usar assets por defecto si existen y no se especificaron explícitamente
-if [[ -z "$LOGO_FILE" && -f "${ASSETS_DIR}/logo.png" ]]; then
+# Usar assets por defecto solo si el usuario NO definió la variable en el entorno.
+# Si OVERLAY_LOGO_FILE está definida (aunque vacía) significa "sin logo" — no forzar el default.
+if [[ -z "$LOGO_FILE" && "${OVERLAY_LOGO_FILE+set}" != "set" && -f "${ASSETS_DIR}/logo.png" ]]; then
     LOGO_FILE="${ASSETS_DIR}/logo.png"
 fi
-if [[ -z "$FRAME_FILE" && -f "${ASSETS_DIR}/frame.png" ]]; then
+if [[ -z "$FRAME_FILE" && "${OVERLAY_FRAME_FILE+set}" != "set" && -f "${ASSETS_DIR}/frame.png" ]]; then
     FRAME_FILE="${ASSETS_DIR}/frame.png"
 fi
 
