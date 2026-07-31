@@ -54,37 +54,43 @@ error explícito, solo el aviso genérico de "overlays requieren CPU".
 
 ---
 
-## El fix (dos capas)
+## El fix: self-healing en cada arranque, no solo en la instalación
 
-### 1. Neutralizar el blacklist en la instalación (`streaming-install.sh`)
+El primer fix (neutralizar el blacklist una vez, durante `streaming-install.sh`)
+resuelve el problema — hasta que un `apt upgrade` de DietPi actualice o
+reinstale el paquete que trae `dietpi-disable_rpi_codec.conf` y recree la
+línea `blacklist bcm2835_codec`. Un fix de una sola vez no sobrevive a eso.
 
-```bash
-DIETPI_BLACKLIST="/etc/modprobe.d/dietpi-disable_rpi_codec.conf"
-if [[ -f "$DIETPI_BLACKLIST" ]] && grep -q '^blacklist bcm2835_codec' "$DIETPI_BLACKLIST"; then
-    sed -i 's/^blacklist bcm2835_codec/#blacklist bcm2835_codec  # comentado por raspi-streaming (GPU encoder)/' "$DIETPI_BLACKLIST"
-fi
-```
+La solución es **`scripts/ensure-gpu-encoder.sh`**: un script idempotente,
+pensado para correr como root en cada arranque, que:
 
-Esto hace que `systemd-modules-load` cargue el módulo automáticamente en
-**cada** arranque, sin depender de que algo más lo pida.
-
-### 2. Defensa adicional en el arranque automático (`boot-stream-orchestrator.sh`)
-
-Por si el fix de instalación no se ha vuelto a aplicar en un host ya
-desplegado, el orquestador (que sí corre como root) hace su propio
-`modprobe` justo antes de arrancar el stream automático:
+1. Recorre **todos** los archivos de `/etc/modprobe.d/*.conf` (no asume que
+   el blacklist sigue solo en el archivo original de DietPi) y comenta
+   cualquier línea `blacklist bcm2835_codec` activa que encuentre.
+2. Verifica que `/etc/modules-load.d/raspi-streaming.conf` exista y liste
+   `bcm2835-codec`; lo recrea si falta.
+3. Carga el módulo con `modprobe` si todavía no está activo.
 
 ```bash
-if grep -q '^GPU_ENCODER=true' "$STREAMING_ENV" 2>/dev/null; then
-    if ! lsmod 2>/dev/null | grep -q bcm2835_codec; then
-        modprobe bcm2835-codec 2>/dev/null || true
-    fi
-fi
+sudo ./scripts/ensure-gpu-encoder.sh
 ```
 
-Esto no reemplaza el fix #1 (que es el que garantiza carga automática para
-el caso de "Iniciar" manual desde el portal, no solo el auto-stream), pero
-añade robustez para el camino de auto-stream específicamente.
+### Dónde se invoca
+
+- **`streaming-install.sh`**: lo llama una vez durante la instalación (mismo
+  efecto que antes, ahora sin duplicar la lógica).
+- **`boot-stream-orchestrator.sh`**: lo llama **al inicio de cada arranque**,
+  antes de revisar `AUTO_STREAM_ENABLED`. Esto es deliberado — el orquestador
+  siempre corre en boot (está `enabled` en systemd), así que este es el punto
+  natural para re-aplicar el fix sin importar si el auto-stream está activado
+  o no. Cubre tanto el caso de streaming automático como el de "Iniciar"
+  manual desde el portal minutos u horas después del arranque: para cuando el
+  usuario hace clic, el módulo ya lleva rato cargado y el blacklist (si
+  reapareció) ya fue neutralizado.
+
+Con esto, un `apt upgrade` que reintroduzca el blacklist deja de ser un
+problema permanente — se corrige solo en el siguiente reinicio, sin necesitar
+SSH ni volver a correr `make install-streaming` manualmente.
 
 ---
 

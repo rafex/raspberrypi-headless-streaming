@@ -100,33 +100,10 @@ sed -e "s|__STREAM_USER__|${STREAM_USER}|g" \
     > "${SYSTEMD_DIR}/preview.service"
 
 # --- 5b. Encoder de hardware H.264 (Pi 3B/4B): cargar bcm2835-codec en boot ---
-MODULES_LOAD_FILE="/etc/modules-load.d/raspi-streaming.conf"
-if modinfo bcm2835-codec >/dev/null 2>&1; then
-    echo "bcm2835-codec" > "$MODULES_LOAD_FILE"
-    chmod 644 "$MODULES_LOAD_FILE"
-    echo "Módulo bcm2835-codec configurado para carga automática: ${MODULES_LOAD_FILE}"
-
-    # DietPi incluye por defecto un blacklist de este módulo (asume que no se
-    # necesita el codec del VideoCore en uso headless). systemd-modules-load
-    # respeta ese blacklist y descarta silenciosamente la entrada de arriba
-    # en cada arranque, aunque el archivo esté bien escrito. Neutralizarlo
-    # para que la carga automática funcione de verdad.
-    DIETPI_BLACKLIST="/etc/modprobe.d/dietpi-disable_rpi_codec.conf"
-    if [[ -f "$DIETPI_BLACKLIST" ]] && grep -q '^blacklist bcm2835_codec' "$DIETPI_BLACKLIST"; then
-        sed -i 's/^blacklist bcm2835_codec/#blacklist bcm2835_codec  # comentado por raspi-streaming (GPU encoder)/' "$DIETPI_BLACKLIST"
-        echo "  Blacklist de DietPi neutralizado: ${DIETPI_BLACKLIST}"
-    fi
-
-    if ! lsmod 2>/dev/null | grep -q bcm2835_codec; then
-        modprobe bcm2835-codec 2>/dev/null \
-            && echo "  Módulo cargado correctamente." \
-            || echo "  AVISO: no se pudo cargar ahora (se cargará en el próximo arranque)."
-    else
-        echo "  Módulo ya activo."
-    fi
-else
-    echo "AVISO: bcm2835-codec no disponible en este sistema (sin encoder GPU)."
-fi
+# ensure-gpu-encoder.sh también corre en cada boot (vía boot-stream-orchestrator.sh)
+# para re-aplicar este fix si un `apt upgrade` de DietPi reintroduce el blacklist —
+# ver docs/reboot-validation.md.
+"${REPO_DIR}/scripts/ensure-gpu-encoder.sh"
 
 systemctl daemon-reload
 echo "Servicios instalados:"
