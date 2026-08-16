@@ -347,12 +347,13 @@ def detect_media(
             "kind": chosen_audio["kind"],
             "channels": channels,
             "rate": rate,
+            "native": native_channels is not None and native_rate is not None,
             "reason": "selección manual" if audio_source == "manual" else reason,
         }
     else:
         audio_result = {
             "device": "", "name": "", "card_id": "", "kind": "none",
-            "channels": int(env.get("AUDIO_CHANNELS", "1") or 1), "rate": 44100,
+            "channels": int(env.get("AUDIO_CHANNELS", "1") or 1), "rate": 44100, "native": False,
             "reason": "no hay entrada ALSA válida; se usará silencio AAC",
         }
 
@@ -382,7 +383,13 @@ def shell_env(media: dict) -> dict[str, str]:
         "VIDEO_INPUT_FPS": str(video["fps"]),
         "VIDEO_NAME": str(video["name"]),
         "VIDEO_DETECTION_REASON": str(video["reason"]),
-        "AUDIO_DEVICE_RESOLVED": str(audio["device"]),
+        # Cuando conocemos los parámetros nativos, evitar la conversión de
+        # plughw: la EasyCAP publica S16_LE/48 kHz/2ch y hw: elimina una capa
+        # ALSA que puede introducir golpes o drift en esta capturadora.
+        "AUDIO_DEVICE_RESOLVED": (
+            str(audio["device"]).replace("plughw:", "hw:", 1)
+            if audio.get("native") else str(audio["device"])
+        ),
         "AUDIO_KIND": str(audio["kind"]),
         "AUDIO_NAME": str(audio["name"]),
         "AUDIO_RATE_RESOLVED": str(audio["rate"]),

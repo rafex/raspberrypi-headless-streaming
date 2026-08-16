@@ -344,7 +344,9 @@ else
         if [[ "$AUDIO_BOOST" == true ]]; then
             AUDIO_ARGS+=(-af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0")
         fi
-        AUDIO_ARGS+=(-acodec aac -b:a "${AUDIO_BITRATE}")
+        AUDIO_FILTER="highpass=f=20,aresample=async=1:min_hard_comp=0.100000:first_pts=0"
+        [[ "$AUDIO_BOOST" == true ]] && AUDIO_FILTER+=",volume=2.0"
+        AUDIO_ARGS+=(-af "$AUDIO_FILTER" -acodec aac -b:a "${AUDIO_BITRATE}")
         BOOST_LABEL=""; [[ "$AUDIO_BOOST" == true ]] && BOOST_LABEL=" +boost×2"
         AUDIO_INFO="${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch${BOOST_LABEL}"
     fi

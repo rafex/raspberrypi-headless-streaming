@@ -89,6 +89,7 @@ class MediaAutoconfigTests(unittest.TestCase):
         self.assertEqual(result["audio"]["card_id"], "MS210x")
         self.assertEqual(result["audio"]["channels"], 2)
         self.assertEqual(result["audio"]["rate"], 48000)
+        self.assertEqual(media.shell_env(result)["AUDIO_DEVICE_RESOLVED"], "hw:CARD=MS210x,DEV=0")
 
         without_easycap = without_boya.replace("card 0: MS210x [MS210x], device 0: USB Audio [USB Audio]\n", "")
         result = media.detect_media(
