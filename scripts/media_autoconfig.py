@@ -388,7 +388,13 @@ def shell_env(media: dict) -> dict[str, str]:
         # ALSA que puede introducir golpes o drift en esta capturadora.
         "AUDIO_DEVICE_RESOLVED": (
             str(audio["device"]).replace("plughw:", "hw:", 1)
-            if audio.get("native") else str(audio["device"])
+            if audio.get("native")
+            or (
+                str(audio.get("card_id", "")).lower() == "ms210x"
+                and int(audio.get("channels", 0)) == 2
+                and int(audio.get("rate", 0)) == 48000
+            )
+            else str(audio["device"])
         ),
         "AUDIO_KIND": str(audio["kind"]),
         "AUDIO_NAME": str(audio["name"]),
