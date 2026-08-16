@@ -114,12 +114,16 @@
               </summary>
               <div class="acrd-body">
 
-                <p class="section-label">Micrófono</p>
+                <div class="devices-header">
+                  <p class="section-label">Micrófono</p>
+                  <button type="button" id="btn-scan-audio" class="btn-scan">Escanear</button>
+                </div>
                 <select id="cfg-audio-device">
                   <option value="" data-fixed="1">Auto-detectar</option>
                   <option value="__none__" data-fixed="1">Sin audio (silencio AAC)</option>
                 </select>
 
+                <p id="audio-scan-status" class="device-status" aria-live="polite"></p>
                 <p id="audio-rate-hint" class="device-status" hidden></p>
                 <p id="audio-device-detail" class="device-status" hidden></p>
 

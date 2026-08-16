@@ -807,7 +807,28 @@
     }
   }
 
+  async function scanAudioDevices() {
+    const statusEl = $("audio-scan-status");
+    const audioSelect = $("cfg-audio-device");
+    const currentAudio = audioSelect.value;
+    statusEl.textContent = "Escaneando audio...";
+    try {
+      const { mics = [], media } = await api("/api/devices");
+      populateDeviceSelect(audioSelect, mics, currentAudio);
+      const detected = media?.audio;
+      statusEl.textContent = `${mics.length} micrófono(s)` +
+        (detected?.device
+          ? ` · detectado: ${detected.name || detected.device}`
+          : " · sin entrada detectada");
+      updateAudioDeviceDetails();
+      updateSummaries();
+    } catch (err) {
+      statusEl.textContent = `Error al escanear audio: ${err.message}`;
+    }
+  }
+
   $("btn-scan-devices").addEventListener("click", () => loadDevices("", ""));
+  $("btn-scan-audio").addEventListener("click", scanAudioDevices);
 
   // ──────────────────────────────────────────────────
   // Cargar configuración guardada
