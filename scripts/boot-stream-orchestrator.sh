@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Orquesta el arranque post-WiFi: espera estabilización, selecciona audio y
+# Orquesta el arranque post-WiFi: espera estabilización, detecta medios y
 # arranca streaming solo si está habilitado explícitamente.
 
 set -euo pipefail
@@ -75,10 +75,11 @@ if [[ "$AUTO_STREAM_DELAY_SECONDS" =~ ^[0-9]+$ && "$AUTO_STREAM_DELAY_SECONDS" -
     sleep "$AUTO_STREAM_DELAY_SECONDS"
 fi
 
-log "Aplicando configuracion automatica de audio base..."
-"${REPO_DIR}/scripts/stream-audio-autoconfig.py" \
+log "Detectando camara, EasyCAP y audio base..."
+"${REPO_DIR}/scripts/media_autoconfig.py" \
     --env "$STREAMING_ENV" \
-    --channels "$AUTO_STREAM_AUDIO_CHANNELS"
+    --persist \
+    --json | sed -n '1,80p'
 
 log "Limpiando servicios de streaming/preview antes de iniciar..."
 systemctl stop streaming.service streaming-overlay.service preview.service 2>/dev/null || true

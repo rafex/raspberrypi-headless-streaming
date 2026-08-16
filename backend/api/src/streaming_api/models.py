@@ -21,6 +21,7 @@ class HealthPayload(BaseModel):
     ngrok_ssh_command: str = ""
     services: dict[str, Any] = Field(default_factory=dict)
     devices: dict[str, Any] = Field(default_factory=dict)
+    media: dict[str, Any] = Field(default_factory=dict)
     stream_config: dict[str, Any] = Field(default_factory=dict)
     preview_config: dict[str, Any] = Field(default_factory=dict)
     recent_stream_errors: str = ""

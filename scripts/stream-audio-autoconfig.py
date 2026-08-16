@@ -2,9 +2,10 @@
 """
 Selecciona audio base para streaming antes de arrancar:
 1. BOYA / BOYALINK si está conectado
-2. micrófono de webcam
-3. primer micrófono USB disponible
-4. silencio AAC si no hay micrófono
+2. audio USB asociado a EasyCAP/MS210x
+3. micrófono de webcam
+4. primer micrófono USB disponible
+5. silencio AAC si no hay micrófono
 
 Actualiza /etc/streaming.env sin tocar RTMP_URL ni stream keys.
 """
@@ -66,7 +67,14 @@ def list_mics() -> list[dict[str, str | int]]:
         card_id = ids.get(card, "")
         dev = f"plughw:CARD={card_id},DEV={device}" if card_id else f"plughw:{card},{device}"
         kind = kind_for(name, card_id)
-        priority = {"boya": 0, "webcam": 1, "usb": 2}[kind]
+        if kind == "boya":
+            priority = 0
+        elif "ms210x" in f"{name} {card_id}".lower():
+            priority = 1
+        elif kind == "webcam":
+            priority = 2
+        else:
+            priority = 3
         rate = 48000 if kind == "boya" else 44100
         mics.append({
             "dev": dev,
@@ -134,6 +142,7 @@ def main() -> int:
         chosen = mics[0]
         updates = {
             "AUDIO_DEVICE": str(chosen["dev"]),
+            "AUDIO_SOURCE": "auto",
             "AUDIO_RATE": str(chosen["rate"]),
             "AUDIO_CHANNELS": str(args.channels),
             "STREAM_NO_AUDIO": "false",
@@ -147,6 +156,7 @@ def main() -> int:
 
     write_env(args.env, {
         "AUDIO_DEVICE": "",
+        "AUDIO_SOURCE": "auto",
         "AUDIO_RATE": "44100",
         "AUDIO_CHANNELS": str(args.channels),
         "STREAM_NO_AUDIO": "true",

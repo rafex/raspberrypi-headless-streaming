@@ -199,6 +199,10 @@ pre {
   color: #dbeafe;
 }
 
+#media-view {
+  max-height: 300px;
+}
+
 @media (max-width: 640px) {
   .top, .status-panel {
     align-items: stretch;

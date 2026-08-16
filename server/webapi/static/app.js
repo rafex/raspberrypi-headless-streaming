@@ -789,12 +789,17 @@
     const statusEl = $("device-status");
     statusEl.textContent = "Escaneando...";
     try {
-      const { cameras, mics } = await api("/api/devices");
+      const { cameras, mics, media } = await api("/api/devices");
       populateDeviceSelect($("cfg-video-device"), cameras, currentVideo);
       populateDeviceSelect($("cfg-audio-device"), mics,    currentAudio);
+      const detected = media?.video;
+      const audio = media?.audio;
+      const mediaText = detected?.device
+        ? ` · ${detected.name} ${detected.format} ${detected.width}x${detected.height}@${detected.fps} · audio: ${audio?.name || "silencio AAC"}`
+        : "";
       statusEl.textContent =
         `${cameras.length} cámara(s) · ${mics.length} micrófono(s)` +
-        (cameras.length === 0 ? " — no se detectaron cámaras" : "");
+        (cameras.length === 0 ? " — no se detectaron cámaras" : "") + mediaText;
       updateAudioDeviceDetails();
       updateSummaries();
     } catch (err) {
@@ -880,7 +885,7 @@
       $("cfg-overlay-timestamp").checked = cfg.OVERLAY_TIMESTAMP === "true";
       setTimestampPos(cfg.OVERLAY_TIMESTAMP_POS || "tl");
 
-      await loadDevices(cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_DEVICE || "");
+      await loadDevices((cfg.VIDEO_SOURCE || "auto") === "auto" ? "" : cfg.VIDEO_DEVICE || "", noAudio ? "__none__" : cfg.AUDIO_SOURCE === "manual" ? cfg.AUDIO_DEVICE || "" : "");
       if (noAudio) $("cfg-audio-device").value = "__none__";
       updateAudioDeviceDetails();
 
@@ -988,7 +993,9 @@
       fps:                 Number($("cfg-fps").value),
       bitrate:             Number($("cfg-bitrate").value),
       preset:              $("cfg-preset").value,
+      video_source:        $("cfg-video-device").value ? "v4l2" : "auto",
       video_device:        $("cfg-video-device").value,
+      audio_source:        noAudio || !audioVal ? "auto" : "manual",
       audio_device:        noAudio ? "" : audioVal,
       audio_channels:      $("cfg-audio-stereo").checked ? 2 : 1,
       audio_rate:          Number($("cfg-audio-rate").value),
@@ -1051,7 +1058,8 @@
       ["STREAM_FPS", String(intended.fps)],
       ["STREAM_BITRATE", String(intended.bitrate)],
       ["STREAM_PRESET", intended.preset],
-      ["VIDEO_DEVICE", intended.video_device],
+      ["VIDEO_SOURCE", intended.video_source],
+      ["VIDEO_DEVICE", intended.video_source === "auto" ? "" : intended.video_device],
       ["AUDIO_CHANNELS", String(intended.audio_channels)],
       ["AUDIO_RATE", String(intended.audio_rate)],
       ["STREAM_NO_AUDIO", intended.stream_no_audio ? "true" : "false"],
@@ -1072,6 +1080,7 @@
       ["OVERLAY_TIMESTAMP_POS", intended.overlay_timestamp_pos],
     ];
     const expectedAudio = intended.stream_no_audio ? "" : intended.audio_device;
+    checks.push(["AUDIO_SOURCE", intended.audio_source]);
     checks.push(["AUDIO_DEVICE", expectedAudio]);
 
     for (const [key, expected] of checks) {

@@ -137,6 +137,12 @@ CLIENT_IP="${PREVIEW_CLIENT_IP:-}"
 RTMP_NAME="${PREVIEW_RTMP_NAME:-preview}"
 PREVIEW_OVERLAY="${PREVIEW_OVERLAY:-true}"
 GPU_ENCODER="${GPU_ENCODER:-false}"
+VIDEO_SOURCE="${VIDEO_SOURCE:-auto}"
+AUDIO_SOURCE="${AUDIO_SOURCE:-auto}"
+VIDEO_INPUT_FORMAT="${VIDEO_INPUT_FORMAT:-}"
+VIDEO_INPUT_WIDTH="${VIDEO_INPUT_WIDTH:-}"
+VIDEO_INPUT_HEIGHT="${VIDEO_INPUT_HEIGHT:-}"
+VIDEO_INPUT_FPS="${VIDEO_INPUT_FPS:-}"
 
 # PREVIEW_MODE=true (solo systemd/preview.service la define) garantiza que
 # este proceso NUNCA pueda salir hacia la plataforma real, sin depender del
@@ -236,19 +242,29 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# --- Detección de fuente de video ---
+# --- Detección de fuente de video y audio ---
 command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg no encontrado. Instalar con: sudo apt install ffmpeg"
 
-if command -v libcamera-vid >/dev/null 2>&1; then
-    CAPTURE_MODE="libcamera"
+MEDIA_SCRIPT="${SCRIPT_DIR}/media_autoconfig.py"
+[[ -f "$MEDIA_SCRIPT" ]] || die "No se encuentra el resolvedor de medios: $MEDIA_SCRIPT"
+MEDIA_ARGS=(--env /etc/streaming.env --shell-env --video-source "$VIDEO_SOURCE" --audio-source "$AUDIO_SOURCE")
+[[ -n "$VIDEO_DEV" ]] && MEDIA_ARGS+=(--video-device "$VIDEO_DEV")
+[[ -n "$AUDIO_DEV" ]] && MEDIA_ARGS+=(--audio-device "$AUDIO_DEV")
+if ! MEDIA_ENV=$(python3 "$MEDIA_SCRIPT" "${MEDIA_ARGS[@]}" 2>/dev/null); then
+    die "No se pudo autodetectar video/audio"
+fi
+eval "$MEDIA_ENV"
+
+CAPTURE_MODE="$VIDEO_BACKEND"
+if [[ "$CAPTURE_MODE" == "v4l2" ]]; then
+    VIDEO_DEV="$VIDEO_DEVICE_RESOLVED"
+    [[ -n "$VIDEO_DEV" && -e "$VIDEO_DEV" ]] || die "Dispositivo V4L2 no encontrado: $VIDEO_DEV"
+    [[ "$VIDEO_INPUT_WIDTH" =~ ^[0-9]+$ && "$VIDEO_INPUT_HEIGHT" =~ ^[0-9]+$ ]] || die "Formato V4L2 inválido detectado"
+    [[ "$VIDEO_INPUT_FPS" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "FPS V4L2 inválido detectado"
+elif [[ "$CAPTURE_MODE" == "libcamera" ]]; then
+    command -v libcamera-vid >/dev/null 2>&1 || die "libcamera-vid no encontrado y no hay captura V4L2 válida"
 else
-    CAPTURE_MODE="v4l2"
-    if [[ -z "$VIDEO_DEV" ]]; then
-        VIDEO_DEV=$(v4l2-ctl --list-devices 2>/dev/null \
-            | grep "/dev/video" | head -1 | tr -d ' \t' || true)
-        VIDEO_DEV="${VIDEO_DEV:-/dev/video0}"
-    fi
-    [[ -e "$VIDEO_DEV" ]] || die "Dispositivo de video no encontrado: $VIDEO_DEV. Usar --device /dev/videoN"
+    die "No se detectó una fuente de video válida"
 fi
 
 [[ "$WIDTH" =~ ^[0-9]+$ ]]         || die "Ancho inválido: $WIDTH"
@@ -309,42 +325,28 @@ esac
 DURATION_MS=$(( DURATION * 1000 ))
 
 
-# --- Detectar automáticamente micrófono USB ---
-# Busca por palabras clave comunes de micrófonos USB y marcas conocidas (BOYA, etc.)
-detect_usb_mic() {
-    arecord -l 2>/dev/null \
-        | grep -i "usb\|microphone\|mic\|webcam\|boya\|boyalink\|lavalier\|wireless\|focusrite\|scarlett" \
-        | grep "^card" \
-        | head -1 \
-        | awk '{
-            match($0, /card ([0-9]+).*device ([0-9]+)/, arr);
-            if (arr[1] != "" && arr[2] != "")
-                print "plughw:" arr[1] "," arr[2]
-        }' || true
-}
-
 # --- Construir argumentos de audio ---
 if [[ "$NO_AUDIO" == true ]]; then
     # YouTube Live requiere audio; usar fuente silenciosa en lugar de -an
     AUDIO_ARGS=(-f lavfi -i "anullsrc=r=44100:cl=stereo" -acodec aac -b:a 32k)
     AUDIO_INFO="silencio (AAC 32k — sin micrófono)"
 else
+    AUDIO_DEV="${AUDIO_DEVICE_RESOLVED:-$AUDIO_DEV}"
     if [[ -z "$AUDIO_DEV" ]]; then
-        AUDIO_DEV=$(detect_usb_mic)
-        if [[ -n "$AUDIO_DEV" ]]; then
-            echo "Micrófono USB detectado: ${AUDIO_DEV}"
-        else
-            echo "AVISO: No se detectó micrófono USB. Usando audio interno (hw:0)."
-            AUDIO_DEV="hw:0"
+        NO_AUDIO=true
+        AUDIO_ARGS=(-f lavfi -i "anullsrc=r=44100:cl=stereo" -acodec aac -b:a 32k)
+        AUDIO_INFO="silencio (AAC 32k — no hay entrada ALSA válida)"
+    else
+        echo "Audio seleccionado: ${AUDIO_DEV} (${AUDIO_KIND}) — ${AUDIO_DETECTION_REASON}"
+        AUDIO_ARGS=(-thread_queue_size 8192 -f alsa -ar "$AUDIO_RATE_RESOLVED" -ac "$AUDIO_CH" -i "$AUDIO_DEV")
+        AUDIO_RATE="$AUDIO_RATE_RESOLVED"
+        if [[ "$AUDIO_BOOST" == true ]]; then
+            AUDIO_ARGS+=(-af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0")
         fi
+        AUDIO_ARGS+=(-acodec aac -b:a "${AUDIO_BITRATE}")
+        BOOST_LABEL=""; [[ "$AUDIO_BOOST" == true ]] && BOOST_LABEL=" +boost×2"
+        AUDIO_INFO="${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch${BOOST_LABEL}"
     fi
-    AUDIO_ARGS=(-thread_queue_size 8192 -f alsa -ar "$AUDIO_RATE" -ac "$AUDIO_CH" -i "$AUDIO_DEV")
-    if [[ "$AUDIO_BOOST" == true ]]; then
-        AUDIO_ARGS+=(-af "aresample=async=1:min_hard_comp=0.100000:first_pts=0,volume=2.0")
-    fi
-    AUDIO_ARGS+=(-acodec aac -b:a "${AUDIO_BITRATE}")
-    BOOST_LABEL=""; [[ "$AUDIO_BOOST" == true ]] && BOOST_LABEL=" +boost×2"
-    AUDIO_INFO="${AUDIO_DEV} — AAC ${AUDIO_BITRATE} bps — ${AUDIO_RATE}Hz ${AUDIO_CH}ch${BOOST_LABEL}"
 fi
 
 # --- Determinar si hay overlays activos ---
@@ -363,6 +365,7 @@ fi
 echo "=== Stream con overlays ==="
 echo "  Resolución  : ${WIDTH}x${HEIGHT}"
 echo "  FPS         : ${FPS}"
+echo "  Entrada     : ${CAPTURE_MODE} ${VIDEO_DEV:-libcamera-vid} ${VIDEO_INPUT_FORMAT:-H264} ${VIDEO_INPUT_WIDTH:-$WIDTH}x${VIDEO_INPUT_HEIGHT:-$HEIGHT}@${VIDEO_INPUT_FPS:-$FPS}"
 echo "  Bitrate     : ${BITRATE} bps ($(( BITRATE / 1000 )) kbps)"
 echo "  Preset      : ${PRESET}"
 echo "  Audio       : ${AUDIO_INFO}"
@@ -404,6 +407,13 @@ EXTRA_INPUTS=()
 FILTER_PARTS=()
 CURRENT="[0:v]"
 EXTRA_IDX=1
+
+if [[ "$CAPTURE_MODE" == "v4l2" ]]; then
+    V4L2_INPUT_ARGS=(-thread_queue_size 8192 -f v4l2 -input_format "$VIDEO_INPUT_FORMAT" -framerate "$VIDEO_INPUT_FPS" -video_size "${VIDEO_INPUT_WIDTH}x${VIDEO_INPUT_HEIGHT}" -i "$VIDEO_DEV")
+    VIDEO_SCALE_FILTER="scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p"
+    FILTER_PARTS+=("${CURRENT}${VIDEO_SCALE_FILTER}[vscaled]")
+    CURRENT="[vscaled]"
+fi
 
 if [[ -n "$FRAME_FILE" ]]; then
     EXTRA_INPUTS+=(-i "$FRAME_FILE")
@@ -514,16 +524,17 @@ else
             echo "Encoder: h264_v4l2m2m  (GPU VideoCore — menor uso de CPU)"
             echo ""
             run_ffmpeg_pipeline \
-                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${V4L2_INPUT_ARGS[@]}" \
                 "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
-                -vf "format=yuv420p" \
+                -vf "$VIDEO_SCALE_FILTER" \
                 -vcodec h264_v4l2m2m -b:v "$BITRATE"
         else
             run_ffmpeg_pipeline \
-                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${V4L2_INPUT_ARGS[@]}" \
                 "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
+                -vf "$VIDEO_SCALE_FILTER" \
                 -vcodec libx264 -preset "$PRESET" -b:v "$BITRATE"
         fi
     else
@@ -532,7 +543,7 @@ else
             echo "Encoder: h264_v4l2m2m  (GPU VideoCore — con overlays)"
             echo ""
             run_ffmpeg_pipeline \
-                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${V4L2_INPUT_ARGS[@]}" \
                 "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
                 -filter_complex "$FILTER_COMPLEX" \
@@ -540,7 +551,7 @@ else
                 -vcodec h264_v4l2m2m -b:v "$BITRATE"
         else
             run_ffmpeg_pipeline \
-                -thread_queue_size 8192 -f v4l2 -framerate "$FPS" -video_size "${WIDTH}x${HEIGHT}" -i "$VIDEO_DEV" \
+                "${V4L2_INPUT_ARGS[@]}" \
                 "${EXTRA_INPUTS[@]}" "${AUDIO_ARGS[@]}" \
                 "${DURATION_ARGS[@]}" \
                 -filter_complex "$FILTER_COMPLEX" \

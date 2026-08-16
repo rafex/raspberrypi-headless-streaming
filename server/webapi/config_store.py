@@ -12,7 +12,8 @@ FIELDS = (
     "RTMP_URL", "STREAM_PLATFORM", "STREAM_KEY",
     "STREAM_DUAL", "STREAM_KEY_META", "RTMP_URL_SECONDARY",
     "STREAM_WIDTH", "STREAM_HEIGHT", "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET",
-    "VIDEO_DEVICE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
+    "VIDEO_SOURCE", "VIDEO_DEVICE", "VIDEO_INPUT_FORMAT", "VIDEO_INPUT_WIDTH", "VIDEO_INPUT_HEIGHT", "VIDEO_INPUT_FPS",
+    "AUDIO_SOURCE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
     "STREAM_AUDIO_BOOST",
     "GPU_ENCODER",
     "OVERLAY_TEXT_ENABLED", "OVERLAY_TEXT", "OVERLAY_TEXT_POS",
@@ -28,6 +29,8 @@ VALID_LOGO_POS    = ("tl", "tr", "bl", "br")
 VALID_BANNER_POS  = ("footer", "header")
 VALID_PLATFORMS   = ("youtube", "facebook", "custom", "dual")
 VALID_AUDIO_RATES = (44100, 48000)
+VALID_VIDEO_SOURCES = ("auto", "v4l2", "libcamera")
+VALID_AUDIO_SOURCES = ("auto", "manual")
 
 PLATFORM_BASE_URLS = {
     "youtube":  "rtmp://a.rtmp.youtube.com/live2/",
@@ -179,9 +182,19 @@ def validate_config(data: dict) -> dict:
     else:
         gpu_encoder = bool(gpu_encoder_raw)
 
+    video_source = str(data.get("video_source", "auto")).strip().lower() or "auto"
+    if video_source not in VALID_VIDEO_SOURCES:
+        errors.append(f"video_source debe ser uno de: {', '.join(VALID_VIDEO_SOURCES)}")
+        video_source = "auto"
+
     video_device = str(data.get("video_device", "")).strip()
     if video_device and not re.match(r"^/dev/video\d+$", video_device):
         errors.append("video_device debe ser /dev/videoN")
+
+    audio_source = str(data.get("audio_source", "auto")).strip().lower() or "auto"
+    if audio_source not in VALID_AUDIO_SOURCES:
+        errors.append(f"audio_source debe ser uno de: {', '.join(VALID_AUDIO_SOURCES)}")
+        audio_source = "auto"
 
     audio_device = str(data.get("audio_device", "")).strip()
     if audio_device and not re.match(r"^(plughw|hw):(\d+,\d+|CARD=[A-Za-z0-9_=-]+,DEV=\d+)$", audio_device):
@@ -268,7 +281,13 @@ def validate_config(data: dict) -> dict:
         "STREAM_FPS":         str(fps),
         "STREAM_BITRATE":     str(bitrate),
         "STREAM_PRESET":      preset,
-        "VIDEO_DEVICE":       video_device,
+        "VIDEO_SOURCE":       video_source,
+        "VIDEO_DEVICE":       video_device if video_source != "auto" else "",
+        "VIDEO_INPUT_FORMAT": "",
+        "VIDEO_INPUT_WIDTH":  "",
+        "VIDEO_INPUT_HEIGHT": "",
+        "VIDEO_INPUT_FPS":    "",
+        "AUDIO_SOURCE":       audio_source,
         "AUDIO_DEVICE":       audio_device,
         "AUDIO_CHANNELS":     str(audio_channels),
         "AUDIO_RATE":         str(audio_rate),

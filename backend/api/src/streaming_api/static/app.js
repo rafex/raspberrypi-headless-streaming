@@ -89,7 +89,7 @@
     `).join("");
   }
 
-  function renderState(state, config, localStatus) {
+  function renderState(state, config, localStatus, media) {
     const health = state.last_health || {};
     const services = localStatus || health.services || {};
     const ngrokUrl = health.ngrok_url || "";
@@ -107,6 +107,7 @@
     $("ssh-command").textContent = sshCommand || "-";
     $("copy-ssh-btn").disabled = !sshCommand;
     renderServices(services);
+    $("media-view").textContent = JSON.stringify(media || health.media || {}, null, 2);
     $("config-view").textContent = JSON.stringify(config || health.stream_config || {}, null, 2);
   }
 
@@ -121,6 +122,7 @@
       const state = await api(`/ui/api/raspi/${DEVICE_ID}/state`);
       let localStatus = null;
       let config = null;
+      let media = null;
       try {
         localStatus = await headless("/api/status");
       } catch (err) {
@@ -129,7 +131,10 @@
       try {
         config = await headless("/api/config");
       } catch {}
-      renderState(state, config, localStatus);
+      try {
+        media = (await headless("/api/devices")).media || null;
+      } catch {}
+      renderState(state, config, localStatus, media);
     } catch (err) {
       sessionStorage.removeItem(tokenKey);
       setDashboardVisible(false);

@@ -49,6 +49,18 @@
 
 set -euo pipefail
 
+# Mantener este entrypoint por compatibilidad, pero delegar la captura al
+# pipeline común que autodetecta EasyCAP, audio BOYA/webcam y libcamera.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export OVERLAY_LOGO_ENABLED=false
+export OVERLAY_BANNER_ENABLED=false
+export OVERLAY_TEXT_ENABLED=false
+export OVERLAY_TIMESTAMP=false
+export OVERLAY_LOGO_FILE=""
+export OVERLAY_BANNER=""
+export OVERLAY_TEXT=""
+exec "${SCRIPT_DIR}/stream-overlay.sh" "$@"
+
 WIDTH=1920
 HEIGHT=1080
 FPS=30

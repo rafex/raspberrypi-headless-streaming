@@ -193,9 +193,23 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/devices")
     @auth.require_role("operator")
     def get_devices():
+        media = {}
+        try:
+            from pathlib import Path
+            import sys
+            scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+            if str(scripts_dir) not in sys.path:
+                sys.path.insert(0, str(scripts_dir))
+            import media_autoconfig
+            media = media_autoconfig.detect_media(
+                config_store.read_config(app.config["STREAMING_ENV_PATH"])
+            )
+        except Exception:
+            media = {}
         return jsonify({
             "cameras": device_detect.list_cameras(),
             "mics":    device_detect.list_mics(),
+            "media":   media,
         })
 
     def _resolve_audio_device() -> str:

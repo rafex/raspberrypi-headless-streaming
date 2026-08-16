@@ -15,14 +15,18 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import media_autoconfig
+
 
 STREAMING_ENV = Path("/etc/streaming.env")
 PREVIEW_ENV = Path("/etc/preview.env")
 
 SAFE_STREAM_CONFIG_KEYS = (
     "STREAM_PLATFORM", "STREAM_DUAL", "STREAM_WIDTH", "STREAM_HEIGHT",
-    "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET", "VIDEO_DEVICE",
-    "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
+    "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET", "VIDEO_SOURCE", "VIDEO_DEVICE",
+    "AUDIO_SOURCE", "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
     "STREAM_AUDIO_BOOST", "OVERLAY_LOGO_ENABLED", "OVERLAY_LOGO_POS",
     "OVERLAY_BANNER_ENABLED", "OVERLAY_BANNER_POS", "OVERLAY_TEXT_ENABLED",
     "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP", "OVERLAY_TIMESTAMP_POS",
@@ -143,6 +147,7 @@ def payload() -> dict:
             "audio": run(["arecord", "-l"]),
             "video": run(["sh", "-c", "ls -1 /dev/video* 2>/dev/null || true"]),
         },
+        "media": media_autoconfig.detect_media(read_env(STREAMING_ENV)),
         "stream_config": safe_stream_config(),
         "preview_config": read_env(PREVIEW_ENV),
         "recent_stream_errors": run([

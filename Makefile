@@ -15,7 +15,7 @@
         backend-token backend-admin-token backend-certs backend-secrets backend-install-raspi-certs \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
-        streaming apply-streaming-defaults start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
+        streaming apply-streaming-defaults media-status start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
         start-preview stop-preview status-preview logs-preview
 
 WEBAPI_USER  ?= admin
@@ -60,6 +60,7 @@ help:
 	@echo "Streaming:"
 	@echo "  make streaming         - crea usuario 'streamer' e instala servicios systemd"
 	@echo "  make apply-streaming-defaults - aplica defaults preservando stream keys locales"
+	@echo "  make media-status          - detecta EasyCAP, cámara, formato y audio"
 	@echo "  make start-streaming   - inicia el stream (sin overlay)"
 	@echo "  make stop-streaming    - detiene el stream"
 	@echo "  make status-streaming  - muestra el estado del stream"
@@ -226,6 +227,9 @@ streaming:
 
 apply-streaming-defaults:
 	sudo ./scripts/apply-streaming-defaults.py --defaults $(STREAMING_DEFAULT_ENV) --env $(STREAMING_ENV)
+
+media-status:
+	python3 scripts/media_autoconfig.py --env $(STREAMING_ENV) --json
 
 start-streaming:
 	sudo systemctl start streaming.service
