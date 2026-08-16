@@ -338,6 +338,7 @@ else
         AUDIO_INFO="silencio (AAC 32k — no hay entrada ALSA válida)"
     else
         echo "Audio seleccionado: ${AUDIO_DEV} (${AUDIO_KIND}) — ${AUDIO_DETECTION_REASON}"
+        AUDIO_CH="${AUDIO_CHANNELS_RESOLVED:-$AUDIO_CH}"
         AUDIO_ARGS=(-thread_queue_size 8192 -f alsa -ar "$AUDIO_RATE_RESOLVED" -ac "$AUDIO_CH" -i "$AUDIO_DEV")
         AUDIO_RATE="$AUDIO_RATE_RESOLVED"
         if [[ "$AUDIO_BOOST" == true ]]; then

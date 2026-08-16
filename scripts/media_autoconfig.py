@@ -34,7 +34,7 @@ FFMPEG_PIXEL_FORMATS = {
 
 def command_runner(cmd: list[str]) -> str:
     try:
-        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True, timeout=5)
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True, timeout=5)
     except Exception:
         return ""
 
@@ -246,6 +246,20 @@ def _audio_score(item: dict, selected_video: dict | None) -> tuple[int, int]:
     return 100, 1
 
 
+def audio_hw_params(item: dict, runner: Runner = command_runner) -> tuple[int | None, int | None]:
+    """Obtiene los canales y la frecuencia nativos publicados por ALSA."""
+    device = str(item["device"]).replace("plughw:", "hw:", 1)
+    output = runner([
+        "arecord", "--dump-hw-params", "-D", device,
+        "-f", "S16_LE", "-d", "1", "/dev/null",
+    ])
+    channels_match = re.search(r"CHANNELS:\s+(\d+)", output)
+    rate_match = re.search(r"RATE:\s+(\d+)", output)
+    channels = int(channels_match.group(1)) if channels_match else None
+    rate = int(rate_match.group(1)) if rate_match else None
+    return channels, rate
+
+
 def _libcamera_available() -> bool:
     return shutil.which("libcamera-vid") is not None
 
@@ -316,6 +330,9 @@ def detect_media(
         chosen_audio = max(audio, key=lambda item: _audio_score(item, selected), default=None)
 
     if chosen_audio:
+        native_channels, native_rate = audio_hw_params(chosen_audio, runner)
+        channels = native_channels or int(env.get("AUDIO_CHANNELS", "1") or 1)
+        rate = native_rate or (48000 if chosen_audio["kind"] == "boya" else int(env.get("AUDIO_RATE", "44100") or 44100))
         reason = {
             "boya": "BOYA/BOYALINK tiene prioridad",
             "webcam": "no hay BOYA ni audio EasyCAP; se usa micrófono de webcam",
@@ -328,8 +345,8 @@ def detect_media(
             "name": chosen_audio["name"],
             "card_id": chosen_audio["card_id"],
             "kind": chosen_audio["kind"],
-            "channels": int(env.get("AUDIO_CHANNELS", "1") or 1),
-            "rate": 48000 if chosen_audio["kind"] == "boya" else int(env.get("AUDIO_RATE", "44100") or 44100),
+            "channels": channels,
+            "rate": rate,
             "reason": "selección manual" if audio_source == "manual" else reason,
         }
     else:
@@ -369,6 +386,7 @@ def shell_env(media: dict) -> dict[str, str]:
         "AUDIO_KIND": str(audio["kind"]),
         "AUDIO_NAME": str(audio["name"]),
         "AUDIO_RATE_RESOLVED": str(audio["rate"]),
+        "AUDIO_CHANNELS_RESOLVED": str(audio["channels"]),
         "AUDIO_DETECTION_REASON": str(audio["reason"]),
         "MEDIA_AUDIO_AVAILABLE": "true" if audio["device"] else "false",
     }

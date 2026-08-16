@@ -44,6 +44,8 @@ class MediaAutoconfigTests(unittest.TestCase):
             return WEBCAM_INFO if command[-1] == "--info" else WEBCAM_FORMATS
         if command == ["arecord", "-l"]:
             return ARECORD
+        if command[:2] == ["arecord", "--dump-hw-params"]:
+            return "CHANNELS: 2\nRATE: 48000\n"
         return ""
 
     def test_easycap_mode_and_encoder_nodes_are_handled(self):
@@ -85,6 +87,8 @@ class MediaAutoconfigTests(unittest.TestCase):
             libcamera_available=False,
         )
         self.assertEqual(result["audio"]["card_id"], "MS210x")
+        self.assertEqual(result["audio"]["channels"], 2)
+        self.assertEqual(result["audio"]["rate"], 48000)
 
         without_easycap = without_boya.replace("card 0: MS210x [MS210x], device 0: USB Audio [USB Audio]\n", "")
         result = media.detect_media(
