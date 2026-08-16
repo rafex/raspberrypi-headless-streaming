@@ -26,6 +26,10 @@ Crea, si no existen:
 /etc/raspi-streaming/ngrok.yml
 ```
 
+Si `/etc/raspi-streaming/boot-flow.env` ya existe, la instalación actualiza
+automáticamente solo los antiguos defaults `120` y `420` a `600` segundos.
+Otros valores se consideran personalizados y se conservan.
+
 ## Auto-stream diferido
 
 Archivo:

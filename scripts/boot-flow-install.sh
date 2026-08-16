@@ -32,7 +32,25 @@ install_config_if_missing() {
     fi
 }
 
+# Actualizar únicamente valores que pertenecían a defaults anteriores.
+# Cualquier valor diferente representa una decisión explícita del usuario y se
+# conserva para no sobrescribir configuración personalizada en una actualización.
+migrate_boot_flow_delay() {
+    local dst="$1"
+    local current
+    [[ -f "$dst" ]] || return 0
+
+    current="$(awk -F= '$1 == "AUTO_STREAM_DELAY_SECONDS" {print $2; exit}' "$dst")"
+    case "$current" in
+        120|420)
+            sed -i 's/^AUTO_STREAM_DELAY_SECONDS=.*/AUTO_STREAM_DELAY_SECONDS=600/' "$dst"
+            echo "Delay migrado: ${dst} (${current}s → 600s)"
+            ;;
+    esac
+}
+
 install_config_if_missing "${REPO_DIR}/systemd/boot-flow.env.example" "${CONFIG_DIR}/boot-flow.env" 600
+migrate_boot_flow_delay "${CONFIG_DIR}/boot-flow.env"
 install_config_if_missing "${REPO_DIR}/systemd/health-reporter.env.example" "${CONFIG_DIR}/health-reporter.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/backend-control-agent.env.example" "${CONFIG_DIR}/backend-control-agent.env" 600
 install_config_if_missing "${REPO_DIR}/systemd/ngrok.env.example" "${CONFIG_DIR}/ngrok.env" 600

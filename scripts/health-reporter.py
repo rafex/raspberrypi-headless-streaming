@@ -19,6 +19,15 @@ from pathlib import Path
 STREAMING_ENV = Path("/etc/streaming.env")
 PREVIEW_ENV = Path("/etc/preview.env")
 
+SAFE_STREAM_CONFIG_KEYS = (
+    "STREAM_PLATFORM", "STREAM_DUAL", "STREAM_WIDTH", "STREAM_HEIGHT",
+    "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET", "VIDEO_DEVICE",
+    "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
+    "STREAM_AUDIO_BOOST", "OVERLAY_LOGO_ENABLED", "OVERLAY_LOGO_POS",
+    "OVERLAY_BANNER_ENABLED", "OVERLAY_BANNER_POS", "OVERLAY_TEXT_ENABLED",
+    "OVERLAY_TEXT_POS", "OVERLAY_TIMESTAMP", "OVERLAY_TIMESTAMP_POS",
+)
+
 
 def run(cmd: list[str], timeout: int = 5) -> str:
     try:
@@ -99,14 +108,7 @@ def service_state(service: str) -> dict[str, str | bool]:
 
 def safe_stream_config() -> dict[str, str]:
     cfg = read_env(STREAMING_ENV)
-    allowed = (
-        "STREAM_PLATFORM", "STREAM_DUAL", "STREAM_WIDTH", "STREAM_HEIGHT",
-        "STREAM_FPS", "STREAM_BITRATE", "STREAM_PRESET", "VIDEO_DEVICE",
-        "AUDIO_DEVICE", "AUDIO_CHANNELS", "AUDIO_RATE", "STREAM_NO_AUDIO",
-        "STREAM_AUDIO_BOOST", "OVERLAY_TIMESTAMP", "OVERLAY_LOGO_POS",
-        "OVERLAY_BANNER_POS",
-    )
-    return {key: cfg.get(key, "") for key in allowed}
+    return {key: cfg.get(key, "") for key in SAFE_STREAM_CONFIG_KEYS}
 
 
 def payload() -> dict:
