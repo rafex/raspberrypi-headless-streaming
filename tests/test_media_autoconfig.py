@@ -102,6 +102,18 @@ class MediaAutoconfigTests(unittest.TestCase):
         )
         self.assertEqual(result["audio"]["kind"], "webcam")
 
+    def test_generic_hdmi_capture_matches_stream_output(self):
+        modes = [
+            {"format": "MJPG", "width": 1920, "height": 1080, "fps": 30},
+            {"format": "MJPG", "width": 1280, "height": 720, "fps": 30},
+            {"format": "YUYV", "width": 1280, "height": 720, "fps": 10},
+        ]
+        selected = media._best_mode(modes, easycap=False)
+        self.assertEqual(
+            selected,
+            {"format": "MJPG", "width": 1280, "height": 720, "fps": 30},
+        )
+
     def test_fallbacks_to_libcamera_and_silence(self):
         result = media.detect_media(
             {"VIDEO_SOURCE": "auto", "AUDIO_SOURCE": "auto"},

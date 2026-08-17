@@ -127,12 +127,21 @@ def _video_score(name: str, device: str) -> int:
     text = f"{name} {device}".lower()
     if any(word in text for word in ("ms210x", "easycap", "easiercap", "av to usb", "usbtv", "stk1160")):
         return 100
+    if "macrosilicon" in text:
+        # HDMI USB grabbers commonly identify themselves only as USB Video.
+        return 90
     if any(word in text for word in ("uvc", "webcam", "camera", "c920")):
         return 50
     return 20
 
 
-def _best_mode(modes: list[dict[str, str | int]], easycap: bool) -> dict[str, str | int] | None:
+def _best_mode(
+    modes: list[dict[str, str | int]],
+    easycap: bool,
+    target_width: int = 1280,
+    target_height: int = 720,
+    target_fps: float = 30,
+) -> dict[str, str | int] | None:
     if not modes:
         return None
 
@@ -146,7 +155,19 @@ def _best_mode(modes: list[dict[str, str | int]], easycap: bool) -> dict[str, st
             ntsc_score = 0
         # Prefer useful modes without requesting a larger input than necessary.
         size_score = min(width * height, 1920 * 1080) // 10000
-        return format_score + ntsc_score + fps_score, size_score, int(fps), width * height
+        matches_output = (
+            not easycap
+            and width == target_width
+            and height == target_height
+            and abs(fps - target_fps) < 0.1
+        )
+        return (
+            1 if matches_output else 0,
+            format_score + ntsc_score + fps_score,
+            size_score,
+            int(fps),
+            width * height,
+        )
 
     return max(modes, key=score)
 
@@ -301,7 +322,13 @@ def detect_media(
             "reason": "sin captura V4L2 válida; fallback a libcamera",
         }
     elif selected:
-        mode = _best_mode(selected["modes"], bool(selected["easycap"]))
+        mode = _best_mode(
+            selected["modes"],
+            bool(selected["easycap"]),
+            target_width=int(env.get("STREAM_WIDTH", "1280") or 1280),
+            target_height=int(env.get("STREAM_HEIGHT", "720") or 720),
+            target_fps=float(env.get("STREAM_FPS", "30") or 30),
+        )
         video = {
             "backend": "v4l2",
             "device": selected["device"],
