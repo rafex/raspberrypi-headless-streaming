@@ -258,7 +258,9 @@ def _audio_score(item: dict, selected_video: dict | None) -> tuple[int, int]:
     text = f"{item.get('name', '')} {item.get('card_id', '')}".lower()
     video_text = f"{(selected_video or {}).get('name', '')}".lower()
     easycap = bool(selected_video and selected_video.get("easycap"))
-    if easycap and any(word in text for word in ("ms210x", "usb audio", "av to usb")):
+    capture_audio = any(word in text for word in ("ms210x", "ms2109", "macrosilicon", "av to usb"))
+    capture_video = easycap or any(word in video_text for word in ("usb video", "macrosilicon"))
+    if capture_video and capture_audio:
         return 300, 0
     if kind == "webcam":
         return 200, 0
@@ -351,8 +353,13 @@ def detect_media(
     audio_configured = env.get("AUDIO_DEVICE", "").strip()
     audio = list_audio_devices(runner, audio_ids, audio_output)
     chosen_audio = None
+    audio_fallback_reason = ""
     if audio_source == "manual" and audio_configured:
         chosen_audio = next((item for item in audio if item["device"] == audio_configured), None)
+        if chosen_audio is None:
+            chosen_audio = max(audio, key=lambda item: _audio_score(item, selected), default=None)
+            if chosen_audio:
+                audio_fallback_reason = "fuente manual no disponible; se usa audio detectado"
     elif audio_source != "manual":
         chosen_audio = max(audio, key=lambda item: _audio_score(item, selected), default=None)
 
@@ -375,7 +382,10 @@ def detect_media(
             "channels": channels,
             "rate": rate,
             "native": native_channels is not None and native_rate is not None,
-            "reason": "selección manual" if audio_source == "manual" else reason,
+            "reason": (
+                audio_fallback_reason
+                or ("selección manual" if audio_source == "manual" else reason)
+            ),
         }
     else:
         audio_result = {

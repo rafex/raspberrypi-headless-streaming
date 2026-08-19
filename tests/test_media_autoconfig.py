@@ -126,6 +126,29 @@ class MediaAutoconfigTests(unittest.TestCase):
         self.assertEqual(result["video"]["backend"], "libcamera")
         self.assertEqual(result["audio"]["kind"], "none")
 
+    def test_missing_manual_boya_falls_back_to_hdmi_audio(self):
+        hdmi_audio = "card 0: MS2109 [MS2109], device 0: USB Audio [USB Audio]\n"
+        result = media.detect_media(
+            {
+                "VIDEO_SOURCE": "auto",
+                "AUDIO_SOURCE": "manual",
+                "AUDIO_DEVICE": "plughw:CARD=BOYALINK,DEV=0",
+            },
+            runner=self.runner,
+            video_devices=[],
+            audio_output=hdmi_audio,
+            audio_ids={"0": "MS2109"},
+            libcamera_available=False,
+        )
+        self.assertEqual(result["audio"]["card_id"], "MS2109")
+        self.assertIn("fuente manual no disponible", result["audio"]["reason"])
+
+    def test_hdmi_capture_audio_beats_webcam(self):
+        hdmi = {"name": "USB Video: USB Video", "easycap": False}
+        ms2109 = {"name": "USB Audio", "card_id": "MS2109", "kind": "usb"}
+        webcam = {"name": "USB Audio", "card_id": "C920", "kind": "webcam"}
+        self.assertGreater(media._audio_score(ms2109, hdmi), media._audio_score(webcam, hdmi))
+
 
 if __name__ == "__main__":
     unittest.main()
