@@ -256,7 +256,7 @@ def _audio_kind(name: str, card_id: str, usb_metadata: dict[str, str] | None = N
         return "boya"
     if "ms2109" in text or "macrosilicon" in text or "usb video" in text:
         return "hdmi_capture"
-    if "c-media" in text or "0d8c" in text or "usb audio device" in text:
+    if "c-media" in text or "0d8c" in text:
         return "usb_capture"
     if any(word in text for word in ("webcam", "camera", "c920", "uvc")):
         return "webcam"
