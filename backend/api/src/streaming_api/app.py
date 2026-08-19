@@ -25,7 +25,14 @@ from .settings import settings
 from .store import Store
 
 
-app = FastAPI(title=settings.app_name)
+# The public UI is served from /static. Keep FastAPI's schema and interactive
+# documentation disabled so route metadata is not exposed without auth.
+app = FastAPI(
+    title=settings.app_name,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 store = Store(settings.database_path)
 STATIC_DIR = Path(__file__).with_name("static")
 
@@ -69,7 +76,10 @@ def frontend() -> RedirectResponse:
 @app.get("/portal/{device_id}/")
 @app.head("/portal/{device_id}")
 @app.head("/portal/{device_id}/")
-def redirect_to_portal(device_id: str) -> RedirectResponse:
+def redirect_to_portal(
+    device_id: str,
+    _: Principal = Depends(authenticate_admin_token),
+) -> RedirectResponse:
     return RedirectResponse(f"https://{portal_host_for_device(device_id)}/", status_code=302)
 
 
