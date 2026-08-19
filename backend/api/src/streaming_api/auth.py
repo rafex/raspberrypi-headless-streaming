@@ -103,9 +103,9 @@ def _validate_mtls(request: Request) -> tuple[str, str]:
     if not settings.require_mtls:
         return "", ""
 
-    verify_value = request.headers.get(settings.mtls_verify_header, "")
     subject = request.headers.get(settings.mtls_subject_header, "")
     cn = request.headers.get(settings.mtls_cn_header, "")
+    certificate = request.headers.get(settings.mtls_cert_header, "")
     if not subject:
         subject = request.headers.get("x-streaming-client-dn", "")
     if not cn:
@@ -116,9 +116,10 @@ def _validate_mtls(request: Request) -> tuple[str, str]:
     # If TLS is terminated before the Ingress, the edge proxy forwards
     # X-Streaming-Client-CN/DN because HAProxy Ingress strips X-SSL-* headers
     # received from outside.
-    if verify_value == settings.mtls_verify_success_value:
-        return subject, cn
-    if cn or subject:
+    # HAProxy Ingress forwards the client certificate fields only after it
+    # terminates TLS. The verify header alone is not sufficient: clients can
+    # otherwise spoof X-SSL-Client-Verify before the trusted proxy.
+    if certificate or cn or subject:
         return subject, cn
 
     if settings.require_mtls:

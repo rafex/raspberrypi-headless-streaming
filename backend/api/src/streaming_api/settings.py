@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     mtls_verify_success_value: str = "SUCCESS"
     mtls_subject_header: str = "x-ssl-client-dn"
     mtls_cn_header: str = "x-ssl-client-cn"
+    mtls_cert_header: str = "x-ssl-client-cert"
 
     max_payload_bytes: int = 262_144
 
