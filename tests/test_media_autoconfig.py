@@ -149,6 +149,18 @@ class MediaAutoconfigTests(unittest.TestCase):
         webcam = {"name": "USB Audio", "card_id": "C920", "kind": "webcam"}
         self.assertGreater(media._audio_score(ms2109, hdmi), media._audio_score(webcam, hdmi))
 
+    def test_usb_audio_capture_is_classified_and_prioritized(self):
+        kind = media._audio_kind(
+            "USB Audio",
+            "Device",
+            {"vendor": "0d8c", "product": "0014", "manufacturer": "C-Media Electronics Inc.", "product_name": "USB Audio Device"},
+        )
+        self.assertEqual(kind, "usb_capture")
+        self.assertGreater(
+            media._audio_score({"kind": kind}, None),
+            media._audio_score({"kind": "hdmi_capture"}, None),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

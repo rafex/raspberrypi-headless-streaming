@@ -216,10 +216,48 @@ def card_ids() -> dict[str, str]:
     return ids
 
 
-def _audio_kind(name: str, card_id: str) -> str:
-    text = f"{name} {card_id}".lower()
+def _card_usb_metadata(card: str) -> dict[str, str]:
+    """Reads USB identity for an ALSA card without requiring pyudev."""
+    try:
+        path = Path(f"/sys/class/sound/card{card}/device").resolve()
+    except OSError:
+        return {}
+    for candidate in (path, *path.parents):
+        vendor_path = candidate / "idVendor"
+        product_path = candidate / "idProduct"
+        if not vendor_path.is_file() or not product_path.is_file():
+            continue
+        metadata = {
+            "vendor": vendor_path.read_text(encoding="utf-8").strip().lower(),
+            "product": product_path.read_text(encoding="utf-8").strip().lower(),
+        }
+        for key, metadata_key in (("manufacturer", "manufacturer"), ("product", "product_name")):
+            value_path = candidate / key
+            if value_path.is_file():
+                metadata[metadata_key] = value_path.read_text(encoding="utf-8").strip()
+        return metadata
+    return {}
+
+
+def _audio_kind(name: str, card_id: str, usb_metadata: dict[str, str] | None = None) -> str:
+    metadata = usb_metadata or {}
+    text = " ".join(
+        str(value).lower()
+        for value in (
+            name,
+            card_id,
+            metadata.get("vendor", ""),
+            metadata.get("product", ""),
+            metadata.get("manufacturer", ""),
+            metadata.get("product_name", ""),
+        )
+    )
     if "boya" in text or "boyalink" in text:
         return "boya"
+    if "ms2109" in text or "macrosilicon" in text or "usb video" in text:
+        return "hdmi_capture"
+    if "c-media" in text or "0d8c" in text or "usb audio device" in text:
+        return "usb_capture"
     if any(word in text for word in ("webcam", "camera", "c920", "uvc")):
         return "webcam"
     return "usb"
@@ -239,7 +277,8 @@ def list_audio_devices(
             continue
         card, device, name = match.group(1), match.group(2), match.group(3).strip()
         card_id = ids.get(card, "")
-        kind = _audio_kind(name, card_id)
+        usb_metadata = _card_usb_metadata(card)
+        kind = _audio_kind(name, card_id, usb_metadata)
         devices.append({
             "device": f"plughw:CARD={card_id},DEV={device}" if card_id else f"plughw:{card},{device}",
             "name": name,
@@ -247,6 +286,8 @@ def list_audio_devices(
             "device_number": device,
             "card_id": card_id,
             "kind": kind,
+            "usb_vendor": usb_metadata.get("vendor", ""),
+            "usb_product": usb_metadata.get("product", ""),
         })
     return devices
 
@@ -255,6 +296,10 @@ def _audio_score(item: dict, selected_video: dict | None) -> tuple[int, int]:
     kind = str(item["kind"])
     if kind == "boya":
         return 400, 0
+    if kind == "usb_capture":
+        return 350, 0
+    if kind == "hdmi_capture":
+        return 300, 0
     text = f"{item.get('name', '')} {item.get('card_id', '')}".lower()
     video_text = f"{(selected_video or {}).get('name', '')}".lower()
     easycap = bool(selected_video and selected_video.get("easycap"))
@@ -369,6 +414,8 @@ def detect_media(
         rate = native_rate or (48000 if chosen_audio["kind"] == "boya" else int(env.get("AUDIO_RATE", "44100") or 44100))
         reason = {
             "boya": "BOYA/BOYALINK tiene prioridad",
+            "usb_capture": "capturadora USB de audio tiene prioridad después de BOYA",
+            "hdmi_capture": "audio de la capturadora HDMI",
             "webcam": "no hay BOYA ni audio EasyCAP; se usa micrófono de webcam",
             "usb": "se usa audio USB disponible",
         }.get(str(chosen_audio["kind"]), "audio seleccionado")
