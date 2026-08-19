@@ -19,6 +19,10 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 BACKEND_CERTS = ROOT_DIR / "backend" / "certs" / "backend"
 FRONTEND_CERTS = ROOT_DIR / "backend" / "certs" / "frontend"
 RASPI_ENV_LOCAL = ROOT_DIR / "backend" / "helpers" / "raspi-backend.env.local"
+DEFAULT_GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY", "rafex/raspberrypi-headless-streaming")
+PORTAL_USERNAME_SECRET = "STREAMING_API_PORTAL_USERNAME"
+PORTAL_PASSWORD_HASH_SECRET = "STREAMING_API_PORTAL_PASSWORD_HASH"
+PORTAL_WORKFLOW = "Build and Deploy Streaming API"
 
 
 def die(message: str) -> None:
@@ -28,6 +32,38 @@ def die(message: str) -> None:
 
 def run(cmd: list[str]) -> None:
     subprocess.check_call(cmd)
+
+
+def require_gh() -> None:
+    if not shutil.which("gh"):
+        die("gh no esta instalado o no esta en PATH")
+
+
+def set_github_secret(repo: str, name: str, value: str) -> None:
+    require_gh()
+    subprocess.run(
+        ["gh", "secret", "set", name, "--repo", repo],
+        input=f"{value}\n",
+        text=True,
+        check=True,
+    )
+
+
+def delete_github_secret(repo: str, name: str) -> None:
+    require_gh()
+    subprocess.run(["gh", "secret", "delete", name, "--repo", repo], check=True)
+
+
+def dispatch_portal_workflow(repo: str, workflow: str, ref: str) -> None:
+    require_gh()
+    result = subprocess.run(
+        ["gh", "workflow", "run", workflow, "--repo", repo, "--ref", ref],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    if result.stdout.strip():
+        print(result.stdout.strip())
 
 
 def require_openssl() -> None:
@@ -156,6 +192,43 @@ def cmd_password_hash(args: argparse.Namespace) -> int:
     return 0
 
 
+def portal_credentials() -> tuple[str, str]:
+    username = input("Usuario del portal: ").strip()
+    if not username:
+        die("el usuario no puede estar vacio")
+    password = getpass.getpass("Contraseña del portal: ")
+    confirm = getpass.getpass("Confirmar contraseña: ")
+    if not password:
+        die("la contraseña no puede estar vacia")
+    if password != confirm:
+        die("las contraseñas no coinciden")
+    return username, password
+
+
+def cmd_portal_user_create(args: argparse.Namespace) -> int:
+    username, password = portal_credentials()
+    set_github_secret(args.repo, PORTAL_USERNAME_SECRET, username)
+    set_github_secret(args.repo, PORTAL_PASSWORD_HASH_SECRET, generate_password_hash(password))
+    print(f"Credenciales del portal actualizadas para {args.repo}: usuario={username}")
+    if args.deploy:
+        dispatch_portal_workflow(args.repo, args.workflow, args.ref)
+        print("Workflow de despliegue solicitado.")
+    return 0
+
+
+def cmd_portal_user_delete(args: argparse.Namespace) -> int:
+    if not args.yes:
+        answer = input(
+            f"Esto deshabilitara el acceso al portal en {args.repo}. Escribe BORRAR para continuar: "
+        )
+        if answer != "BORRAR":
+            die("operacion cancelada")
+    delete_github_secret(args.repo, PORTAL_USERNAME_SECRET)
+    delete_github_secret(args.repo, PORTAL_PASSWORD_HASH_SECRET)
+    print(f"Credenciales del portal eliminadas de {args.repo}.")
+    return 0
+
+
 def cmd_certs(args: argparse.Namespace) -> int:
     generate_certs(args.device_id, args.days, args.force, args.force_ca)
     return 0
@@ -219,6 +292,31 @@ def build_parser() -> argparse.ArgumentParser:
     password_hash.add_argument("--password", default="", help="Contraseña en claro; si se omite, se pide en prompt.")
     password_hash.add_argument("--iterations", type=int, default=210_000)
     password_hash.set_defaults(func=cmd_password_hash)
+
+    portal_user = sub.add_parser(
+        "portal-user",
+        help="Crea, reemplaza o elimina las credenciales del portal remoto en GitHub.",
+    )
+    portal_actions = portal_user.add_subparsers(dest="portal_action", required=True)
+
+    for action in ("create", "reset"):
+        command = portal_actions.add_parser(
+            action,
+            help="Crea o reemplaza el usuario y contraseña del portal.",
+        )
+        command.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
+        command.add_argument("--deploy", action="store_true", help="Dispara el workflow después de actualizar los secrets.")
+        command.add_argument("--workflow", default=PORTAL_WORKFLOW)
+        command.add_argument("--ref", default="main")
+        command.set_defaults(func=cmd_portal_user_create)
+
+    portal_delete = portal_actions.add_parser(
+        "delete",
+        help="Elimina los dos secrets y deshabilita el acceso al portal.",
+    )
+    portal_delete.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
+    portal_delete.add_argument("--yes", action="store_true", help="No pedir confirmacion interactiva.")
+    portal_delete.set_defaults(func=cmd_portal_user_delete)
 
     certs = sub.add_parser("certs", help="Genera CA mTLS y certificado cliente.")
     certs.add_argument("--device-id", default="raspi3b")

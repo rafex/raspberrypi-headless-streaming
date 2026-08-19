@@ -13,6 +13,7 @@
         wifi-bootstrap install-wifi-bootstrap repair-wifi-bootstrap enforce-wifi-bootstrap start-wifi-bootstrap stop-wifi-bootstrap status-wifi-bootstrap logs-wifi-bootstrap \
         boot-flow install-boot-flow status-boot-flow logs-boot-flow start-health-reporter stop-health-reporter logs-health-reporter start-backend-agent stop-backend-agent logs-backend-agent start-ngrok stop-ngrok logs-ngrok \
         backend-token backend-admin-token backend-certs backend-secrets backend-install-raspi-certs \
+        backend-portal-user-create backend-portal-user-reset backend-portal-user-delete \
         start-web-api stop-web-api restart-web-api status-web-api logs-web-api \
         deploy-web-api update-services \
         streaming apply-streaming-defaults media-status start-streaming stop-streaming status-streaming logs-streaming monitor-streaming status-streaming-live \
@@ -72,6 +73,8 @@ help:
 	@echo "  make backend-admin-token    - genera token bearer admin"
 	@echo "  make backend-session-secret - genera secreto para sesiones del portal remoto"
 	@echo "  make backend-password-hash  - genera hash PBKDF2 para contraseña del portal"
+	@echo "  make backend-portal-user-reset - reemplaza usuario/contraseña del portal en GitHub"
+	@echo "  make backend-portal-user-delete - elimina las credenciales del portal en GitHub"
 	@echo "  make backend-certs          - genera CA mTLS y cert cliente (BACKEND_DEVICE_ID=$(BACKEND_DEVICE_ID))"
 	@echo "  make backend-secrets        - genera tokens + certs + envs locales"
 	@echo "  make backend-install-raspi-certs - instala cert cliente en la Raspi (RASPI_SSH=$(RASPI_SSH))"
@@ -173,6 +176,15 @@ backend-session-secret:
 
 backend-password-hash:
 	./backend/helpers/streaming-api-secrets.py password-hash
+
+backend-portal-user-create:
+	./backend/helpers/streaming-api-secrets.py portal-user create
+
+backend-portal-user-reset:
+	./backend/helpers/streaming-api-secrets.py portal-user reset
+
+backend-portal-user-delete:
+	./backend/helpers/streaming-api-secrets.py portal-user delete
 
 backend-certs:
 	./backend/helpers/streaming-api-secrets.py certs \
