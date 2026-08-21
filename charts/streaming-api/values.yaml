@@ -20,6 +20,7 @@ env:
   DATABASE_PATH: "/data/streaming-api.db"
   PORTAL_SESSION_TTL_SECONDS: "7200"
   REQUIRE_MTLS: "true"
+  HEALTH_REPORT_REQUIRE_MTLS: "false"
   MTLS_VERIFY_HEADER: "x-ssl-client-verify"
   MTLS_VERIFY_SUCCESS_VALUE: "SUCCESS"
   MTLS_SUBJECT_HEADER: "x-ssl-client-dn"

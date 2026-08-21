@@ -159,6 +159,37 @@ def authenticate(
     )
 
 
+def authenticate_health_report(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+) -> Principal:
+    """Authenticate the Raspi health reporter with its dedicated bearer token.
+
+    mTLS is still checked whenever the ingress forwards the client identity.
+    The health endpoint can fall back to the Raspi token because its purpose is
+    to keep liveness and dynamic tunnel addresses current; administrative and
+    desired-state APIs continue using ``authenticate`` and require mTLS.
+    """
+    token = _extract_token(authorization, x_api_token)
+    if not settings.api_token_raspi or not hmac.compare_digest(token, settings.api_token_raspi):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or missing Raspi token",
+        )
+
+    subject = cn = ""
+    if settings.health_report_require_mtls:
+        subject, cn = _validate_mtls(request)
+    elif settings.require_mtls:
+        try:
+            subject, cn = _validate_mtls(request)
+        except HTTPException as exc:
+            if exc.status_code != status.HTTP_401_UNAUTHORIZED:
+                raise
+    return Principal(role="raspi", mtls_subject=subject, mtls_cn=cn)
+
+
 def require_admin(principal: Principal) -> None:
     if principal.role != "admin":
         raise HTTPException(

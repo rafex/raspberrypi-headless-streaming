@@ -268,10 +268,11 @@
     $("remote-ip").textContent = health.ip || "-";
     $("remote-route").textContent = health.default_route || "-";
     const ngrok = $("remote-ngrok");
-    const ngrokUrl = safeExternalUrl(health.ngrok_url);
+    const isFresh = status.label !== "Sin comunicación";
+    const ngrokUrl = isFresh ? safeExternalUrl(health.ngrok_url) : "";
     ngrok.textContent = ngrokUrl || "-";
     ngrok.href = ngrokUrl || "#";
-    const ssh = health.ngrok_ssh_command || "";
+    const ssh = isFresh ? health.ngrok_ssh_command || "" : "";
     $("remote-ssh").textContent = ssh || "-";
     $("remote-ssh-copy").disabled = !ssh;
     const summary = mediaSummary(media, config);

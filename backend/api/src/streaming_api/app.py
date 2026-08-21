@@ -10,6 +10,7 @@ from .auth import (
     Principal,
     authenticate,
     authenticate_admin_token,
+    authenticate_health_report,
     create_portal_session,
     require_admin,
     verify_portal_credentials,
@@ -135,7 +136,7 @@ async def ui_headless_proxy(
 def report_health(
     device_id: str,
     payload: HealthPayload,
-    principal: Principal = Depends(authenticate),
+    principal: Principal = Depends(authenticate_health_report),
 ) -> dict[str, str]:
     store.upsert_health(device_id, payload)
     return {"status": "accepted", "role": principal.role}

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     portal_proxy_timeout_seconds: float = 20.0
 
     require_mtls: bool = True
+    # Health reports are already authenticated by the Raspi bearer token. Keep
+    # mTLS optional here so a broken edge header forwarding path cannot freeze
+    # the published ngrok/SSH endpoints; control APIs remain mTLS-protected.
+    health_report_require_mtls: bool = False
     mtls_verify_header: str = "x-ssl-client-verify"
     mtls_verify_success_value: str = "SUCCESS"
     mtls_subject_header: str = "x-ssl-client-dn"

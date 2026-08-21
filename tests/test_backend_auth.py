@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "backend/api/src"))
 
 from streaming_api.auth import (  # noqa: E402
     _validate_mtls,
+    authenticate_health_report,
     create_portal_session,
     portal_session_claims,
     validate_portal_session,
@@ -70,6 +71,33 @@ class PortalSessionTests(unittest.TestCase):
             "streaming_api.auth.time.time", return_value=8_200
         ):
             self.assertFalse(validate_portal_session(token))
+
+
+class HealthReportAuthTests(unittest.TestCase):
+    def test_raspi_token_can_refresh_health_when_edge_drops_mtls_headers(self):
+        with (
+            patch.object(settings, "api_token_raspi", "raspi-token"),
+            patch.object(settings, "require_mtls", True),
+            patch.object(settings, "health_report_require_mtls", False),
+        ):
+            principal = authenticate_health_report(
+                request_with_headers(),
+                authorization="Bearer raspi-token",
+                x_api_token=None,
+            )
+
+        self.assertEqual(principal.role, "raspi")
+
+    def test_health_report_rejects_wrong_raspi_token(self):
+        with patch.object(settings, "api_token_raspi", "raspi-token"):
+            with self.assertRaises(HTTPException) as context:
+                authenticate_health_report(
+                    request_with_headers(),
+                    authorization="Bearer wrong-token",
+                    x_api_token=None,
+                )
+
+        self.assertEqual(context.exception.status_code, 401)
 
 
 if __name__ == "__main__":
