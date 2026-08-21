@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     portal_username: str = ""
     portal_password_hash: str = ""
     portal_session_secret: str = ""
-    portal_session_ttl_seconds: int = 43_200
+    portal_session_ttl_seconds: int = 7_200
 
     portal_proxy_domain: str = "rafex.io"
     portal_proxy_allowed_host_suffixes: str = ".ngrok-free.app,.ngrok.app"

@@ -36,6 +36,7 @@ class PortalLoginOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_at: int
+    csrf_token: str
 
 
 class ControlCommand(BaseModel):

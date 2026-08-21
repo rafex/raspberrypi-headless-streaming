@@ -13,6 +13,7 @@ from .auth import (
     create_portal_session,
     require_admin,
     verify_portal_credentials,
+    PORTAL_SESSION_COOKIE,
 )
 from .models import AckPayload, DesiredStateIn, DesiredStateOut, HealthPayload, PortalLoginIn, PortalLoginOut
 from .portal_proxy import (
@@ -84,11 +85,26 @@ def redirect_to_portal(
 
 
 @app.post("/ui/api/login", response_model=PortalLoginOut)
-def ui_login(credentials: PortalLoginIn) -> PortalLoginOut:
+def ui_login(credentials: PortalLoginIn, response: Response) -> PortalLoginOut:
     if not verify_portal_credentials(credentials.username, credentials.password):
         raise HTTPException(status_code=401, detail="usuario o contraseña inválidos")
-    access_token, expires_at = create_portal_session()
-    return PortalLoginOut(access_token=access_token, expires_at=expires_at)
+    access_token, expires_at, csrf_token = create_portal_session()
+    response.set_cookie(
+        PORTAL_SESSION_COOKIE,
+        access_token,
+        max_age=settings.portal_session_ttl_seconds,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/",
+    )
+    return PortalLoginOut(access_token=access_token, expires_at=expires_at, csrf_token=csrf_token)
+
+
+@app.post("/ui/api/logout")
+def ui_logout(response: Response, _: Principal = Depends(authenticate_admin_token)) -> dict[str, str]:
+    response.delete_cookie(PORTAL_SESSION_COOKIE, path="/")
+    return {"status": "ok"}
 
 
 @app.get("/ui/api/raspi/{device_id}/state")

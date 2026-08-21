@@ -3,6 +3,8 @@
 
   const DEVICE_ID = "raspi3b";
   const tokenKey = "streaming_api_session_token";
+  const csrfKey = "streaming_api_session_csrf";
+  const sessionExpiresKey = "streaming_api_session_expires_at";
   const usernameKey = "streaming_api_username";
   let role = null;
   let remoteRefreshInFlight = false;
@@ -11,6 +13,7 @@
   let gpuEncoderPref = false;
   let lastSavedConfigJSON = null;
   let lastServicesRenderKey = null;
+  let loginInFlight = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -31,6 +34,10 @@
       const headers = {};
       const accessToken = sessionStorage.getItem(tokenKey) || "";
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+      if (method !== "GET" && method !== "HEAD") {
+        const csrfToken = localStorage.getItem(csrfKey) || "";
+        if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+      }
       if (formData) delete headers["Content-Type"];
       return headers;
     },
@@ -43,6 +50,22 @@
       ? path
       : `/ui/api/raspi/${DEVICE_ID}/headless${path}`;
     return http.request(target, options);
+  }
+
+  function clearRemoteSession() {
+    sessionStorage.removeItem(tokenKey);
+    localStorage.removeItem(csrfKey);
+    localStorage.removeItem(sessionExpiresKey);
+  }
+
+  function hasRemoteSession() {
+    // Keep accepting legacy bearer sessions; the backend remains the source
+    // of truth while users transition to the HttpOnly cookie session.
+    if (sessionStorage.getItem(tokenKey)) return true;
+    const expiresAt = Number(localStorage.getItem(sessionExpiresKey) || 0);
+    if (expiresAt > Math.floor(Date.now() / 1000)) return true;
+    clearRemoteSession();
+    return false;
   }
 
   function showDashboard() {
@@ -59,17 +82,32 @@
     setActionStatus("");
     if (remotePollTimer) { clearTimeout(remotePollTimer); remotePollTimer = null; }
     closeMicStream();
+    focusLoginField("username");
   }
 
   function setLoginLoading(loading) {
     const submit = $("login-submit");
     const status = $("login-status");
+    const form = $("login-form");
+    const view = $("login-view");
+    const label = submit.querySelector(".login-submit-label");
     submit.disabled = loading;
     submit.classList.toggle("is-loading", loading);
     submit.setAttribute("aria-busy", loading ? "true" : "false");
+    form.setAttribute("aria-busy", loading ? "true" : "false");
+    view.classList.toggle("is-authenticating", loading);
     $("username").disabled = loading;
     $("password").disabled = loading;
+    label.textContent = loading ? "Iniciando sesión…" : "Entrar";
+    status.textContent = loading ? "Iniciando sesión" : "";
     status.hidden = !loading;
+  }
+
+  function focusLoginField(id) {
+    if ($("login-view").hidden) return;
+    const field = $(id);
+    if (!field || field.disabled) return;
+    requestAnimationFrame(() => field.focus());
   }
 
   function setActionStatus(message, tone = "") {
@@ -305,7 +343,7 @@
       if (failed.length) setActionStatus("La Raspi respondió, pero algunos datos están temporalmente desactualizados.", "error");
     } catch (err) {
       if (err.status === 401) {
-        sessionStorage.removeItem(tokenKey);
+        clearRemoteSession();
         role = null;
         showLogin();
         return;
@@ -327,7 +365,7 @@
   function startRemotePolling() {
     if (remotePollTimer) clearTimeout(remotePollTimer);
     const schedule = () => {
-      if (!sessionStorage.getItem(tokenKey)) return;
+      if (!hasRemoteSession()) return;
       if (document.visibilityState === "visible") refreshStatus();
       remotePollTimer = setTimeout(schedule, 10_000);
     };
@@ -1177,14 +1215,23 @@
   // ──────────────────────────────────────────────────
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (loginInFlight) return;
+    loginInFlight = true;
     $("login-error").hidden = true;
+    $("username").setAttribute("aria-invalid", "false");
+    $("password").setAttribute("aria-invalid", "false");
     setLoginLoading(true);
+    let loginFailed = false;
     try {
       const result = await api("/ui/api/login", {
         method: "POST",
         body: { username: $("username").value, password: $("password").value },
       });
-      sessionStorage.setItem(tokenKey, result.access_token);
+      // The server keeps the authenticated session in an HttpOnly cookie.
+      // Store only the CSRF token and expiry needed by this browser client.
+      sessionStorage.removeItem(tokenKey);
+      localStorage.setItem(csrfKey, result.csrf_token);
+      localStorage.setItem(sessionExpiresKey, String(result.expires_at));
       localStorage.setItem(usernameKey, $("username").value.trim());
       role = "operator";
       $("session-info").textContent = `${$("username").value.trim()} (admin remoto)`;
@@ -1196,15 +1243,20 @@
       syncMicStream();
       startRemotePolling();
     } catch (err) {
+      loginFailed = true;
+      $("password").setAttribute("aria-invalid", "true");
       $("login-error").textContent = err.message;
       $("login-error").hidden = false;
     } finally {
+      loginInFlight = false;
       setLoginLoading(false);
+      if (loginFailed) focusLoginField("password");
     }
   });
 
   $("logout-btn").addEventListener("click", async () => {
-    sessionStorage.removeItem(tokenKey);
+    try { await api("/ui/api/logout", { method: "POST" }); } catch {}
+    clearRemoteSession();
     role = null;
     showLogin();
   });
@@ -1388,9 +1440,9 @@
 
   $("username").value = localStorage.getItem(usernameKey) || "";
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && sessionStorage.getItem(tokenKey)) refreshStatus();
+    if (document.visibilityState === "visible" && hasRemoteSession()) refreshStatus();
   });
-  if (sessionStorage.getItem(tokenKey)) {
+  if (hasRemoteSession()) {
     role = "operator";
     $("session-info").textContent = `${$("username").value || "Sesión"} (admin remoto)`;
     showDashboard();
@@ -1400,4 +1452,5 @@
       startRemotePolling();
     });
   }
+  focusLoginField("username");
 })();

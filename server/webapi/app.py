@@ -85,7 +85,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         SESSION_COOKIE_SECURE=True,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Strict",
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+        # Fixed two-hour lifetime from login; do not extend it on polling.
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=2),
+        SESSION_REFRESH_EACH_REQUEST=False,
         STREAMING_ENV_PATH=streaming_env_path,
         PREVIEW_ENV_PATH=preview_env_path,
         LOGO_UPLOAD_DIR=logo_upload_dir,
@@ -156,6 +158,13 @@ def create_app(test_config: dict | None = None) -> Flask:
 
         _audit.info("login_ok user=%s role=%s ip=%s", username, result["role"], _client_ip())
         return jsonify(result)
+
+    @app.get("/api/session")
+    @auth.require_role("viewer")
+    def session_info():
+        current = auth.current_session() or {}
+        current["csrf_token"] = session.get("csrf", "")
+        return jsonify(current)
 
     @app.post("/api/logout")
     @auth.require_role("viewer")

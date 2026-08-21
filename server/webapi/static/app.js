@@ -8,6 +8,7 @@
   let lastSavedConfigJSON = null;
   let lastServicesRenderKey = null;
   let savedCustomRtmpUrl = "";
+  let loginInFlight = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -50,17 +51,32 @@
     setActionStatus("");
     if (eventSource) { eventSource.close(); eventSource = null; }
     closeMicStream();
+    focusLoginField("username");
   }
 
   function setLoginLoading(loading) {
     const submit = $("login-submit");
     const status = $("login-status");
+    const form = $("login-form");
+    const view = $("login-view");
+    const label = submit.querySelector(".login-submit-label");
     submit.disabled = loading;
     submit.classList.toggle("is-loading", loading);
     submit.setAttribute("aria-busy", loading ? "true" : "false");
+    form.setAttribute("aria-busy", loading ? "true" : "false");
+    view.classList.toggle("is-authenticating", loading);
     $("username").disabled = loading;
     $("password").disabled = loading;
+    label.textContent = loading ? "Iniciando sesión…" : "Entrar";
+    status.textContent = loading ? "Iniciando sesión" : "";
     status.hidden = !loading;
+  }
+
+  function focusLoginField(id) {
+    if ($("login-view").hidden) return;
+    const field = $(id);
+    if (!field || field.disabled) return;
+    requestAnimationFrame(() => field.focus());
   }
 
   function setActionStatus(message, tone = "") {
@@ -1076,8 +1092,13 @@
   // ──────────────────────────────────────────────────
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (loginInFlight) return;
+    loginInFlight = true;
     $("login-error").hidden = true;
+    $("username").setAttribute("aria-invalid", "false");
+    $("password").setAttribute("aria-invalid", "false");
     setLoginLoading(true);
+    let loginFailed = false;
     try {
       const result = await api("/api/login", {
         method: "POST",
@@ -1094,10 +1115,14 @@
       syncMicStream();
       startEventSource();
     } catch (err) {
+      loginFailed = true;
+      $("password").setAttribute("aria-invalid", "true");
       $("login-error").textContent = err.message;
       $("login-error").hidden = false;
     } finally {
+      loginInFlight = false;
       setLoginLoading(false);
+      if (loginFailed) focusLoginField("password");
     }
   });
 
@@ -1107,6 +1132,29 @@
     role = null;
     showLogin();
   });
+
+  async function restoreLocalSession() {
+    try {
+      const result = await api("/api/session");
+      csrfToken = result.csrf_token;
+      role = result.role;
+      $("session-info").textContent = `${result.user} (${role})`;
+      showDashboard();
+      buildPreviewShell();
+      await refreshStatus();
+      await loadConfig();
+      await loadPreviewConfig();
+      syncMicStream();
+      startEventSource();
+    } catch (err) {
+      // A missing/expired cookie is the normal first-visit path. Network
+      // errors remain visible through the normal login screen instead of
+      // creating a half-authenticated dashboard.
+      csrfToken = null;
+      role = null;
+      focusLoginField("username");
+    }
+  }
 
   // ──────────────────────────────────────────────────
   // Construir y guardar config
@@ -1283,4 +1331,6 @@
       saveBtn.setAttribute("aria-busy", "false");
     }
   });
+
+  restoreLocalSession();
 })();

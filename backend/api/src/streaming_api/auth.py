@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from dataclasses import dataclass
 from typing import Literal
@@ -15,6 +16,7 @@ from .settings import settings
 
 Role = Literal["raspi", "admin"]
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PORTAL_SESSION_COOKIE = "streaming_portal_session"
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,7 @@ class Principal:
     role: Role
     mtls_subject: str = ""
     mtls_cn: str = ""
+    portal_session_csrf: str = ""
 
 
 def _extract_token(authorization: str | None, x_api_token: str | None) -> str:
@@ -63,26 +66,27 @@ def verify_portal_credentials(username: str, password: str) -> bool:
     return verify_password(password, settings.portal_password_hash)
 
 
-def create_portal_session() -> tuple[str, int]:
+def create_portal_session() -> tuple[str, int, str]:
     if not settings.portal_session_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="portal session secret not configured",
         )
     expires_at = int(time.time()) + int(settings.portal_session_ttl_seconds)
-    payload = {"role": "admin", "exp": expires_at}
+    csrf_token = _b64url_encode(secrets.token_bytes(32))
+    payload = {"role": "admin", "exp": expires_at, "csrf": csrf_token}
     payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = hmac.new(
         settings.portal_session_secret.encode("utf-8"),
         payload_b64.encode("ascii"),
         hashlib.sha256,
     ).digest()
-    return f"pst_{payload_b64}.{_b64url_encode(signature)}", expires_at
+    return f"pst_{payload_b64}.{_b64url_encode(signature)}", expires_at, csrf_token
 
 
-def validate_portal_session(token: str) -> bool:
+def portal_session_claims(token: str) -> dict | None:
     if not settings.portal_session_secret or not token.startswith("pst_"):
-        return False
+        return None
     try:
         payload_b64, signature_b64 = token.removeprefix("pst_").split(".", 1)
         expected = hmac.new(
@@ -92,11 +96,17 @@ def validate_portal_session(token: str) -> bool:
         ).digest()
         provided = _b64url_decode(signature_b64)
         if not hmac.compare_digest(provided, expected):
-            return False
+            return None
         payload = json.loads(_b64url_decode(payload_b64))
-        return payload.get("role") == "admin" and int(payload.get("exp", 0)) > int(time.time())
+        if payload.get("role") != "admin" or int(payload.get("exp", 0)) <= int(time.time()):
+            return None
+        return payload
     except Exception:
-        return False
+        return None
+
+
+def validate_portal_session(token: str) -> bool:
+    return portal_session_claims(token) is not None
 
 
 def _validate_mtls(request: Request) -> tuple[str, str]:
@@ -158,14 +168,25 @@ def require_admin(principal: Principal) -> None:
 
 
 def authenticate_admin_token(
+    request: Request,
     authorization: str | None = Header(default=None),
     x_api_token: str | None = Header(default=None),
 ) -> Principal:
     token = _extract_token(authorization, x_api_token)
     if settings.api_token_admin and token == settings.api_token_admin:
         return Principal(role="admin")
-    if validate_portal_session(token):
-        return Principal(role="admin")
+
+    # Browser sessions use an HttpOnly cookie. Bearer portal sessions remain
+    # accepted for CLI/backward compatibility.
+    session_token = token or request.cookies.get(PORTAL_SESSION_COOKIE, "")
+    claims = portal_session_claims(session_token)
+    if claims is not None:
+        csrf_token = str(claims.get("csrf", ""))
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            provided_csrf = request.headers.get("X-CSRF-Token", "")
+            if not csrf_token or not hmac.compare_digest(provided_csrf, csrf_token):
+                raise HTTPException(status_code=403, detail="CSRF token inválido o ausente")
+        return Principal(role="admin", portal_session_csrf=csrf_token)
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="invalid or missing admin session",

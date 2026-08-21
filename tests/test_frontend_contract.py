@@ -13,6 +13,20 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("api-client.js", LOCAL_HTML.read_text(encoding="utf-8"))
         self.assertIn("api-client.js", REMOTE_HTML.read_text(encoding="utf-8"))
 
+    def test_both_login_forms_support_keyboard_and_busy_feedback(self):
+        for path in (LOCAL_HTML, REMOTE_HTML):
+            html = path.read_text(encoding="utf-8")
+            self.assertIn('id="login-form"', html)
+            self.assertIn('type="submit"', html)
+            self.assertIn('autofocus', html)
+            self.assertIn('aria-describedby="login-status login-error"', html)
+        for path in (ROOT / "server/webapi/static/app.js", REMOTE_APP):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("loginInFlight", source)
+            self.assertIn("focusLoginField", source)
+            self.assertIn('form.setAttribute("aria-busy"', source)
+            self.assertIn("Iniciando sesión", source)
+
     def test_remote_uses_controlled_polling_and_freshness_thresholds(self):
         source = REMOTE_APP.read_text(encoding="utf-8")
         self.assertIn("Promise.allSettled", source)
