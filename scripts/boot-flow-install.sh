@@ -72,8 +72,8 @@ cp "${REPO_DIR}/systemd/ngrok-web.service" "${SYSTEMD_DIR}/ngrok-web.service"
 
 systemctl daemon-reload
 
-# Seguro por defecto: el orquestador queda enabled, pero no arranca stream si
-# AUTO_STREAM_ENABLED=false. Health/ngrok se habilitan cuando tengan config.
+# El orquestador queda enabled. El auto-stream depende de boot-flow.env y de
+# que exista una ruta default y un RTMP_URL valido.
 systemctl enable boot-stream-orchestrator.service
 
 echo ""

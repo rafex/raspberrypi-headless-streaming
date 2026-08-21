@@ -41,7 +41,7 @@ sudo nano /etc/raspi-streaming/boot-flow.env
 Valores principales:
 
 ```env
-AUTO_STREAM_ENABLED=false
+AUTO_STREAM_ENABLED=true
 AUTO_STREAM_DELAY_SECONDS=600
 AUTO_STREAM_SERVICE=streaming-overlay.service
 AUTO_STREAM_WAIT_SERVICES="web-api.service ngrok-web.service health-reporter.service"
