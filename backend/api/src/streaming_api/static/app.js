@@ -1214,7 +1214,20 @@
   // ──────────────────────────────────────────────────
   // Login / logout
   // ──────────────────────────────────────────────────
-  $("login-form").addEventListener("submit", async (ev) => {
+  const loginForm = $("login-form");
+  const submitLoginFromKeyboard = (ev) => {
+    if (ev.key !== "Enter" || ev.isComposing || loginInFlight) return;
+    ev.preventDefault();
+    if (typeof loginForm.requestSubmit === "function") {
+      loginForm.requestSubmit($("login-submit"));
+    } else {
+      $("login-submit").click();
+    }
+  };
+  $("username").addEventListener("keydown", submitLoginFromKeyboard);
+  $("password").addEventListener("keydown", submitLoginFromKeyboard);
+
+  loginForm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (loginInFlight) return;
     loginInFlight = true;

@@ -24,6 +24,8 @@ class FrontendContractTests(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             self.assertIn("loginInFlight", source)
             self.assertIn("focusLoginField", source)
+            self.assertIn("submitLoginFromKeyboard", source)
+            self.assertIn("loginForm.requestSubmit", source)
             self.assertIn('form.setAttribute("aria-busy"', source)
             self.assertIn("Iniciando sesión", source)
 
