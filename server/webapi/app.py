@@ -332,7 +332,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     def put_config():
         data = request.get_json(silent=True) or {}
         try:
-            validated = config_store.validate_config(data)
+            current = config_store.read_config(app.config["STREAMING_ENV_PATH"])
+            validated = config_store.validate_config(data, current=current)
         except config_store.ConfigValidationError as exc:
             return jsonify({"error": str(exc)}), 400
 

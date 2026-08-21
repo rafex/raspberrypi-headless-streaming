@@ -6,6 +6,8 @@
   let eventSource = null;
   let gpuEncoderPref = false;
   let lastSavedConfigJSON = null;
+  let lastServicesRenderKey = null;
+  let savedCustomRtmpUrl = "";
 
   const $ = (id) => document.getElementById(id);
 
@@ -21,16 +23,17 @@
   // Micrófonos que usan 48 kHz por defecto (coincide con mic_default_rate en common.sh)
   const MIC_48K_RE = /boya|focusrite|scarlett/i;
 
-  async function api(path, { method = "GET", body } = {}) {
-    const headers = { "Content-Type": "application/json" };
-    if (csrfToken && method !== "GET") headers["X-CSRF-Token"] = csrfToken;
-    const res = await fetch(path, {
-      method, headers, credentials: "same-origin",
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
-    return data;
+  const http = window.createStreamingApiClient({
+    getHeaders: (method, formData) => {
+      const headers = {};
+      if (csrfToken && method !== "GET") headers["X-CSRF-Token"] = csrfToken;
+      if (formData) delete headers["Content-Type"];
+      return headers;
+    },
+  });
+
+  async function api(path, options = {}) {
+    return http.request(path, options);
   }
 
   function showDashboard() {
@@ -42,8 +45,30 @@
   function showLogin() {
     $("dashboard-view").hidden = true;
     $("login-view").hidden = false;
+    setLoginLoading(false);
+    lastServicesRenderKey = null;
+    setActionStatus("");
     if (eventSource) { eventSource.close(); eventSource = null; }
     closeMicStream();
+  }
+
+  function setLoginLoading(loading) {
+    const submit = $("login-submit");
+    const status = $("login-status");
+    submit.disabled = loading;
+    submit.classList.toggle("is-loading", loading);
+    submit.setAttribute("aria-busy", loading ? "true" : "false");
+    $("username").disabled = loading;
+    $("password").disabled = loading;
+    status.hidden = !loading;
+  }
+
+  function setActionStatus(message, tone = "") {
+    const status = $("action-status");
+    if (!status) return;
+    status.textContent = message;
+    status.className = `action-status${tone ? ` ${tone}` : ""}`;
+    status.hidden = !message;
   }
 
   // ──────────────────────────────────────────────────
@@ -56,41 +81,61 @@
     const withOverlay   = overlay.active;
     const activeService = plain.active ? "streaming" : overlay.active ? "streaming-overlay" : null;
     const state         = isActive ? (plain.active ? plain.state : overlay.state) : "detenido";
+    const renderKey = JSON.stringify({
+      role,
+      streaming: [plain.active, plain.state],
+      overlay: [overlay.active, overlay.state],
+    });
+    if (renderKey === lastServicesRenderKey) return;
+    lastServicesRenderKey = renderKey;
 
+    const actions = $("global-actions");
+    actions.replaceChildren();
     if (role === "operator") {
-      $("global-actions").innerHTML = `
-        <button id="btn-global-stop-all" class="btn-stop-all global-stop">Stop all</button>
-      `;
-      document.getElementById("btn-global-stop-all")?.addEventListener("click", (e) =>
-        handleStopAll(e.currentTarget)
-      );
-    } else {
-      $("global-actions").innerHTML = "";
+      const stopAll = document.createElement("button");
+      stopAll.id = "btn-global-stop-all";
+      stopAll.className = "btn-stop-all global-stop";
+      stopAll.textContent = "Stop all";
+      stopAll.addEventListener("click", (e) => handleStopAll(e.currentTarget));
+      actions.appendChild(stopAll);
     }
 
-    $("services").innerHTML = `
-      <div class="service-card">
-        <div class="name">Stream</div>
-        <span class="badge ${isActive ? "active" : "inactive"}">
-          ${isActive ? "Activo" + (withOverlay ? " — con overlay" : "") : "Detenido"} — ${state}
-        </span>
-        ${role === "operator" ? `
-          <div class="service-actions">
-            <button id="btn-stream-start" class="btn-start" ${isActive ? "disabled" : ""}>Iniciar</button>
-            <button id="btn-stream-stop"  class="btn-stop"  ${!isActive ? "disabled" : ""}>Detener</button>
-          </div>` : ""}
-      </div>`;
-
+    const servicesEl = $("services");
+    servicesEl.replaceChildren();
+    const card = document.createElement("div");
+    card.className = "service-card";
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = "Stream";
+    const badge = document.createElement("span");
+    badge.className = `badge ${isActive ? "active" : "inactive"}`;
+    badge.textContent = `${isActive ? "Activo" + (withOverlay ? " — con overlay" : "") : "Detenido"} — ${String(state)}`;
+    card.append(name, badge);
     if (role === "operator") {
-      // streaming-overlay.service maneja tanto overlays como GPU encoder (cámara USB);
-      // streaming.service (libcamera-vid) solo aplica cuando ninguno está activo.
-      document.getElementById("btn-stream-start")?.addEventListener("click", (e) => {
+      const serviceActions = document.createElement("div");
+      serviceActions.className = "service-actions";
+      const start = document.createElement("button");
+      start.id = "btn-stream-start";
+      start.className = "btn-start";
+      start.textContent = "Iniciar";
+      start.disabled = isActive;
+      const stop = document.createElement("button");
+      stop.id = "btn-stream-stop";
+      stop.className = "btn-stop";
+      stop.textContent = "Detener";
+      stop.disabled = !isActive;
+      serviceActions.append(start, stop);
+      card.appendChild(serviceActions);
+      start.addEventListener("click", (e) => {
         if (!confirmStartWithUnsavedChanges()) return;
         handleStreamAction((anyOverlayActive() || gpuEncoderPref) ? "streaming-overlay" : "streaming", "start", e.currentTarget);
       });
-      document.getElementById("btn-stream-stop")?.addEventListener("click", (e) =>
-        handleStreamAction(activeService || "streaming", "stop", e.currentTarget)
-      );
+      stop.addEventListener("click", (e) => handleStreamAction(activeService || "streaming", "stop", e.currentTarget));
+    }
+    servicesEl.appendChild(card);
+
+    if (role === "operator") {
+      // streaming-overlay.service handles overlays and GPU encoding.
     }
   }
 
@@ -100,23 +145,32 @@
   // gastar sudo de más mientras se espera la respuesta.
   async function handleStreamAction(service, action, btn) {
     if (btn) btn.disabled = true;
+    if (btn) btn.setAttribute("aria-busy", "true");
+    setActionStatus(action === "start" ? "Iniciando transmisión..." : "Deteniendo transmisión...");
     try {
       await api(`/api/stream/${service}/${action}`, { method: "POST" });
+      setActionStatus("Operación completada.", "success");
     } catch (err) {
-      alert(err.message);
+      setActionStatus(err.message, "error");
     } finally {
       await refreshStatus();
+      if (btn) btn.setAttribute("aria-busy", "false");
     }
   }
 
   async function handleStopAll(btn) {
+    if (!confirm("¿Detener todas las transmisiones, previews y servicios relacionados?")) return;
     if (btn) btn.disabled = true;
+    if (btn) btn.setAttribute("aria-busy", "true");
+    setActionStatus("Deteniendo todos los servicios...");
     try {
       await api("/api/stream/stop-all", { method: "POST" });
+      setActionStatus("Todos los servicios fueron detenidos.", "success");
     } catch (err) {
-      alert(err.message);
+      setActionStatus(err.message, "error");
     } finally {
       await refreshStatus();
+      if (btn) btn.setAttribute("aria-busy", "false");
     }
   }
 
@@ -130,7 +184,15 @@
       renderServices(data);
       updatePreviewStatus(data["preview"]);
       lockOverlayToggle(anyServiceActive(data));
-    } catch { showLogin(); }
+    } catch (err) {
+      if (err.status === 401) {
+        csrfToken = null;
+        role = null;
+        showLogin();
+        return;
+      }
+      setActionStatus("No se pudo actualizar el estado. Reintentando...", "error");
+    }
   }
 
   function startEventSource() {
@@ -147,9 +209,15 @@
     };
     eventSource.onerror = () => {
       eventSource.close(); eventSource = null;
+      setActionStatus("Conexión en recuperación; el estado puede estar desactualizado...", "error");
       // Verificar si la sesión sigue activa o si es un error transitorio (429, red, etc.)
       fetch("/api/status", { credentials: "same-origin" }).then((r) => {
-        if (r.status === 401) { showLogin(); return; }
+        if (r.status === 401) {
+          csrfToken = null;
+          role = null;
+          showLogin();
+          return;
+        }
         // Sesión OK — reintentar SSE en 30s (puede ser 429 u otro error transitorio)
         setTimeout(startEventSource, 30_000);
       }).catch(() => setTimeout(startEventSource, 30_000));
@@ -200,7 +268,7 @@
         <p class="field-hint" id="preview-url-label"></p>
         <div class="preview-url-row">
           <code id="preview-url-text"></code>
-          <button type="button" id="preview-url-copy" class="copy-btn" title="Copiar URL">&#128203;</button>
+          <button type="button" id="preview-url-copy" class="copy-btn" aria-label="Copiar URL" title="Copiar URL">&#128203;</button>
         </div>
         <div class="service-actions">
           <button id="btn-preview-start" class="btn-start">Iniciar preview</button>
@@ -307,6 +375,8 @@
 
   async function handlePreviewStart(btn) {
     if (btn) btn.disabled = true;
+    if (btn) btn.setAttribute("aria-busy", "true");
+    setActionStatus("Iniciando vista previa...");
     try {
       const transport = $("preview-transport").value;
       await api("/api/preview/config", {
@@ -320,10 +390,12 @@
         },
       });
       await api("/api/stream/preview/start", { method: "POST" });
+      setActionStatus("Vista previa iniciada.", "success");
     } catch (err) {
-      alert(err.message);
+      setActionStatus(err.message, "error");
     } finally {
       await refreshStatus();
+      if (btn) btn.setAttribute("aria-busy", "false");
     }
   }
 
@@ -498,9 +570,11 @@
   // ──────────────────────────────────────────────────
   function setLogoPos(pos) {
     $("cfg-overlay-logo-pos").value = pos;
-    document.querySelectorAll(".pos-btn[data-logopos]").forEach((b) =>
-      b.classList.toggle("active", b.dataset.logopos === pos)
-    );
+    document.querySelectorAll(".pos-btn[data-logopos]").forEach((b) => {
+      const active = b.dataset.logopos === pos;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
   }
 
   document.querySelectorAll(".pos-btn[data-logopos]").forEach((btn) => {
@@ -512,9 +586,11 @@
   // ──────────────────────────────────────────────────
   function setTextPos(pos) {
     $("cfg-overlay-text-pos").value = pos;
-    document.querySelectorAll(".pos-btn[data-textpos]").forEach((b) =>
-      b.classList.toggle("active", b.dataset.textpos === pos)
-    );
+    document.querySelectorAll(".pos-btn[data-textpos]").forEach((b) => {
+      const active = b.dataset.textpos === pos;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
   }
 
   document.querySelectorAll(".pos-btn[data-textpos]").forEach((btn) => {
@@ -526,9 +602,11 @@
   // ──────────────────────────────────────────────────
   function setTimestampPos(pos) {
     $("cfg-overlay-timestamp-pos").value = pos;
-    document.querySelectorAll(".pos-btn[data-timestamppos]").forEach((b) =>
-      b.classList.toggle("active", b.dataset.timestamppos === pos)
-    );
+    document.querySelectorAll(".pos-btn[data-timestamppos]").forEach((b) => {
+      const active = b.dataset.timestamppos === pos;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
   }
 
   document.querySelectorAll(".pos-btn[data-timestamppos]").forEach((btn) => {
@@ -540,9 +618,11 @@
   // ──────────────────────────────────────────────────
   function setBannerPos(pos) {
     $("cfg-overlay-banner-pos").value = pos;
-    document.querySelectorAll(".banner-pos-btn").forEach((b) =>
-      b.classList.toggle("active", b.dataset.bannerpos === pos)
-    );
+    document.querySelectorAll(".banner-pos-btn").forEach((b) => {
+      const active = b.dataset.bannerpos === pos;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
   }
 
   document.querySelectorAll(".banner-pos-btn").forEach((btn) => {
@@ -785,8 +865,17 @@
     }
   }
 
+  let deviceScanInFlight = false;
+
   async function loadDevices(currentVideo, currentAudio) {
+    if (deviceScanInFlight) return;
+    deviceScanInFlight = true;
     const statusEl = $("device-status");
+    const scanButton = $("btn-scan-devices");
+    if (scanButton) {
+      scanButton.disabled = true;
+      scanButton.setAttribute("aria-busy", "true");
+    }
     statusEl.textContent = "Escaneando...";
     try {
       const { cameras, mics, media } = await api("/api/devices");
@@ -804,12 +893,27 @@
       updateSummaries();
     } catch (err) {
       statusEl.textContent = `Error al escanear: ${err.message}`;
+    } finally {
+      deviceScanInFlight = false;
+      if (scanButton) {
+        scanButton.disabled = false;
+        scanButton.setAttribute("aria-busy", "false");
+      }
     }
   }
 
+  let audioScanInFlight = false;
+
   async function scanAudioDevices() {
+    if (audioScanInFlight) return;
+    audioScanInFlight = true;
     const statusEl = $("audio-scan-status");
     const audioSelect = $("cfg-audio-device");
+    const scanButton = $("btn-scan-audio");
+    if (scanButton) {
+      scanButton.disabled = true;
+      scanButton.setAttribute("aria-busy", "true");
+    }
     const currentAudio = audioSelect.value;
     statusEl.textContent = "Escaneando audio...";
     try {
@@ -824,6 +928,12 @@
       updateSummaries();
     } catch (err) {
       statusEl.textContent = `Error al escanear audio: ${err.message}`;
+    } finally {
+      audioScanInFlight = false;
+      if (scanButton) {
+        scanButton.disabled = false;
+        scanButton.setAttribute("aria-busy", "false");
+      }
     }
   }
 
@@ -848,8 +958,10 @@
 
       // Plataforma
       let platform     = cfg.STREAM_PLATFORM || "";
-      let streamKey    = cfg.STREAM_KEY      || "";
-      let streamKeyMeta = cfg.STREAM_KEY_META || "";
+      const streamKeyConfigured = Boolean(cfg.STREAM_KEY);
+      const streamKeyMetaConfigured = Boolean(cfg.STREAM_KEY_META);
+      let streamKey    = "";
+      let streamKeyMeta = "";
       if (!platform) {
         const det = detectPlatform(cfg.RTMP_URL || "");
         platform  = det.platform;
@@ -857,9 +969,13 @@
       }
       if (cfg.STREAM_DUAL === "true") platform = "dual";
       $("cfg-platform").value        = platform || "youtube";
-      $("cfg-stream-key").value      = streamKey;
-      $("cfg-stream-key-meta").value = streamKeyMeta;
-      $("cfg-rtmp-url").value        = cfg.RTMP_URL || "";
+      $("cfg-stream-key").value      = "";
+      $("cfg-stream-key").placeholder = streamKeyConfigured ? "Configurada; dejar vacío para conservar" : "xxxx-xxxx-xxxx-xxxx";
+      $("cfg-stream-key-meta").value = "";
+      $("cfg-stream-key-meta").placeholder = streamKeyMetaConfigured ? "Configurada; dejar vacío para conservar" : "xxxx-xxxx-xxxx-xxxx";
+      savedCustomRtmpUrl = cfg.RTMP_URL || "";
+      $("cfg-rtmp-url").value        = "";
+      $("cfg-rtmp-url").placeholder = savedCustomRtmpUrl ? "Configurada; dejar vacío para conservar" : "rtmp://tu-servidor/live/key";
       updatePlatformUI($("cfg-platform").value);
 
       // Audio
@@ -949,12 +1065,19 @@
     $("logo-file-input").value = "";
   });
 
+  $("btn-upload")?.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    ev.preventDefault();
+    $("logo-file-input").click();
+  });
+
   // ──────────────────────────────────────────────────
   // Login / logout
   // ──────────────────────────────────────────────────
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     $("login-error").hidden = true;
+    setLoginLoading(true);
     try {
       const result = await api("/api/login", {
         method: "POST",
@@ -973,6 +1096,8 @@
     } catch (err) {
       $("login-error").textContent = err.message;
       $("login-error").hidden = false;
+    } finally {
+      setLoginLoading(false);
     }
   });
 
@@ -998,7 +1123,7 @@
       rtmpUrl          = PLATFORM_BASE.youtube  + streamKey;
       rtmpUrlSecondary = PLATFORM_BASE.facebook + streamKeyMeta;
     } else if (platform === "custom") {
-      rtmpUrl = $("cfg-rtmp-url").value.trim();
+      rtmpUrl = $("cfg-rtmp-url").value.trim() || savedCustomRtmpUrl;
     } else {
       rtmpUrl = (PLATFORM_BASE[platform] || "") + streamKey;
     }
@@ -1072,6 +1197,24 @@
     );
   }
 
+  function validateConfig(intended) {
+    const ranges = [
+      ["ancho", intended.width, 320, 1920],
+      ["alto", intended.height, 240, 1080],
+      ["FPS", intended.fps, 1, 60],
+      ["bitrate", intended.bitrate, 200000, 25000000],
+    ];
+    for (const [label, value, min, max] of ranges) {
+      if (!Number.isFinite(value) || value < min || value > max) {
+        throw new Error(`Revisa el ${label}: debe estar entre ${min} y ${max}.`);
+      }
+    }
+    if (intended.platform === "custom" && !intended.rtmp_url) {
+      throw new Error("Escribe una URL RTMP personalizada.");
+    }
+    // Empty secret fields preserve the values already stored on the Raspi.
+  }
+
   function verifyPersistedConfig(intended, persisted) {
     const checks = [
       ["STREAM_WIDTH", String(intended.width)],
@@ -1114,9 +1257,16 @@
   $("config-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const msgEl = $("config-msg");
+    const saveBtn = ev.currentTarget.querySelector('button[type="submit"]');
     msgEl.hidden = true;
+    saveBtn.disabled = true;
+    saveBtn.setAttribute("aria-busy", "true");
     try {
       const intended = buildConfigBody();
+      validateConfig(intended);
+      msgEl.textContent = "Guardando y verificando...";
+      msgEl.className = "device-status";
+      msgEl.hidden = false;
       await api("/api/config", { method: "PUT", body: intended });
       const persisted = await api("/api/config");
       verifyPersistedConfig(intended, persisted);
@@ -1128,6 +1278,9 @@
       msgEl.textContent = err.message;
       msgEl.className = "error";
       msgEl.hidden = false;
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.setAttribute("aria-busy", "false");
     }
   });
 })();

@@ -1,89 +1,492 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Raspi Streaming</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260816-media">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de transmisión</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260820-ui">
 </head>
 <body>
   <main class="wrap">
-    <header class="top">
-      <div>
-        <h1>Raspi Streaming</h1>
-        <p id="device-line">raspi3b</p>
-      </div>
-      <button id="refresh-btn" type="button">Actualizar</button>
-    </header>
+    <h1>Raspi Streaming</h1>
+    <p id="app-version" style="text-align:center;font-size:0.7rem;opacity:0.35;margin:-8px 0 4px;letter-spacing:0.04em;font-family:monospace">75e72af</p>
 
-    <section id="auth-card" class="panel">
-      <h2>Acceso</h2>
-      <label>Usuario
-        <input id="login-username" type="text" autocomplete="username" placeholder="usuario">
-      </label>
-      <label>Contraseña
-        <input id="login-password" type="password" autocomplete="current-password" placeholder="contraseña">
-      </label>
-      <button id="login-btn" type="button">Entrar</button>
-      <p id="auth-error" class="error" hidden></p>
+    <!-- ===== Login ===== -->
+    <section id="login-view">
+      <div class="form-container">
+        <p>Acceso</p>
+        <form id="login-form" class="form">
+          <label for="username">Usuario</label>
+          <input type="text" id="username" class="input" placeholder="Ingresa tu usuario" autocomplete="username" required>
+          <label for="password">Contraseña</label>
+          <input type="password" id="password" class="input" placeholder="Contraseña" autocomplete="current-password" required>
+          <button type="submit" id="login-submit">
+            <span class="login-submit-label">Entrar</span>
+            <span class="login-spinner" aria-hidden="true"></span>
+          </button>
+          <p id="login-status" class="login-status" aria-live="polite" hidden>Autenticando...</p>
+          <p id="login-error" class="error" role="alert" hidden></p>
+        </form>
+      </div>
     </section>
 
-    <section id="dashboard" hidden>
-      <section class="panel status-panel">
-        <div>
-          <p class="label">Estado</p>
-          <h2 id="connection-state">Sin datos</h2>
+    <!-- ===== Dashboard ===== -->
+    <section id="dashboard-view" hidden>
+      <div class="topbar">
+        <span id="session-info"></span>
+        <div class="topbar-actions">
+          <button id="refresh-btn" type="button">Actualizar</button>
+          <button id="logout-btn" class="link" type="button">Salir</button>
         </div>
-        <span id="last-seen" class="badge">-</span>
-      </section>
+      </div>
 
-      <section class="panel">
-        <h2>Conectividad</h2>
-        <dl class="kv">
-          <dt>WiFi</dt><dd id="wifi-ssid">-</dd>
-          <dt>IP</dt><dd id="ip-address">-</dd>
-          <dt>Ruta</dt><dd id="default-route">-</dd>
-          <dt>ngrok</dt><dd><a id="ngrok-url" href="#" target="_blank" rel="noreferrer">-</a></dd>
+      <section class="remote-overview" aria-live="polite" aria-atomic="false">
+        <div class="remote-overview-head">
+          <div>
+            <p class="section-label">Comunicación remota</p>
+            <h2 id="remote-connection-state">Sin datos</h2>
+          </div>
+          <span id="remote-last-seen" class="badge inactive">Sin reporte</span>
+        </div>
+        <dl class="remote-kv">
+          <dt>WiFi</dt><dd id="remote-wifi">-</dd>
+          <dt>IP</dt><dd id="remote-ip">-</dd>
+          <dt>Ruta</dt><dd id="remote-route">-</dd>
+          <dt>ngrok</dt><dd><a id="remote-ngrok" href="#" target="_blank" rel="noreferrer">-</a></dd>
           <dt>SSH</dt>
-          <dd>
-            <div class="copy-line">
-              <code id="ssh-command">-</code>
-              <button id="copy-ssh-btn" class="icon-btn" type="button" aria-label="Copiar comando SSH" title="Copiar comando SSH">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </dd>
-          <dt>Portal directo</dt><dd><a href="https://raspi3b.rafex.io/" target="_blank" rel="noreferrer">raspi3b.rafex.io</a></dd>
+          <dd class="copy-line"><code id="remote-ssh">-</code><button id="remote-ssh-copy" class="copy-btn" type="button" aria-label="Copiar comando SSH" title="Copiar comando SSH">&#128203;</button></dd>
         </dl>
-      </section>
-
-      <section class="panel">
-        <h2>Servicios</h2>
-        <div id="services" class="services"></div>
-        <div class="actions">
-          <button id="stop-all-btn" class="danger" type="button">Stop all</button>
-          <button id="start-stream-btn" class="success" type="button">Iniciar stream</button>
-          <button id="start-overlay-btn" class="success" type="button">Iniciar con overlay</button>
-          <button id="start-preview-btn" type="button">Iniciar preview</button>
+        <div class="remote-summary-grid">
+          <div><span class="section-label">Cámara</span><strong id="remote-camera">Sin datos</strong></div>
+          <div><span class="section-label">Audio</span><strong id="remote-audio">Sin datos</strong></div>
+          <div><span class="section-label">Video</span><strong id="remote-video">Sin datos</strong></div>
+          <div><span class="section-label">Encoder</span><strong id="remote-encoder">Sin datos</strong></div>
         </div>
+        <details class="diagnostics-details">
+          <summary>Diagnóstico detallado</summary>
+          <pre id="diagnostics-view">Sin datos</pre>
+        </details>
       </section>
 
-      <section class="panel">
-        <h2>Medios detectados</h2>
-        <pre id="media-view">{}</pre>
-      </section>
+      <div id="global-actions"></div>
+      <p id="action-status" class="action-status" role="status" aria-live="polite" hidden></p>
 
-      <section class="panel">
-        <h2>Configuración actual</h2>
-        <pre id="config-view">{}</pre>
-      </section>
+      <!-- Tarjeta de stream -->
+      <div id="services" aria-live="polite" aria-atomic="false"></div>
 
-      <p id="message" class="message" hidden></p>
+      <!-- Tarjeta de vista previa local (RTMP/MPEG-TS) — solo operators -->
+      <div id="preview-card" aria-live="polite" aria-atomic="false"></div>
+
+      <!-- Configuración — solo operators -->
+      <section id="config-section" hidden>
+        <h2>Configuración</h2>
+        <form id="config-form">
+
+          <div class="accordion">
+
+            <!-- ════════════════════════════════════════
+                 PASO 1 — Cámara & Resolución
+                 ════════════════════════════════════════ -->
+            <details class="acrd" open>
+              <summary class="acrd-hdr">
+                <span class="acrd-num">1</span>
+                <span class="acrd-title">Cámara</span>
+                <span class="acrd-chip" id="sum-camera">Auto · 720p</span>
+              </summary>
+              <div class="acrd-body">
+
+                <div class="devices-header">
+                  <p class="section-label">Dispositivo de video</p>
+                  <button type="button" id="btn-scan-devices" class="btn-scan">Escanear</button>
+                </div>
+                <div id="device-status" class="device-status" aria-live="polite"></div>
+                <select id="cfg-video-device">
+                  <option value="" data-fixed="1">Auto-detectar</option>
+                </select>
+
+                <p class="section-label" style="margin-top:16px">Resolución</p>
+                <div class="res-grid">
+                  <button type="button" class="res-btn" data-preset="360p">
+                    <span class="res-label">360p</span>
+                    <span class="res-sub">640×360 · mínimo CPU</span>
+                  </button>
+                  <button type="button" class="res-btn" data-preset="480p">
+                    <span class="res-label">480p</span>
+                    <span class="res-sub">854×480 · menor CPU</span>
+                  </button>
+                  <button type="button" class="res-btn" data-preset="720p">
+                    <span class="res-label">720p</span>
+                    <span class="res-sub">HD · rec. Pi 3B</span>
+                  </button>
+                  <button type="button" class="res-btn" data-preset="1080p">
+                    <span class="res-label">1080p</span>
+                    <span class="res-sub">Full HD</span>
+                  </button>
+                </div>
+
+                <input type="hidden" id="cfg-width">
+                <input type="hidden" id="cfg-height">
+                <input type="hidden" id="cfg-fps">
+
+                <details id="cfg-res-custom">
+                  <summary>Personalizado</summary>
+                  <div class="grid2" style="margin-top:12px">
+                    <label>Ancho (px)  <input type="number" id="cfg-width-vis"  min="320"  max="1920"></label>
+                    <label>Alto (px)   <input type="number" id="cfg-height-vis" min="240"  max="1080"></label>
+                    <label>FPS         <input type="number" id="cfg-fps-vis"    min="1"    max="60"></label>
+                  </div>
+                </details>
+              </div>
+            </details>
+
+            <!-- ════════════════════════════════════════
+                 PASO 2 — Audio
+                 ════════════════════════════════════════ -->
+            <details class="acrd" id="acrd-audio">
+              <summary class="acrd-hdr">
+                <span class="acrd-num">2</span>
+                <span class="acrd-title">Audio</span>
+                <span class="acrd-chip" id="sum-audio">Auto · Mono · 44100 Hz</span>
+              </summary>
+              <div class="acrd-body">
+
+                <div class="devices-header">
+                  <p class="section-label">Micrófono</p>
+                  <button type="button" id="btn-scan-audio" class="btn-scan">Escanear</button>
+                </div>
+                <select id="cfg-audio-device">
+                  <option value="" data-fixed="1">Auto-detectar</option>
+                  <option value="__none__" data-fixed="1">Sin audio (silencio AAC)</option>
+                </select>
+
+                <p id="audio-scan-status" class="device-status" aria-live="polite"></p>
+                <p id="audio-rate-hint" class="device-status" hidden></p>
+                <p id="audio-device-detail" class="device-status" hidden></p>
+
+                <div class="grid2" style="margin-top:14px">
+                  <div class="toggle-row" style="margin:0">
+                    <span>Stereo (2 ch)</span>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="cfg-audio-stereo" aria-label="Usar audio estéreo">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <label>
+                    Sample rate
+                    <select id="cfg-audio-rate">
+                      <option value="44100">44 100 Hz</option>
+                      <option value="48000">48 000 Hz</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="toggle-row" style="margin-top:14px">
+                  <div>
+                    <span>Boost de audio ×2</span>
+                    <div class="field-hint">aresample + volume=2.0 (útil para BOYA)</div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-audio-boost" aria-label="Activar boost de audio">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <!-- ── Nivel y ganancia del micrófono (medición en vivo) ── -->
+                <div id="mic-meter" class="mic-meter" style="margin-top:20px">
+                  <div class="mic-meter-head">
+                    <span class="section-label" style="margin:0">Nivel del micrófono</span>
+                    <button type="button" id="mic-refresh" class="btn-scan">Medir ahora</button>
+                  </div>
+                  <div class="vu-track">
+                    <div class="vu-fill" id="vu-fill"></div>
+                    <div class="vu-peak" id="vu-peak" hidden></div>
+                  </div>
+                  <p id="mic-status" class="device-status">Esperando medición…</p>
+
+                  <p class="section-label" style="margin-top:10px">
+                    Ganancia de captura <span id="mic-gain-val" class="mic-gain-val"></span>
+                  </p>
+                  <input type="range" id="mic-gain" class="mic-gain-slider" min="0" max="100" step="1" value="50" disabled>
+                  <p class="field-hint">Ajusta el volumen de entrada antes de transmitir. La ganancia funciona incluso durante la transmisión; el nivel se actualiza en vivo cuando no hay stream ni preview activos.</p>
+                </div>
+
+              </div>
+            </details>
+
+            <!-- ════════════════════════════════════════
+                 PASO 3 — Destino
+                 ════════════════════════════════════════ -->
+            <details class="acrd">
+              <summary class="acrd-hdr">
+                <span class="acrd-num">3</span>
+                <span class="acrd-title">Destino</span>
+                <span class="acrd-chip" id="sum-dest">YouTube</span>
+              </summary>
+              <div class="acrd-body">
+
+                <label>
+                  Plataforma
+                  <select id="cfg-platform">
+                    <option value="youtube">YouTube Live</option>
+                    <option value="facebook">Facebook / Meta Live</option>
+                    <option value="dual">★ Dual — YouTube + Facebook</option>
+                    <option value="custom">URL personalizada</option>
+                  </select>
+                </label>
+
+                <div id="cfg-stream-key-row">
+                  <label id="cfg-stream-key-label">
+                    Stream Key
+                    <input type="password" id="cfg-stream-key" placeholder="xxxx-xxxx-xxxx-xxxx" autocomplete="off">
+                  </label>
+                </div>
+
+                <div id="cfg-stream-key-meta-row" hidden>
+                  <label>
+                    Stream Key Facebook
+                    <input type="password" id="cfg-stream-key-meta" placeholder="xxxx-xxxx-xxxx-xxxx" autocomplete="off">
+                  </label>
+                  <p class="field-hint">El stream se replicará a ambas plataformas (onfail=ignore).</p>
+                </div>
+
+                <div id="cfg-rtmp-url-row" hidden>
+                  <label>
+                    URL RTMP personalizada
+                    <input type="text" id="cfg-rtmp-url" placeholder="rtmp://tu-servidor/live/key" autocomplete="off">
+                  </label>
+                </div>
+
+              </div>
+            </details>
+
+            <!-- ════════════════════════════════════════
+                 PASO 4 — Video (Bitrate)
+                 ════════════════════════════════════════ -->
+            <details class="acrd">
+              <summary class="acrd-hdr">
+                <span class="acrd-num">4</span>
+                <span class="acrd-title">Video</span>
+                <span class="acrd-chip" id="sum-video">2500 kbps · veryfast</span>
+              </summary>
+              <div class="acrd-body">
+
+                <p class="section-label">Calidad de video</p>
+                <div class="quality-grid">
+                  <button type="button" class="quality-card" data-bitrate="4500000">
+                    <div class="qc-name">Alta calidad</div>
+                    <div class="qc-kbps">4 500 kbps</div>
+                    <div class="qc-note">buena subida · 1080p</div>
+                  </button>
+                  <button type="button" class="quality-card" data-bitrate="2500000">
+                    <div class="qc-name">Balance</div>
+                    <div class="qc-kbps">2 500 kbps</div>
+                    <div class="qc-note">recomendado · 720p</div>
+                  </button>
+                  <button type="button" class="quality-card" data-bitrate="1500000">
+                    <div class="qc-name">Bajo ancho</div>
+                    <div class="qc-kbps">1 500 kbps</div>
+                    <div class="qc-note">480p</div>
+                  </button>
+                  <button type="button" class="quality-card" data-bitrate="800000">
+                    <div class="qc-name">Mínimo</div>
+                    <div class="qc-kbps">800 kbps</div>
+                    <div class="qc-note">360p · menor CPU</div>
+                  </button>
+                </div>
+                <input type="hidden" id="cfg-bitrate">
+
+                <details id="cfg-video-advanced">
+                  <summary>Avanzado</summary>
+                  <div style="margin-top:12px">
+                    <label>
+                      Bitrate personalizado (bps)
+                      <input type="number" id="cfg-bitrate-vis" min="200000" max="25000000">
+                    </label>
+                    <label>
+                      Preset de codificación
+                      <select id="cfg-preset">
+                        <option value="ultrafast">ultrafast — máxima velocidad</option>
+                        <option value="superfast">superfast</option>
+                        <option value="veryfast">veryfast — recomendado Pi 3B</option>
+                        <option value="faster">faster</option>
+                        <option value="fast">fast — mejor calidad, más CPU</option>
+                      </select>
+                    </label>
+                  </div>
+                </details>
+
+              </div>
+            </details>
+
+            <!-- ════════════════════════════════════════
+                 PASO 5 — Encoder GPU
+                 ════════════════════════════════════════ -->
+            <details class="acrd">
+              <summary class="acrd-hdr">
+                <span class="acrd-num">5</span>
+                <span class="acrd-title">Encoder</span>
+                <span class="acrd-chip" id="sum-encoder">CPU · libx264</span>
+              </summary>
+              <div class="acrd-body">
+                <div class="toggle-row">
+                  <div>
+                    <span>Encoder GPU (h264_v4l2m2m)</span>
+                    <div class="field-hint">Usa el VideoCore del Raspberry Pi para codificar H.264 con menor carga de CPU. Compatible con overlays (logo, texto, timestamp) — el filtro corre en CPU y solo el encode final pasa a GPU.</div>
+                  </div>
+                  <label class="toggle-switch">
+                      <input type="checkbox" id="gpu-encoder-toggle" aria-label="Activar encoder GPU">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <p class="field-hint" style="margin-top:10px">Requiere <code>bcm2835-codec</code> cargado en el kernel (se configura automáticamente con <code>make install-streaming</code>). Si el hardware no está disponible, el sistema regresa a libx264 sin interrumpir la transmisión.</p>
+              </div>
+            </details>
+
+            <!-- ════════════════════════════════════════
+                 PASO 6 — Overlays
+                 ════════════════════════════════════════ -->
+            <details class="acrd">
+              <summary class="acrd-hdr">
+                <span class="acrd-num">6</span>
+                <span class="acrd-title">Overlays</span>
+                <span class="acrd-chip" id="sum-overlay">Ninguno</span>
+              </summary>
+              <div class="acrd-body">
+
+                <p class="field-hint">Cada overlay tiene su propio interruptor: apagarlo lo oculta del stream y del preview, pero conserva el valor guardado — puedes prepararlo y activarlo después sin volver a escribirlo.</p>
+
+                <!-- ── Logo ── -->
+                <div class="toggle-row" style="margin-top:20px">
+                  <span class="section-label" style="margin:0">Logo PNG</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-overlay-logo-enabled" aria-label="Activar logo PNG">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="logo-path-row" style="margin-top:10px">
+                  <input type="text" id="cfg-overlay-logo-file"
+                    placeholder="/var/lib/raspi-streaming/assets/logos/logo.png" autocomplete="off">
+                  <label id="btn-upload" class="btn-upload" for="logo-file-input" tabindex="0" role="button" aria-label="Subir archivo" title="Subir archivo">&#128194;</label>
+                  <input type="file" id="logo-file-input" accept=".png,.jpg,.jpeg" style="display:none">
+                </div>
+                <p id="logo-upload-msg" class="section-label" aria-live="polite" hidden></p>
+
+                <p class="section-label" style="margin-top:14px">
+                  Ancho del logo
+                  <span class="field-hint" style="display:inline">— recomendado según resolución:</span>
+                </p>
+                <p class="field-hint" id="logo-w-hint">360p/480p → 60-80 px · 720p → 100-150 px · 1080p → 120-200 px</p>
+                <div class="chip-row" id="logo-w-chips">
+                  <button type="button" class="chip-btn" data-logow="0">Original</button>
+                  <button type="button" class="chip-btn" data-logow="80">80 px</button>
+                  <button type="button" class="chip-btn" data-logow="100">100 px</button>
+                  <button type="button" class="chip-btn" data-logow="120">120 px</button>
+                  <button type="button" class="chip-btn" data-logow="150">150 px</button>
+                  <button type="button" class="chip-btn" data-logow="200">200 px</button>
+                </div>
+                <label>
+                  Personalizado (0 = original)
+                  <input type="number" id="cfg-overlay-logo-w" min="0" max="500" value="0" placeholder="px">
+                </label>
+
+                <p class="section-label" style="margin-top:14px">Posición del logo</p>
+                <div class="pos-grid-2x2">
+                  <button type="button" class="pos-btn" data-logopos="tl" aria-label="Arriba izquierda" aria-pressed="false">↖</button>
+                  <button type="button" class="pos-btn" data-logopos="tr" aria-label="Arriba derecha" aria-pressed="false">↗</button>
+                  <button type="button" class="pos-btn" data-logopos="bl" aria-label="Abajo izquierda" aria-pressed="false">↙</button>
+                  <button type="button" class="pos-btn" data-logopos="br" aria-label="Abajo derecha" aria-pressed="false">↘</button>
+                </div>
+                <input type="hidden" id="cfg-overlay-logo-pos" value="br">
+
+                <p class="section-label" style="margin-top:14px">Margen del logo (px)</p>
+                <div class="chip-row" id="logo-pad-chips">
+                  <button type="button" class="chip-btn" data-logopad="10">10</button>
+                  <button type="button" class="chip-btn" data-logopad="20">20</button>
+                  <button type="button" class="chip-btn" data-logopad="30">30</button>
+                  <button type="button" class="chip-btn" data-logopad="40">40</button>
+                  <button type="button" class="chip-btn" data-logopad="50">50</button>
+                </div>
+                <input type="number" id="cfg-overlay-logo-pad" min="0" max="200" value="20" placeholder="px">
+
+                <!-- ── Banner ── -->
+                <div class="toggle-row" style="margin-top:24px">
+                  <span class="section-label" style="margin:0">Banner — barra negra con texto centrado</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-overlay-banner-enabled" aria-label="Activar banner">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <input type="text" id="cfg-overlay-banner" style="margin-top:10px"
+                  placeholder="Ej: Cámara Principal — Entrada Sur" maxlength="200">
+
+                <div class="banner-pos-row" style="margin-top:10px">
+                  <button type="button" class="banner-pos-btn active" data-bannerpos="footer" aria-pressed="true">▼ Inferior</button>
+                  <button type="button" class="banner-pos-btn" data-bannerpos="header" aria-pressed="false">▲ Superior</button>
+                </div>
+                <input type="hidden" id="cfg-overlay-banner-pos" value="footer">
+
+                <!-- ── Texto libre ── -->
+                <div class="toggle-row" style="margin-top:24px">
+                  <span class="section-label" style="margin:0">Texto libre (esquina)</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-overlay-text-enabled" aria-label="Activar texto libre">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <input type="text" id="cfg-overlay-text" style="margin-top:10px"
+                  placeholder="Ej: Cámara 1 — Entrada Principal" maxlength="200">
+
+                <p class="section-label" style="margin-top:10px">Posición del texto</p>
+                <div class="pos-grid-3x3">
+                  <button type="button" class="pos-btn" data-textpos="tl" aria-label="Texto arriba izquierda" aria-pressed="false">↖</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-textpos="tr" aria-label="Texto arriba derecha" aria-pressed="false">↗</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-textpos="center" aria-label="Texto centrado" aria-pressed="false">⊙</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-textpos="bl" aria-label="Texto abajo izquierda" aria-pressed="false">↙</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-textpos="br" aria-label="Texto abajo derecha" aria-pressed="false">↘</button>
+                </div>
+                <input type="hidden" id="cfg-overlay-text-pos" value="bl">
+
+                <!-- ── Timestamp ── -->
+                <div class="toggle-row" style="margin-top:24px">
+                  <span class="section-label" style="margin:0">Timestamp en tiempo real</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="cfg-overlay-timestamp" aria-label="Activar reloj">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <p class="section-label" style="margin-top:10px">Posición del timestamp</p>
+                <div class="pos-grid-3x3">
+                  <button type="button" class="pos-btn" data-timestamppos="tl" aria-label="Reloj arriba izquierda" aria-pressed="false">↖</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="tr" aria-label="Reloj arriba derecha" aria-pressed="false">↗</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="center" aria-label="Reloj centrado" aria-pressed="false">⊙</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="bl" aria-label="Reloj abajo izquierda" aria-pressed="false">↙</button>
+                  <div></div>
+                  <button type="button" class="pos-btn" data-timestamppos="br" aria-label="Reloj abajo derecha" aria-pressed="false">↘</button>
+                </div>
+                <input type="hidden" id="cfg-overlay-timestamp-pos" value="tl">
+
+              </div>
+            </details>
+
+          </div><!-- .accordion -->
+
+          <button type="submit" style="margin-top:16px">Guardar configuración</button>
+          <p id="config-msg" role="status" aria-live="polite" hidden></p>
+
+        </form>
+      </section>
     </section>
   </main>
-  <script src="/static/app.js?v=20260816-media"></script>
+
+  <script src="/static/api-client.js?v=20260820-ui"></script>
+  <script src="/static/app.js?v=20260820-ui"></script>
 </body>
 </html>

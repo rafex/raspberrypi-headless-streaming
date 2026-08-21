@@ -4,6 +4,7 @@
   --text: #e8ecf1;
   --muted: #8a93a3;
   --accent: #3b82f6;
+  --accent-strong: #2563eb;
   --good: #22c55e;
   --bad: #ef4444;
   --radius: 10px;
@@ -20,7 +21,7 @@ body {
 }
 
 .wrap {
-  max-width: 480px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 24px 16px 64px;
 }
@@ -45,9 +46,10 @@ h2 {
 }
 
 #login-view .form-container {
-  width: 300px;
-  background: linear-gradient(180deg, rgb(0, 183, 255) 25%, rgb(255, 255, 255) 20%);
-  height: 350px;
+  width: min(100%, 360px);
+  min-height: 350px;
+  background: var(--panel);
+  border: 1px solid #2a3340;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -70,12 +72,12 @@ h2 {
   left: 10%;
   font-size: 30px;
   font-weight: 900;
-  color: rgb(255, 255, 255);
+  color: var(--text);
   margin: 0;
 }
 
 #login-view .form label {
-  color: rgb(40, 42, 44);
+  color: var(--muted);
   margin-top: 15px;
   margin-bottom: 5px;
   font-size: 15px;
@@ -83,25 +85,63 @@ h2 {
 
 #login-view .form .input {
   padding: 10px;
-  height: 35px;
-  border: none;
-  background-color: rgb(224, 231, 236);
-  color: rgb(40, 42, 44);
-  border-radius: 0;
+  height: 44px;
+  border: 1px solid #2a3340;
+  background-color: #11151c;
+  color: var(--text);
+  border-radius: var(--radius);
 }
 
 #login-view .form .input:focus {
-  outline: none;
+  border-color: var(--accent);
 }
 
 #login-view .form button {
   border: none;
-  height: 35px;
+  min-height: 44px;
   margin-top: 30px;
-  background-color: rgb(0, 183, 255);
+  background-color: var(--accent-strong);
   color: white;
   font-size: 16px;
-  border-radius: 0;
+  border-radius: var(--radius);
+}
+
+#login-view #login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+#login-view #login-submit:disabled {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+#login-view .login-spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: login-spin 0.7s linear infinite;
+}
+
+#login-view #login-submit.is-loading .login-spinner {
+  display: inline-block;
+}
+
+#login-view .login-status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
 }
 
 #login-view .form .error {
@@ -127,6 +167,15 @@ input, select {
   border: 1px solid #2a3340;
   border-radius: var(--radius);
   color: var(--text);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+.btn-upload:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
 }
 
 button {
@@ -158,6 +207,21 @@ button:disabled {
 .error {
   color: var(--bad);
   font-size: 0.9rem;
+}
+
+.action-status {
+  margin: -2px 0 12px;
+  min-height: 1.25em;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.action-status.error {
+  color: var(--bad);
+}
+
+.action-status.success {
+  color: var(--good);
 }
 
 .topbar {
@@ -309,7 +373,20 @@ h3 {
 }
 
 .toggle-switch input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.toggle-switch:focus-within .toggle-slider {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
 }
 
 .toggle-slider {
@@ -458,6 +535,20 @@ h3 {
 .copy-btn:disabled {
   opacity: 0.7;
   cursor: default;
+}
+
+@media (max-width: 560px) {
+  .wrap { padding: 16px 12px 48px; }
+  .grid2 { grid-template-columns: 1fr; gap: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ────────────────────────────────────────────────

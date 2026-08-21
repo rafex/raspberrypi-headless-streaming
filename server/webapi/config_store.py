@@ -78,9 +78,10 @@ def mask_rtmp_url(rtmp_url: str) -> str:
     return f"{platform} (oculto)"
 
 
-def validate_config(data: dict) -> dict:
-    """Valida el payload entrante de PUT /api/config. Lanza ConfigValidationError si algo no sirve."""
+def validate_config(data: dict, current: dict | None = None) -> dict:
+    """Valida config y conserva secretos omitidos o enviados en blanco."""
     errors = []
+    current = current or {}
 
     # --- Plataforma y destino RTMP ---
     platform = str(data.get("platform", "custom")).strip()
@@ -88,8 +89,8 @@ def validate_config(data: dict) -> dict:
         errors.append(f"platform debe ser uno de: {', '.join(VALID_PLATFORMS)}")
         platform = "custom"
 
-    stream_key      = str(data.get("stream_key",      "")).strip()
-    stream_key_meta = str(data.get("stream_key_meta", "")).strip()
+    stream_key = str(data.get("stream_key", "")).strip() or str(current.get("STREAM_KEY", "")).strip()
+    stream_key_meta = str(data.get("stream_key_meta", "")).strip() or str(current.get("STREAM_KEY_META", "")).strip()
 
     rtmp_url           = ""
     rtmp_url_secondary = ""

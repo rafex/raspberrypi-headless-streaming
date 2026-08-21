@@ -20,8 +20,12 @@
           <input type="text" id="username" class="input" placeholder="Ingresa tu usuario" autocomplete="username" required>
           <label for="password">Password</label>
           <input type="password" id="password" class="input" placeholder="Password" autocomplete="current-password" required>
-          <button type="submit">Entrar</button>
-          <p id="login-error" class="error" hidden></p>
+          <button type="submit" id="login-submit">
+            <span class="login-submit-label">Entrar</span>
+            <span class="login-spinner" aria-hidden="true"></span>
+          </button>
+          <p id="login-status" class="login-status" aria-live="polite" hidden>Autenticando...</p>
+          <p id="login-error" class="error" role="alert" hidden></p>
         </form>
       </div>
     </section>
@@ -34,17 +38,18 @@
       </div>
 
       <div id="global-actions"></div>
+      <p id="action-status" class="action-status" role="status" aria-live="polite" hidden></p>
 
       <!-- Tarjeta de stream -->
-      <div id="services"></div>
+      <div id="services" aria-live="polite" aria-atomic="false"></div>
 
       <!-- Tarjeta de vista previa local (RTMP/MPEG-TS) — solo operators -->
-      <div id="preview-card"></div>
+      <div id="preview-card" aria-live="polite" aria-atomic="false"></div>
 
       <!-- Configuración — solo operators -->
       <section id="config-section" hidden>
         <h2>Configuración</h2>
-        <form id="config-form" novalidate>
+        <form id="config-form">
 
           <div class="accordion">
 
@@ -63,7 +68,7 @@
                   <p class="section-label">Dispositivo de video</p>
                   <button type="button" id="btn-scan-devices" class="btn-scan">Escanear</button>
                 </div>
-                <div id="device-status" class="device-status"></div>
+                <div id="device-status" class="device-status" aria-live="polite"></div>
                 <select id="cfg-video-device">
                   <option value="" data-fixed="1">Auto-detectar</option>
                 </select>
@@ -131,7 +136,7 @@
                   <div class="toggle-row" style="margin:0">
                     <span>Stereo (2 ch)</span>
                     <label class="toggle-switch">
-                      <input type="checkbox" id="cfg-audio-stereo">
+                      <input type="checkbox" id="cfg-audio-stereo" aria-label="Usar audio estéreo">
                       <span class="toggle-slider"></span>
                     </label>
                   </div>
@@ -150,7 +155,7 @@
                     <div class="field-hint">aresample + volume=2.0 (útil para BOYA)</div>
                   </div>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="cfg-audio-boost">
+                    <input type="checkbox" id="cfg-audio-boost" aria-label="Activar boost de audio">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -298,7 +303,7 @@
                     <div class="field-hint">Usa el VideoCore del Raspberry Pi para codificar H.264 con menor carga de CPU. Compatible con overlays (logo, texto, timestamp) — el filtro corre en CPU y solo el encode final pasa a GPU.</div>
                   </div>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="gpu-encoder-toggle">
+                      <input type="checkbox" id="gpu-encoder-toggle" aria-label="Activar encoder GPU">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -323,17 +328,17 @@
                 <div class="toggle-row" style="margin-top:20px">
                   <span class="section-label" style="margin:0">Logo PNG</span>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="cfg-overlay-logo-enabled">
+                    <input type="checkbox" id="cfg-overlay-logo-enabled" aria-label="Activar logo PNG">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
                 <div class="logo-path-row" style="margin-top:10px">
                   <input type="text" id="cfg-overlay-logo-file"
                     placeholder="/var/lib/raspi-streaming/assets/logos/logo.png" autocomplete="off">
-                  <label class="btn-upload" for="logo-file-input" title="Subir archivo">&#128194;</label>
+                  <label id="btn-upload" class="btn-upload" for="logo-file-input" tabindex="0" role="button" aria-label="Subir archivo" title="Subir archivo">&#128194;</label>
                   <input type="file" id="logo-file-input" accept=".png,.jpg,.jpeg" style="display:none">
                 </div>
-                <p id="logo-upload-msg" class="section-label" hidden></p>
+                <p id="logo-upload-msg" class="section-label" aria-live="polite" hidden></p>
 
                 <p class="section-label" style="margin-top:14px">
                   Ancho del logo
@@ -355,10 +360,10 @@
 
                 <p class="section-label" style="margin-top:14px">Posición del logo</p>
                 <div class="pos-grid-2x2">
-                  <button type="button" class="pos-btn" data-logopos="tl" title="Arriba izquierda">↖</button>
-                  <button type="button" class="pos-btn" data-logopos="tr" title="Arriba derecha">↗</button>
-                  <button type="button" class="pos-btn" data-logopos="bl" title="Abajo izquierda">↙</button>
-                  <button type="button" class="pos-btn" data-logopos="br" title="Abajo derecha">↘</button>
+                  <button type="button" class="pos-btn" data-logopos="tl" aria-label="Arriba izquierda" aria-pressed="false">↖</button>
+                  <button type="button" class="pos-btn" data-logopos="tr" aria-label="Arriba derecha" aria-pressed="false">↗</button>
+                  <button type="button" class="pos-btn" data-logopos="bl" aria-label="Abajo izquierda" aria-pressed="false">↙</button>
+                  <button type="button" class="pos-btn" data-logopos="br" aria-label="Abajo derecha" aria-pressed="false">↘</button>
                 </div>
                 <input type="hidden" id="cfg-overlay-logo-pos" value="br">
 
@@ -376,7 +381,7 @@
                 <div class="toggle-row" style="margin-top:24px">
                   <span class="section-label" style="margin:0">Banner — barra negra con texto centrado</span>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="cfg-overlay-banner-enabled">
+                    <input type="checkbox" id="cfg-overlay-banner-enabled" aria-label="Activar banner">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -384,8 +389,8 @@
                   placeholder="Ej: Cámara Principal — Entrada Sur" maxlength="200">
 
                 <div class="banner-pos-row" style="margin-top:10px">
-                  <button type="button" class="banner-pos-btn active" data-bannerpos="footer">▼ Inferior</button>
-                  <button type="button" class="banner-pos-btn" data-bannerpos="header">▲ Superior</button>
+                  <button type="button" class="banner-pos-btn active" data-bannerpos="footer" aria-pressed="true">▼ Inferior</button>
+                  <button type="button" class="banner-pos-btn" data-bannerpos="header" aria-pressed="false">▲ Superior</button>
                 </div>
                 <input type="hidden" id="cfg-overlay-banner-pos" value="footer">
 
@@ -393,7 +398,7 @@
                 <div class="toggle-row" style="margin-top:24px">
                   <span class="section-label" style="margin:0">Texto libre (esquina)</span>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="cfg-overlay-text-enabled">
+                    <input type="checkbox" id="cfg-overlay-text-enabled" aria-label="Activar texto libre">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -402,15 +407,15 @@
 
                 <p class="section-label" style="margin-top:10px">Posición del texto</p>
                 <div class="pos-grid-3x3">
-                  <button type="button" class="pos-btn" data-textpos="tl">↖</button>
+                  <button type="button" class="pos-btn" data-textpos="tl" aria-label="Texto arriba izquierda" aria-pressed="false">↖</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-textpos="tr">↗</button>
+                  <button type="button" class="pos-btn" data-textpos="tr" aria-label="Texto arriba derecha" aria-pressed="false">↗</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-textpos="center">⊙</button>
+                  <button type="button" class="pos-btn" data-textpos="center" aria-label="Texto centrado" aria-pressed="false">⊙</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-textpos="bl">↙</button>
+                  <button type="button" class="pos-btn" data-textpos="bl" aria-label="Texto abajo izquierda" aria-pressed="false">↙</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-textpos="br">↘</button>
+                  <button type="button" class="pos-btn" data-textpos="br" aria-label="Texto abajo derecha" aria-pressed="false">↘</button>
                 </div>
                 <input type="hidden" id="cfg-overlay-text-pos" value="bl">
 
@@ -418,22 +423,22 @@
                 <div class="toggle-row" style="margin-top:24px">
                   <span class="section-label" style="margin:0">Timestamp en tiempo real</span>
                   <label class="toggle-switch">
-                    <input type="checkbox" id="cfg-overlay-timestamp">
+                    <input type="checkbox" id="cfg-overlay-timestamp" aria-label="Activar reloj">
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
 
                 <p class="section-label" style="margin-top:10px">Posición del timestamp</p>
                 <div class="pos-grid-3x3">
-                  <button type="button" class="pos-btn" data-timestamppos="tl">↖</button>
+                  <button type="button" class="pos-btn" data-timestamppos="tl" aria-label="Reloj arriba izquierda" aria-pressed="false">↖</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-timestamppos="tr">↗</button>
+                  <button type="button" class="pos-btn" data-timestamppos="tr" aria-label="Reloj arriba derecha" aria-pressed="false">↗</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-timestamppos="center">⊙</button>
+                  <button type="button" class="pos-btn" data-timestamppos="center" aria-label="Reloj centrado" aria-pressed="false">⊙</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-timestamppos="bl">↙</button>
+                  <button type="button" class="pos-btn" data-timestamppos="bl" aria-label="Reloj abajo izquierda" aria-pressed="false">↙</button>
                   <div></div>
-                  <button type="button" class="pos-btn" data-timestamppos="br">↘</button>
+                  <button type="button" class="pos-btn" data-timestamppos="br" aria-label="Reloj abajo derecha" aria-pressed="false">↘</button>
                 </div>
                 <input type="hidden" id="cfg-overlay-timestamp-pos" value="tl">
 
@@ -443,13 +448,14 @@
           </div><!-- .accordion -->
 
           <button type="submit" style="margin-top:16px">Guardar configuración</button>
-          <p id="config-msg" hidden></p>
+          <p id="config-msg" role="status" aria-live="polite" hidden></p>
 
         </form>
       </section>
     </section>
   </main>
 
-  <script src="app.js?v=75e72af"></script>
+  <script src="api-client.js?v=20260820-ui"></script>
+  <script src="app.js?v=20260820-ui"></script>
 </body>
 </html>
